@@ -54,8 +54,8 @@
     "renderer_names": ["decidr_list", "decidr_dashboard", "decidr_graph"]
   },
   "tool_rules": {
-    "my_action_items": "Best starting point for any session. For visual overview, push to decidr_dashboard with just { organization_id } from meta — the renderer fetches its own data. Or drill into individual items with get_decision/get_task.",
-    "list_initiatives": "Use to discover all initiatives. Push to decidr_list. Use format=compact to save tokens. Pass initiative IDs to decidr_graph for a visual map.",
+    "my_action_items": "Returns prioritized action items as entity refs. Push results to decidr_list — the renderer fetches full data from the API. Drill into individual items with get_decision/get_task. For a visual dashboard overview, push directly to decidr_dashboard with just { organization_id } instead — no tool call needed.",
+    "list_initiatives": "Use to discover all initiatives. Push to decidr_list. Use format=compact to save tokens. For a visual graph, push directly to decidr_graph with just { organization_id } — no tool call needed.",
     "list_projects": "Use to discover projects. Push to decidr_list. Filter by status to find active work. Use initiative_id to filter by initiative.",
     "list_decisions": "Use to discover decisions. Push to decidr_list. Call get_decision for full details including approval progress.",
     "list_tasks": "Use to discover tasks. Push to decidr_list. Filter by assigned_to_me=true for the user's work.",
@@ -112,7 +112,7 @@
     "get_task": "decidr_list",
     "get_bridge": "decidr_list",
     "search": "decidr_list",
-    "my_action_items": "decidr_dashboard",
+    "my_action_items": "decidr_list",
     "create_organization": "decidr_list",
     "list_organizations": "decidr_list",
     "list_members": "decidr_list",
@@ -174,16 +174,15 @@
     {
       "name": "decidr_dashboard",
       "description": "Full dashboard with initiative grouping, health bars, project cards, and prioritized action items",
-      "scope": "tool",
-      "rule": "Preferred renderer for my_action_items and project overview. The renderer fetches all data from the API — only pass organization_id. Do NOT pass action items, entities, or other data in the payload.",
-      "tools": ["my_action_items"],
+      "scope": "universal",
+      "rule": "Push directly to show the dashboard — do NOT call my_action_items or any other tool first. The renderer fetches all data from the API. Only pass organization_id. For fast access, push immediately when user asks for dashboard or overview.",
       "data_hint": "{ organization_id: string }"
     },
     {
       "name": "decidr_graph",
       "description": "Force-directed SVG graph of projects and bridges with interactive nodes and semantic zoom",
       "scope": "universal",
-      "rule": "Use when user asks for a visual map, graph, or diagram of their initiatives. The renderer fetches all data from the API — only pass organization_id and optionally initiative_ids to scope the view. Do NOT pass full entity data.",
+      "rule": "Push directly when user asks for a visual map, graph, or diagram — do NOT call list_initiatives or any other tool first. The renderer fetches all data from the API. Only pass organization_id and optionally initiative_ids to scope the view. For fast access, push immediately.",
       "invoke_schema": "{ \"type\": \"object\", \"properties\": { \"initiative_ids\": { \"type\": \"array\", \"items\": { \"type\": \"string\" }, \"description\": \"Initiative IDs to scope the graph view. Omit for all initiatives.\" } } }",
       "data_hint": "{ organization_id: string, initiative_ids?: string[] }"
     }
