@@ -1,0 +1,190 @@
+{
+  "name": "decidr",
+  "version": "1.0.0",
+  "description": "DecidR — decision graph tool for solo builders",
+  "registry_index": {
+    "groups": [
+      {
+        "name": "Discover",
+        "description": "Find entities by listing or searching",
+        "tools": ["list_initiatives", "list_projects", "list_decisions", "list_tasks", "list_bridges", "search"]
+      },
+      {
+        "name": "Read",
+        "description": "Get full details for a specific entity",
+        "tools": ["get_initiative", "get_project", "get_decision", "get_task", "get_bridge", "list_entity_documents", "find_entities_by_ludflow_document"]
+      },
+      {
+        "name": "Act",
+        "description": "Create, update, and link entities",
+        "tools": ["create_initiative", "create_project", "create_decision", "create_task", "create_bridge", "update_initiative", "update_project", "update_decision", "update_task", "update_bridge", "link_document", "search_ludflow_documents"]
+      },
+      {
+        "name": "Review",
+        "description": "Action items, approvals, and completions",
+        "tools": ["my_action_items", "approve_decision", "reject_decision", "supersede_decision", "unsupersede_decision", "complete_task"]
+      }
+    ]
+  },
+  "tool_rules": {
+    "my_action_items": "Best starting point for any session. Push result to decidr_dashboard for visual overview, or drill into individual items with get_decision/get_task.",
+    "list_initiatives": "Use to discover all initiatives. Push to decidr_list. Use format=compact to save tokens. Pass initiative IDs to decidr_graph for a visual map.",
+    "list_projects": "Use to discover projects. Push to decidr_list. Filter by status to find active work.",
+    "list_decisions": "Use to discover decisions. Push to decidr_list. Call get_decision for full details including approval progress.",
+    "list_tasks": "Use to discover tasks. Push to decidr_list. Filter by assigned_to_me=true for the user's work.",
+    "list_bridges": "Use to discover cross-project bridges. Push to decidr_list.",
+    "get_initiative": "Get full initiative details. Push to decidr_list for detail view.",
+    "get_project": "Get full project details including task/decision/bridge counts. Push to decidr_list.",
+    "get_decision": "Get full decision details including approval progress and linked documents. If status is IN_PROGRESS, tell user they can approve_decision or reject_decision. Check list_entity_documents for supporting context.",
+    "get_task": "Get full task details. If status is TODO or IN_PROGRESS, user can complete_task. Push to decidr_list.",
+    "get_bridge": "Get full bridge details including connected projects and decisions. Push to decidr_list.",
+    "search": "Use when user describes something by name or keyword. Push results to decidr_list. Offer to drill into specific results with get_* tools.",
+    "create_initiative": "Create a new initiative. Returns full created entity. Consider creating projects under it next.",
+    "create_project": "Create a new project. Returns full created entity. Consider adding decisions or tasks next.",
+    "create_decision": "Create a new decision. Requires entity_type and matching parent ID. Returns full created entity. Consider linking supporting documents with link_document.",
+    "create_task": "Create a new task. Returns full created entity. Consider assigning with update_task or linking a document.",
+    "create_bridge": "Create a bridge between two projects. Returns full created entity.",
+    "update_initiative": "Update initiative fields. Returns full updated entity.",
+    "update_project": "Update project fields and/or transition status. Returns full updated entity.",
+    "update_decision": "Update decision fields and/or transition status. Returns full updated entity. Field updates applied before status transition.",
+    "update_task": "Update task fields and/or transition status. Returns full updated entity.",
+    "update_bridge": "Update bridge fields and/or transition status. Returns full updated entity.",
+    "approve_decision": "Approve a decision. Before approving, call list_entity_documents for context. Returns approval progress. If all rules satisfied, auto-transitions to DECIDED.",
+    "reject_decision": "Reject a decision. Returns rejection result. Call my_action_items to see remaining work.",
+    "supersede_decision": "Mark a DECIDED decision as superseded by a newer one. Only works on DECIDED decisions.",
+    "unsupersede_decision": "Remove supersede link, restoring the decision as active.",
+    "complete_task": "Mark a task as DONE. Returns full updated entity. Call my_action_items to see remaining work.",
+    "link_document": "Attach a document to any entity. Use type URL for external links, LUDFLOW for LudFlow documents. Search LudFlow docs first with search_ludflow_documents.",
+    "list_entity_documents": "List all documents linked to an entity. Essential context before approving decisions.",
+    "search_ludflow_documents": "Search LudFlow documents by title. Use results with link_document to attach to DecidR entities.",
+    "find_entities_by_ludflow_document": "Find all DecidR entities linked to a LudFlow document. Enables bidirectional navigation."
+  },
+  "no_auto_push": [
+    "create_initiative",
+    "create_project",
+    "create_decision",
+    "create_task",
+    "create_bridge",
+    "update_initiative",
+    "update_project",
+    "update_decision",
+    "update_task",
+    "update_bridge",
+    "approve_decision",
+    "reject_decision",
+    "supersede_decision",
+    "unsupersede_decision",
+    "complete_task",
+    "link_document"
+  ],
+  "renderers": {
+    "list_initiatives": "decidr_list",
+    "list_projects": "decidr_list",
+    "list_decisions": "decidr_list",
+    "list_tasks": "decidr_list",
+    "list_bridges": "decidr_list",
+    "get_initiative": "decidr_list",
+    "get_project": "decidr_list",
+    "get_decision": "decidr_list",
+    "get_task": "decidr_list",
+    "get_bridge": "decidr_list",
+    "search": "decidr_list",
+    "my_action_items": "decidr_dashboard",
+    "approve_decision": "decidr_list",
+    "reject_decision": "decidr_list",
+    "supersede_decision": "decidr_list",
+    "unsupersede_decision": "decidr_list",
+    "complete_task": "decidr_list",
+    "create_initiative": "decidr_list",
+    "create_project": "decidr_list",
+    "create_decision": "decidr_list",
+    "create_task": "decidr_list",
+    "create_bridge": "decidr_list",
+    "update_initiative": "decidr_list",
+    "update_project": "decidr_list",
+    "update_decision": "decidr_list",
+    "update_task": "decidr_list",
+    "update_bridge": "decidr_list",
+    "link_document": "decidr_list",
+    "list_entity_documents": "decidr_list",
+    "search_ludflow_documents": "decidr_list",
+    "find_entities_by_ludflow_document": "decidr_list"
+  },
+  "renderer_definitions": [
+    {
+      "name": "decidr_list",
+      "description": "Universal entity renderer — displays lists, details, search results, and action items with slide-out panels for navigation",
+      "scope": "tool",
+      "rule": "Use for all entity list, detail, and search views. Always use ref-only mode — pass entity type + ID, never full payloads.",
+      "tools": [
+        "list_initiatives",
+        "list_projects",
+        "list_decisions",
+        "list_tasks",
+        "list_bridges",
+        "get_initiative",
+        "get_project",
+        "get_decision",
+        "get_task",
+        "get_bridge",
+        "search",
+        "create_initiative",
+        "create_project",
+        "create_decision",
+        "create_task",
+        "create_bridge",
+        "update_initiative",
+        "update_project",
+        "update_decision",
+        "update_task",
+        "update_bridge",
+        "approve_decision",
+        "reject_decision",
+        "supersede_decision",
+        "unsupersede_decision",
+        "complete_task",
+        "link_document",
+        "list_entity_documents",
+        "search_ludflow_documents",
+        "find_entities_by_ludflow_document"
+      ],
+      "data_hint": "IMPORTANT: Always use ref-only mode. Pass entity references — the renderer fetches full data from the API. Format: { entities: [{ type: 'initiative'|'project'|'decision'|'task'|'bridge', id: string }], meta: { organization_id: string, result_count: number, tool_name: string } }. The tool_name determines rendering mode: 'list_decisions' for list view, 'get_decision' for detail view, 'my_action_items' for action items, 'search' for search results. Entity type names are singular lowercase. Never pass full entity payloads — only type and id."
+    },
+    {
+      "name": "decidr_dashboard",
+      "description": "Full dashboard with initiative grouping, health bars, project cards, and prioritized action items",
+      "scope": "tool",
+      "rule": "Preferred renderer for my_action_items and project overview. Shows prioritized work queue with initiative context.",
+      "tools": ["my_action_items"],
+      "data_hint": "{ data: [{ id: string, entityType: string, entityId: string, title: string, status: string, priority: string, reason: string, parentName?: string, dueDate?: string }], meta: { organization_id: string, result_count: number, tool_name: string } }"
+    },
+    {
+      "name": "decidr_graph",
+      "description": "Force-directed SVG graph of projects and bridges with interactive nodes and semantic zoom",
+      "scope": "universal",
+      "rule": "Use when user asks for a visual map, graph, or diagram of their initiatives. Push via push_content with initiative_ids to scope the view. Call list_initiatives(format=compact) first to get IDs.",
+      "invoke_schema": {
+        "type": "object",
+        "properties": {
+          "initiative_ids": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Initiative IDs to scope the graph view. Omit for all initiatives."
+          }
+        }
+      },
+      "data_hint": "{ initiative_ids: string[] }"
+    }
+  ],
+  "mcp": {
+    "url": "https://app.decidrmcp.com/api/mcp",
+    "auth": {
+      "type": "oauth",
+      "client_id": "fc99d041-1923-416c-8173-a4c02ae9b3a7",
+      "auth_url": "https://app.ludflow.com/oauth/authorize",
+      "token_url": "https://app.ludflow.com/oauth/token",
+      "scopes": ["mcp:tools"]
+    },
+    "tool_prefix": "decidr_"
+  }
+}
