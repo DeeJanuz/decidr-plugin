@@ -1,7 +1,7 @@
 {
   "name": "decidr",
-  "version": "1.0.0",
-  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/v1.0.0/decidr.zip",
+  "version": "0.1.0",
+  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.0/decidr.zip",
   "registry_index": {
     "summary": "Decision governance — initiatives, projects, decisions, tasks, and bridges with approval workflows",
     "tags": ["governance", "decisions", "project-management", "approvals"],
