@@ -1,6 +1,26 @@
 (function() {
   'use strict';
 
+  var _token = '';
+
+  function isValidId(id) {
+    return typeof id === 'string' && /^[a-zA-Z0-9_-]+$/.test(id);
+  }
+
+  function _validatePathIds(path) {
+    var segments = path.split('/');
+    for (var i = 0; i < segments.length; i++) {
+      var seg = segments[i];
+      // Skip empty segments, known resource names, and query strings
+      if (!seg || seg.indexOf('?') !== -1) continue;
+      if (/^[a-z_-]+$/.test(seg)) continue;
+      // This segment looks like an ID — validate it
+      if (!isValidId(seg)) {
+        throw new Error('Invalid ID in path: ' + seg);
+      }
+    }
+  }
+
   function _qs(params) {
     if (!params) return '';
     var parts = [];
@@ -12,10 +32,10 @@
     return parts.length ? '?' + parts.join('&') : '';
   }
 
-  function _headers(token, withBody) {
+  function _headers(withBody) {
     var h = {};
-    if (token) {
-      h['Authorization'] = 'Bearer ' + token;
+    if (_token) {
+      h['Authorization'] = 'Bearer ' + _token;
     }
     if (withBody) {
       h['Content-Type'] = 'application/json';
@@ -32,13 +52,16 @@
 
   var api = {
     _baseUrl: '',
-    _token: '',
     _currentUserId: null,
     _initialized: false,
 
+    setToken: function(t) {
+      _token = t || '';
+    },
+
     init: function(baseUrl, token) {
       api._baseUrl = baseUrl.replace(/\/$/, '');
-      api._token = token;
+      _token = token || '';
     },
 
     autoInit: function(meta) {
@@ -62,26 +85,26 @@
       if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
         return window.__TAURI__.core.invoke('get_plugin_auth_header', { pluginName: 'decidr' })
           .then(function(authHeader) {
-            var token = (authHeader || '').replace(/^Bearer\s+/i, '');
-            api._token = token;
+            var t = (authHeader || '').replace(/^Bearer\s+/i, '');
+            _token = t;
             api._initialized = true;
             return api._fetchCurrentUser();
           })
           .catch(function() {
-            api._token = window.__decidrToken || '';
+            _token = window.__decidrToken || '';
             api._initialized = true;
             return api._fetchCurrentUser();
           });
       }
 
-      api._token = window.__decidrToken || '';
+      _token = window.__decidrToken || '';
       api._initialized = true;
       return api._fetchCurrentUser();
     },
 
     _fetchCurrentUser: function() {
       return fetch(api._baseUrl.replace(/\/api$/, '/api/auth/get-session'), {
-        headers: _headers(api._token, false),
+        headers: _headers(false),
         credentials: 'include'
       }).then(function(r) { return r.ok ? r.json() : null; })
         .then(function(data) {
@@ -118,31 +141,35 @@
       api.autoInit(meta || {}).then(function() {
         renderFn(UI, api);
       }).catch(function(err) {
+        console.error('[decidr] Init error:', err);
         container.innerHTML = '<div style="color:var(--color-error-text);padding:var(--space-4);">'
-          + 'Init error: ' + (UI.escapeHtml ? UI.escapeHtml(String(err.message || err)) : String(err.message || err))
+          + 'Failed to initialize. Please check your connection and try again.'
           + '</div>';
       });
     },
 
     get: function(path) {
+      _validatePathIds(path);
       return fetch(api._baseUrl + path, {
         method: 'GET',
-        headers: _headers(api._token, false)
+        headers: _headers(false)
       }).then(_handleResponse);
     },
 
     post: function(path, body) {
+      _validatePathIds(path);
       return fetch(api._baseUrl + path, {
         method: 'POST',
-        headers: _headers(api._token, true),
+        headers: _headers(true),
         body: JSON.stringify(body)
       }).then(_handleResponse);
     },
 
     patch: function(path, body) {
+      _validatePathIds(path);
       return fetch(api._baseUrl + path, {
         method: 'PATCH',
-        headers: _headers(api._token, true),
+        headers: _headers(true),
         body: JSON.stringify(body)
       }).then(_handleResponse);
     },
@@ -304,9 +331,10 @@
     },
 
     deleteDocument: function(id) {
+      _validatePathIds('/documents/' + id);
       return fetch(api._baseUrl + '/documents/' + id, {
         method: 'DELETE',
-        headers: _headers(api._token, false)
+        headers: _headers(false)
       }).then(_handleResponse);
     },
 
@@ -367,6 +395,12 @@
       return Promise.all(promises);
     }
   };
+
+  // Expose hasToken check without exposing the token value
+  Object.defineProperty(api, '_hasToken', {
+    get: function() { return !!_token; },
+    enumerable: false
+  });
 
   window.__decidrAPI = api;
 })();

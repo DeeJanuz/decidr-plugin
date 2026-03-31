@@ -91,6 +91,10 @@
       .replace(/'/g, '&#39;');
   };
 
+  UI.sanitizeColor = function(c) {
+    return (typeof c === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(c)) ? c : '#6b7280';
+  };
+
   UI.truncate = function(str, max) {
     if (!str) return '';
     max = max || 80;
@@ -172,8 +176,8 @@
     var s = size || 'md';
     var name = (user && user.name) ? user.name : '?';
     var initials = name.split(' ').map(function(w) { return w.charAt(0).toUpperCase(); }).join('').slice(0,2);
-    var color = (user && user.avatarColor) ? user.avatarColor : '#6366f1';
-    return '<span class="decidr-avatar decidr-avatar-' + s + '" style="background-color:' + color + ';">' + initials + '</span>';
+    var color = UI.sanitizeColor((user && user.avatarColor) ? user.avatarColor : '#6366f1');
+    return '<span class="decidr-avatar decidr-avatar-' + s + '" style="background-color:' + color + ';">' + UI.escapeHtml(initials) + '</span>';
   };
 
   UI.userChip = function(user) {
@@ -326,9 +330,9 @@
     if (project.createdBy && project.createdBy.name) {
       var ownerName = project.createdBy.name;
       var initials = ownerName.split(' ').map(function(w) { return w.charAt(0).toUpperCase(); }).join('').slice(0, 2);
-      var avatarColor = project.createdBy.avatarColor || projColor;
+      var avatarColor = UI.sanitizeColor(project.createdBy.avatarColor || projColor);
       ownerHtml = '<div class="decidr-dash-proj-owner">'
-        + '<span class="decidr-dash-proj-owner-avatar" style="background:' + avatarColor + ';">' + initials + '</span>'
+        + '<span class="decidr-dash-proj-owner-avatar" style="background:' + avatarColor + ';">' + UI.escapeHtml(initials) + '</span>'
         + '<span>' + UI.escapeHtml(ownerName) + '</span>'
         + '</div>';
     }
@@ -390,10 +394,10 @@
     var statusColor = _graphStatusColor(statusNorm);
     var statusLabel = statusNorm.replace(/_/g, ' ');
 
-    return '<div xmlns="http://www.w3.org/1999/xhtml" class="decidr-graph-proj-card" style="border-left-color:' + (node.color || '#60a5fa') + ';">'
+    return '<div xmlns="http://www.w3.org/1999/xhtml" class="decidr-graph-proj-card" style="border-left-color:' + UI.sanitizeColor(node.color || '#60a5fa') + ';">'
       + '<div class="decidr-graph-proj-card-name">' + UI.escapeHtml(node.label || '') + '</div>'
       + '<div class="decidr-graph-proj-card-owner">'
-      + '<span class="decidr-graph-proj-card-avatar" style="background:' + (node.ownerColor || '#6b7280') + ';">'
+      + '<span class="decidr-graph-proj-card-avatar" style="background:' + UI.sanitizeColor(node.ownerColor || '#6b7280') + ';">'
       + UI.escapeHtml(node.ownerInitials || '??') + '</span>'
       + '<span>' + UI.escapeHtml(node.ownerName || 'Unknown') + '</span>'
       + '</div>'
@@ -970,7 +974,7 @@
           // Render error state with debug info
           console.error('[decidr] SlideOut fetch failed:', err);
           console.error('[decidr] API baseUrl:', window.__decidrAPI ? window.__decidrAPI._baseUrl : 'NO API');
-          console.error('[decidr] API token:', window.__decidrAPI ? (window.__decidrAPI._token ? 'set (' + window.__decidrAPI._token.substring(0, 15) + '...)' : 'EMPTY') : 'NO API');
+          console.error('[decidr] API token:', window.__decidrAPI ? (window.__decidrAPI._hasToken ? 'present' : 'EMPTY') : 'NO API');
           var top = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
           if (top && top.id === id && top.type === type) {
             top.data = { _error: true, _errorMsg: String(err.message || err) };
@@ -2441,7 +2445,7 @@
 
     // Title row
     html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:var(--space-2);">';
-    html += '<div class="decidr-so-color-dot" style="background:' + (project.color || '#6366f1') + ';"></div>';
+    html += '<div class="decidr-so-color-dot" style="background:' + UI.sanitizeColor(project.color || '#6366f1') + ';"></div>';
     html += '<h3 class="decidr-so-detail-title" style="margin:0;">' + UI.escapeHtml(project.name) + '</h3>';
     html += UI.statusBadge(project.status);
     html += '</div>';
@@ -3039,7 +3043,7 @@
       html += '<div class="decidr-so-section">';
       html += UI.SlideOut._renderSectionHeader('Source Project');
       html += '<div class="decidr-so-list-item" data-entity-type="project" data-entity-id="' + UI.escapeHtml(bridge.fromProject.id) + '" style="cursor:pointer;">';
-      html += '<div class="decidr-so-color-dot" style="background:' + (bridge.fromProject.color || '#6366f1') + ';display:inline-block;margin-right:6px;"></div>';
+      html += '<div class="decidr-so-color-dot" style="background:' + UI.sanitizeColor(bridge.fromProject.color || '#6366f1') + ';display:inline-block;margin-right:6px;"></div>';
       html += '<span class="decidr-so-list-title">' + UI.escapeHtml(bridge.fromProject.name) + '</span>';
       html += UI.statusBadge(bridge.fromProject.status);
       html += '</div></div>';
@@ -3050,7 +3054,7 @@
       html += '<div class="decidr-so-section">';
       html += UI.SlideOut._renderSectionHeader('Target Project');
       html += '<div class="decidr-so-list-item" data-entity-type="project" data-entity-id="' + UI.escapeHtml(bridge.toProject.id) + '" style="cursor:pointer;">';
-      html += '<div class="decidr-so-color-dot" style="background:' + (bridge.toProject.color || '#6366f1') + ';display:inline-block;margin-right:6px;"></div>';
+      html += '<div class="decidr-so-color-dot" style="background:' + UI.sanitizeColor(bridge.toProject.color || '#6366f1') + ';display:inline-block;margin-right:6px;"></div>';
       html += '<span class="decidr-so-list-title">' + UI.escapeHtml(bridge.toProject.name) + '</span>';
       html += UI.statusBadge(bridge.toProject.status);
       html += '</div></div>';

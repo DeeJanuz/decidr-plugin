@@ -163,7 +163,7 @@
     }
 
     function getProjectColor(project) {
-      return project.color || '#60a5fa'; /* matches --entity-project; kept as literal for SVG attribute compatibility */
+      return UI.sanitizeColor(project.color || '#60a5fa'); /* matches --entity-project; kept as literal for SVG attribute compatibility */
     }
 
     function _graphStatusColor(status) {
@@ -224,7 +224,7 @@
 
     function _getOwnerColor(user) {
       if (!user) return '#6b7280';
-      return user.avatarColor || user.avatar_color || '#6b7280';
+      return UI.sanitizeColor(user.avatarColor || user.avatar_color || '#6b7280');
     }
 
     // ── Layout computation ────────────────────────────────────
