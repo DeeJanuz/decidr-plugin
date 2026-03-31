@@ -57,40 +57,18 @@
       API.listBridges({ take: 200 }).then(function(resp) { fetches.bridges = unwrapList(resp); }),
       API.getActionItems({ take: 200 }).then(function(resp) { fetches.actionItems = unwrapList(resp); })
     ]).then(function() {
-      // Projects don't have initiativeId directly.
-      // Derive mapping from bridges (which have initiativeId + fromProjectId/toProjectId)
-      // and from decisions (which may have initiativeId + projectId).
-      var projectToInit = {};  // projectId -> initiativeId
-
-      // From bridges (via initiativeBridges join data)
-      var bridges = fetches.bridges || [];
-      for (var b = 0; b < bridges.length; b++) {
-        var br = bridges[b];
-        var initBridges = br.initiativeBridges || [];
-        for (var ib = 0; ib < initBridges.length; ib++) {
-          var initId = initBridges[ib].initiativeId;
-          if (initId) {
-            if (br.fromProjectId && !projectToInit[br.fromProjectId]) {
-              projectToInit[br.fromProjectId] = initId;
-            }
-            if (br.toProjectId && !projectToInit[br.toProjectId]) {
-              projectToInit[br.toProjectId] = initId;
-            }
-          }
-        }
-      }
-
-      // From decisions (fallback)
-      var decisions = fetches.decisions || [];
-      for (var d = 0; d < decisions.length; d++) {
-        var dec = decisions[d];
-        if (dec.projectId && dec.initiativeId && !projectToInit[dec.projectId]) {
-          projectToInit[dec.projectId] = dec.initiativeId;
+      // Projects have direct initiativeId
+      var projectToInit = {};
+      var projects = fetches.projects || [];
+      for (var p = 0; p < projects.length; p++) {
+        var proj = projects[p];
+        var initId = proj.initiativeId || proj.initiative_id;
+        if (initId) {
+          projectToInit[proj.id] = initId;
         }
       }
 
       var projectMap = {};
-      var projects = fetches.projects || [];
       for (var p = 0; p < projects.length; p++) {
         var proj = projects[p];
         var initId = projectToInit[proj.id] || '_ungrouped';

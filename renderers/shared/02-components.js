@@ -3095,8 +3095,8 @@
     }
     // Stats from _count
     var counts = initiative._count || {};
-    if (counts.initiativeBridges > 0) {
-      metaItems.push({ html: counts.initiativeBridges + ' Bridge' + (counts.initiativeBridges !== 1 ? 's' : '') });
+    if (counts.projects > 0) {
+      metaItems.push({ html: counts.projects + ' Project' + (counts.projects !== 1 ? 's' : '') });
     }
     if (counts.decisions > 0) {
       metaItems.push({ html: counts.decisions + ' Decision' + (counts.decisions !== 1 ? 's' : '') });

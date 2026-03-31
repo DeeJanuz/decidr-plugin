@@ -1,6 +1,20 @@
 {
   "name": "decidr",
   "version": "0.1.0",
+  "prompt_definitions": [
+    {
+      "name": "initiative_planning",
+      "description": "Guided strategic interview to plan and scaffold a new initiative with projects, bridges, decisions, tasks, and documents. Acts as a professional strategist helping extract maximum value.",
+      "arguments": [
+        {
+          "name": "initiative_idea",
+          "description": "Optional starting description of the initiative idea",
+          "required": false
+        }
+      ],
+      "source": "prompts/initiative-planning.md"
+    }
+  ],
   "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.0/decidr.zip",
   "registry_index": {
     "summary": "Decision governance — initiatives, projects, decisions, tasks, and bridges with approval workflows",
@@ -27,9 +41,9 @@
         "tools": ["create_initiative", "create_project", "create_decision", "create_task", "create_bridge", "update_initiative", "update_project", "update_decision", "update_task", "update_bridge"]
       },
       {
-        "name": "Approvals",
-        "hint": "Approve, reject, or supersede decisions",
-        "tools": ["approve_decision", "reject_decision", "supersede_decision", "unsupersede_decision", "complete_task"]
+        "name": "Organization",
+        "hint": "Create organizations and manage members",
+        "tools": ["create_organization", "list_organizations", "list_members", "manage_member"]
       },
       {
         "name": "Documents",
@@ -42,31 +56,30 @@
   "tool_rules": {
     "my_action_items": "Best starting point for any session. For visual overview, push to decidr_dashboard with just { organization_id } from meta — the renderer fetches its own data. Or drill into individual items with get_decision/get_task.",
     "list_initiatives": "Use to discover all initiatives. Push to decidr_list. Use format=compact to save tokens. Pass initiative IDs to decidr_graph for a visual map.",
-    "list_projects": "Use to discover projects. Push to decidr_list. Filter by status to find active work.",
+    "list_projects": "Use to discover projects. Push to decidr_list. Filter by status to find active work. Use initiative_id to filter by initiative.",
     "list_decisions": "Use to discover decisions. Push to decidr_list. Call get_decision for full details including approval progress.",
     "list_tasks": "Use to discover tasks. Push to decidr_list. Filter by assigned_to_me=true for the user's work.",
     "list_bridges": "Use to discover cross-project bridges. Push to decidr_list.",
     "get_initiative": "Get full initiative details. Push to decidr_list for detail view.",
     "get_project": "Get full project details including task/decision/bridge counts. Push to decidr_list.",
-    "get_decision": "Get full decision details including approval progress and linked documents. If status is IN_PROGRESS, tell user they can approve_decision or reject_decision. Check list_entity_documents for supporting context.",
-    "get_task": "Get full task details. If status is TODO or IN_PROGRESS, user can complete_task. Push to decidr_list.",
+    "get_decision": "Get full decision details including approval progress and linked documents. If status is IN_PROGRESS, tell user they can use update_decision with action: approve or reject. Check list_entity_documents for supporting context.",
+    "get_task": "Get full task details. If status is TODO or IN_PROGRESS, user can use update_task with status: DONE. Push to decidr_list.",
     "get_bridge": "Get full bridge details including connected projects and decisions. Push to decidr_list.",
     "search": "Use when user describes something by name or keyword. Push results to decidr_list. Offer to drill into specific results with get_* tools.",
     "create_initiative": "Create a new initiative. Returns full created entity. Consider creating projects under it next.",
-    "create_project": "Create a new project. Returns full created entity. Consider adding decisions or tasks next.",
+    "create_project": "Create a new project. Pass initiative_id to link to an initiative and member_ids to assign members. Returns full created entity. Consider adding decisions or tasks next.",
     "create_decision": "Create a new decision. Requires entity_type and matching parent ID. Returns full created entity. Consider linking supporting documents with link_document.",
     "create_task": "Create a new task. Returns full created entity. Consider assigning with update_task or linking a document.",
     "create_bridge": "Create a bridge between two projects. Returns full created entity.",
     "update_initiative": "Update initiative fields. Returns full updated entity.",
     "update_project": "Update project fields and/or transition status. Returns full updated entity.",
-    "update_decision": "Update decision fields and/or transition status. Returns full updated entity. Field updates applied before status transition.",
-    "update_task": "Update task fields and/or transition status. Returns full updated entity.",
+    "update_decision": "Update decision fields and/or transition status. Use action param for approve/reject/supersede/unsupersede. Returns full updated entity. Field updates applied before status transition.",
+    "update_task": "Update task fields and/or transition status. Set status to DONE to complete a task. Returns full updated entity.",
     "update_bridge": "Update bridge fields and/or transition status. Returns full updated entity.",
-    "approve_decision": "Approve a decision. Before approving, call list_entity_documents for context. Returns approval progress. If all rules satisfied, auto-transitions to DECIDED.",
-    "reject_decision": "Reject a decision. Returns rejection result. Call my_action_items to see remaining work.",
-    "supersede_decision": "Mark a DECIDED decision as superseded by a newer one. Only works on DECIDED decisions.",
-    "unsupersede_decision": "Remove supersede link, restoring the decision as active.",
-    "complete_task": "Mark a task as DONE. Returns full updated entity. Call my_action_items to see remaining work.",
+    "create_organization": "Create a new organization. The caller becomes OWNER. Use manage_member to invite others.",
+    "list_organizations": "List organizations the current user belongs to.",
+    "list_members": "List all members of the current organization.",
+    "manage_member": "Add, update role, or remove organization members. Use action: add with email, update_role with user_id+role, or remove with user_id.",
     "link_document": "Attach a document to any entity. Use type URL for external links, LUDFLOW for LudFlow documents. Search LudFlow docs first with search_ludflow_documents.",
     "list_entity_documents": "List all documents linked to an entity. Essential context before approving decisions.",
     "search_ludflow_documents": "Search LudFlow documents by title. Use results with link_document to attach to DecidR entities.",
@@ -83,11 +96,8 @@
     "update_decision",
     "update_task",
     "update_bridge",
-    "approve_decision",
-    "reject_decision",
-    "supersede_decision",
-    "unsupersede_decision",
-    "complete_task",
+    "create_organization",
+    "manage_member",
     "link_document"
   ],
   "renderers": {
@@ -103,11 +113,10 @@
     "get_bridge": "decidr_list",
     "search": "decidr_list",
     "my_action_items": "decidr_dashboard",
-    "approve_decision": "decidr_list",
-    "reject_decision": "decidr_list",
-    "supersede_decision": "decidr_list",
-    "unsupersede_decision": "decidr_list",
-    "complete_task": "decidr_list",
+    "create_organization": "decidr_list",
+    "list_organizations": "decidr_list",
+    "list_members": "decidr_list",
+    "manage_member": "decidr_list",
     "create_initiative": "decidr_list",
     "create_project": "decidr_list",
     "create_decision": "decidr_list",
@@ -151,11 +160,10 @@
         "update_decision",
         "update_task",
         "update_bridge",
-        "approve_decision",
-        "reject_decision",
-        "supersede_decision",
-        "unsupersede_decision",
-        "complete_task",
+        "create_organization",
+        "list_organizations",
+        "list_members",
+        "manage_member",
         "link_document",
         "list_entity_documents",
         "search_ludflow_documents",

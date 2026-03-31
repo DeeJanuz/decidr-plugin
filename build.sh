@@ -42,9 +42,12 @@ bundle_renderer renderers/list.js      decidr-list.js
 bundle_renderer renderers/dashboard.js decidr-dashboard.js
 bundle_renderer renderers/graph.js     decidr-graph.js
 
+# Copy prompts directory
+cp -r prompts "${BUILD_DIR}/prompts"
+
 # Create ZIP in release directory
 cd "${BUILD_DIR}"
-zip -r "../${RELEASE_DIR}/${ZIP_NAME}" manifest.json renderers/
+zip -r "../${RELEASE_DIR}/${ZIP_NAME}" manifest.json renderers/ prompts/
 cd ..
 
 # Clean up

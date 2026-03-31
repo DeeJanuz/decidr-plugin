@@ -102,27 +102,8 @@
           if (uid) userMap[uid] = member;
         }
 
-        // Derive project → initiative mapping from bridges.
-        // Bridges have initiativeBridges: [{ initiativeId }] and fromProjectId/toProjectId.
-        // A project belongs to an initiative if any bridge touching it is linked to that initiative.
-        var projectInitMap = {}; // projectId -> Set of initiativeIds
-        for (var bi = 0; bi < allBridges.length; bi++) {
-          var br = allBridges[bi];
-          var ibridges = br.initiativeBridges || br.initiative_bridges || [];
-          for (var ib = 0; ib < ibridges.length; ib++) {
-            var iid = ibridges[ib].initiativeId || ibridges[ib].initiative_id;
-            if (!iid) continue;
-            var touchedProjects = [br.fromProjectId || br.from_project_id, br.toProjectId || br.to_project_id];
-            for (var tp = 0; tp < touchedProjects.length; tp++) {
-              var pid = touchedProjects[tp];
-              if (!pid) continue;
-              if (!projectInitMap[pid]) projectInitMap[pid] = {};
-              projectInitMap[pid][iid] = true;
-            }
-          }
-        }
-
-        // Also check if project has a direct initiativeId (mockup compat)
+        // Projects have direct initiativeId FK
+        var projectInitMap = {};
         var projectLookup = {};
         for (var pi = 0; pi < allProjects.length; pi++) {
           projectLookup[allProjects[pi].id] = allProjects[pi];
@@ -648,13 +629,14 @@
           + ' rx="20" ry="20"'
           + ' style="fill:var(--glass-bg);stroke:var(--glass-border)" stroke-width="1"/>';
 
-        // Header — pure SVG (no foreignObject)
+        // Header — clipped to container's rounded top corners
         var headerH = 56;
+        var clipId = 'header-clip-' + c.initiativeId;
+        svg += '<defs><clipPath id="' + clipId + '">'
+          + '<rect x="' + c.x + '" y="' + c.y + '" width="' + c.width + '" height="' + headerH + '"'
+          + ' rx="20" ry="20"/></clipPath></defs>';
         svg += '<rect x="' + c.x + '" y="' + c.y + '" width="' + c.width + '" height="' + headerH + '"'
-          + ' rx="20" ry="20" fill="var(--glass-bg-heavy)"/>';
-        // Bottom half of header rect to square off bottom corners
-        svg += '<rect x="' + c.x + '" y="' + (c.y + 20) + '" width="' + c.width + '" height="' + (headerH - 20) + '"'
-          + ' fill="var(--glass-bg-heavy)"/>';
+          + ' clip-path="url(#' + clipId + ')" fill="var(--glass-bg-heavy)"/>';
         // Header border bottom
         svg += '<line x1="' + c.x + '" y1="' + (c.y + headerH) + '" x2="' + (c.x + c.width) + '" y2="' + (c.y + headerH) + '"'
           + ' stroke="var(--glass-border)" stroke-width="1"/>';
@@ -782,7 +764,7 @@
       if (!summaryLayer || !detailLayer) return;
 
       var LOW = 0.65;
-      var HIGH = 0.90;
+      var HIGH = 0.78;
 
       var t;
       if (scale >= HIGH) {

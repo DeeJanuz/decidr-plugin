@@ -30,9 +30,6 @@
     if (!toolName) return 'list';
     if (toolName === 'search') return 'search';
     if (toolName === 'my_action_items') return 'action_items';
-    if (toolName === 'approve_decision') return 'approve';
-    if (toolName === 'supersede_decision') return 'supersede';
-    if (toolName === 'complete_task') return 'complete';
     if (toolName.indexOf('create_') === 0) return 'create';
     if (toolName.indexOf('update_') === 0) return 'update';
     if (toolName.indexOf('get_') === 0) return 'get';
