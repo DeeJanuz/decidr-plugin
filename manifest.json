@@ -1,31 +1,6 @@
 {
   "name": "decidr",
   "version": "1.0.0",
-  "description": "DecidR — decision graph tool for solo builders",
-  "registry_index": {
-    "groups": [
-      {
-        "name": "Discover",
-        "description": "Find entities by listing or searching",
-        "tools": ["list_initiatives", "list_projects", "list_decisions", "list_tasks", "list_bridges", "search"]
-      },
-      {
-        "name": "Read",
-        "description": "Get full details for a specific entity",
-        "tools": ["get_initiative", "get_project", "get_decision", "get_task", "get_bridge", "list_entity_documents", "find_entities_by_ludflow_document"]
-      },
-      {
-        "name": "Act",
-        "description": "Create, update, and link entities",
-        "tools": ["create_initiative", "create_project", "create_decision", "create_task", "create_bridge", "update_initiative", "update_project", "update_decision", "update_task", "update_bridge", "link_document", "search_ludflow_documents"]
-      },
-      {
-        "name": "Review",
-        "description": "Action items, approvals, and completions",
-        "tools": ["my_action_items", "approve_decision", "reject_decision", "supersede_decision", "unsupersede_decision", "complete_task"]
-      }
-    ]
-  },
   "tool_rules": {
     "my_action_items": "Best starting point for any session. Push result to decidr_dashboard for visual overview, or drill into individual items with get_decision/get_task.",
     "list_initiatives": "Use to discover all initiatives. Push to decidr_list. Use format=compact to save tokens. Pass initiative IDs to decidr_graph for a visual map.",
@@ -163,21 +138,12 @@
       "description": "Force-directed SVG graph of projects and bridges with interactive nodes and semantic zoom",
       "scope": "universal",
       "rule": "Use when user asks for a visual map, graph, or diagram of their initiatives. Push via push_content with initiative_ids to scope the view. Call list_initiatives(format=compact) first to get IDs.",
-      "invoke_schema": {
-        "type": "object",
-        "properties": {
-          "initiative_ids": {
-            "type": "array",
-            "items": { "type": "string" },
-            "description": "Initiative IDs to scope the graph view. Omit for all initiatives."
-          }
-        }
-      },
+      "invoke_schema": "{ \"type\": \"object\", \"properties\": { \"initiative_ids\": { \"type\": \"array\", \"items\": { \"type\": \"string\" }, \"description\": \"Initiative IDs to scope the graph view. Omit for all initiatives.\" } } }",
       "data_hint": "{ initiative_ids: string[] }"
     }
   ],
   "mcp": {
-    "url": "https://app.decidrmcp.com/api/mcp",
+    "url": "__DECIDR_BASE_URL__/api/mcp",
     "auth": {
       "type": "oauth",
       "client_id": "fc99d041-1923-416c-8173-a4c02ae9b3a7",

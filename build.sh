@@ -5,7 +5,10 @@ PLUGIN_NAME="decidr"
 ZIP_NAME="${PLUGIN_NAME}-plugin.zip"
 BUILD_DIR=".build"
 
-echo "Building ${ZIP_NAME}..."
+# Base URL for the DecidR API (default: local dev server)
+DECIDR_BASE_URL="${DECIDR_BASE_URL:-http://localhost:3001}"
+
+echo "Building ${ZIP_NAME} (API: ${DECIDR_BASE_URL})..."
 
 # Clean previous build
 rm -f "${ZIP_NAME}"
@@ -14,8 +17,8 @@ rm -rf "${BUILD_DIR}"
 # Create build directory
 mkdir -p "${BUILD_DIR}/renderers"
 
-# Copy manifest
-cp manifest.json "${BUILD_DIR}/"
+# Copy manifest with base URL substituted
+sed "s|__DECIDR_BASE_URL__|${DECIDR_BASE_URL}|g" manifest.json > "${BUILD_DIR}/manifest.json"
 
 # Bundle shared files into each renderer
 # Companion loads one renderer file per tool — shared deps must be inlined
