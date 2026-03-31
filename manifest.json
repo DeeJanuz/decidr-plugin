@@ -40,7 +40,7 @@
     "renderer_names": ["decidr_list", "decidr_dashboard", "decidr_graph"]
   },
   "tool_rules": {
-    "my_action_items": "Best starting point for any session. Push result to decidr_dashboard for visual overview, or drill into individual items with get_decision/get_task.",
+    "my_action_items": "Best starting point for any session. For visual overview, push to decidr_dashboard with just { organization_id } from meta — the renderer fetches its own data. Or drill into individual items with get_decision/get_task.",
     "list_initiatives": "Use to discover all initiatives. Push to decidr_list. Use format=compact to save tokens. Pass initiative IDs to decidr_graph for a visual map.",
     "list_projects": "Use to discover projects. Push to decidr_list. Filter by status to find active work.",
     "list_decisions": "Use to discover decisions. Push to decidr_list. Call get_decision for full details including approval progress.",
@@ -167,17 +167,17 @@
       "name": "decidr_dashboard",
       "description": "Full dashboard with initiative grouping, health bars, project cards, and prioritized action items",
       "scope": "tool",
-      "rule": "Preferred renderer for my_action_items and project overview. Shows prioritized work queue with initiative context.",
+      "rule": "Preferred renderer for my_action_items and project overview. The renderer fetches all data from the API — only pass organization_id. Do NOT pass action items, entities, or other data in the payload.",
       "tools": ["my_action_items"],
-      "data_hint": "{ data: [{ id: string, entityType: string, entityId: string, title: string, status: string, priority: string, reason: string, parentName?: string, dueDate?: string }], meta: { organization_id: string, result_count: number, tool_name: string } }"
+      "data_hint": "{ organization_id: string }"
     },
     {
       "name": "decidr_graph",
       "description": "Force-directed SVG graph of projects and bridges with interactive nodes and semantic zoom",
       "scope": "universal",
-      "rule": "Use when user asks for a visual map, graph, or diagram of their initiatives. Push via push_content with initiative_ids to scope the view. Call list_initiatives(format=compact) first to get IDs.",
+      "rule": "Use when user asks for a visual map, graph, or diagram of their initiatives. The renderer fetches all data from the API — only pass organization_id and optionally initiative_ids to scope the view. Do NOT pass full entity data.",
       "invoke_schema": "{ \"type\": \"object\", \"properties\": { \"initiative_ids\": { \"type\": \"array\", \"items\": { \"type\": \"string\" }, \"description\": \"Initiative IDs to scope the graph view. Omit for all initiatives.\" } } }",
-      "data_hint": "{ initiative_ids: string[] }"
+      "data_hint": "{ organization_id: string, initiative_ids?: string[] }"
     }
   ],
   "mcp": {
@@ -189,6 +189,6 @@
       "token_url": "https://app.ludflow.com/oauth/token",
       "scopes": ["mcp:tools"]
     },
-    "tool_prefix": "decidr_"
+    "tool_prefix": "decidr__"
   }
 }

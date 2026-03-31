@@ -46,12 +46,12 @@
         return Promise.resolve();
       }
 
-      // Resolve base URL
+      // Resolve base URL from MCPViews plugin config, meta override, or fallback
       var base = '';
       if (meta && meta._api_base) {
         base = meta._api_base;
-      } else if (window.__decidrManifest && window.__decidrManifest.mcp && window.__decidrManifest.mcp.url) {
-        base = window.__decidrManifest.mcp.url.replace(/\/api\/mcp\/?$/, '/api');
+      } else if (window.__mcpviews_plugins && window.__mcpviews_plugins.decidr && window.__mcpviews_plugins.decidr.mcp_url) {
+        base = window.__mcpviews_plugins.decidr.mcp_url.replace(/\/api\/mcp\/?$/, '/api');
       } else {
         base = 'http://localhost:3001/api';
       }
