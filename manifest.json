@@ -15,7 +15,7 @@
       "source": "prompts/initiative-planning.md"
     }
   ],
-  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/v0.1.1/decidr.zip",
+  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.1/decidr.zip",
   "registry_index": {
     "summary": "Decision governance — initiatives, projects, decisions, tasks, and bridges with approval workflows",
     "tags": ["governance", "decisions", "project-management", "approvals"],
