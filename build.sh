@@ -2,23 +2,21 @@
 set -euo pipefail
 
 PLUGIN_NAME="decidr"
-ZIP_NAME="${PLUGIN_NAME}-plugin.zip"
+ZIP_NAME="${PLUGIN_NAME}.zip"
+RELEASE_DIR="release"
 BUILD_DIR=".build"
 
-# Base URL for the DecidR API (default: local dev server)
-DECIDR_BASE_URL="${DECIDR_BASE_URL:-http://localhost:3001}"
-
-echo "Building ${ZIP_NAME} (API: ${DECIDR_BASE_URL})..."
+echo "Building ${ZIP_NAME}..."
 
 # Clean previous build
-rm -f "${ZIP_NAME}"
-rm -rf "${BUILD_DIR}"
+rm -rf "${RELEASE_DIR}" "${BUILD_DIR}"
+mkdir -p "${RELEASE_DIR}"
 
 # Create build directory
 mkdir -p "${BUILD_DIR}/renderers"
 
-# Copy manifest with base URL substituted
-sed "s|__DECIDR_BASE_URL__|${DECIDR_BASE_URL}|g" manifest.json > "${BUILD_DIR}/manifest.json"
+# Copy manifest as-is (production URL lives in manifest.json)
+cp manifest.json "${BUILD_DIR}/manifest.json"
 
 # Bundle shared files into each renderer
 # Companion loads one renderer file per tool — shared deps must be inlined
@@ -44,12 +42,12 @@ bundle_renderer renderers/list.js      decidr-list.js
 bundle_renderer renderers/dashboard.js decidr-dashboard.js
 bundle_renderer renderers/graph.js     decidr-graph.js
 
-# Create ZIP from build directory
+# Create ZIP in release directory
 cd "${BUILD_DIR}"
-zip -r "../${ZIP_NAME}" manifest.json renderers/
+zip -r "../${RELEASE_DIR}/${ZIP_NAME}" manifest.json renderers/
 cd ..
 
 # Clean up
 rm -rf "${BUILD_DIR}"
 
-echo "Built ${ZIP_NAME} ($(du -h "${ZIP_NAME}" | cut -f1))"
+echo "Built ${RELEASE_DIR}/${ZIP_NAME} ($(du -h "${RELEASE_DIR}/${ZIP_NAME}" | cut -f1))"

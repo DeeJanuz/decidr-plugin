@@ -1,6 +1,44 @@
 {
   "name": "decidr",
   "version": "1.0.0",
+  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/v1.0.0/decidr.zip",
+  "registry_index": {
+    "summary": "Decision governance — initiatives, projects, decisions, tasks, and bridges with approval workflows",
+    "tags": ["governance", "decisions", "project-management", "approvals"],
+    "tool_groups": [
+      {
+        "name": "Action Items",
+        "hint": "Dashboard of prioritized work: pending approvals, assigned tasks, stalled decisions",
+        "tools": ["my_action_items"]
+      },
+      {
+        "name": "Browse",
+        "hint": "List and search initiatives, projects, decisions, tasks, and bridges",
+        "tools": ["list_initiatives", "list_projects", "list_decisions", "list_tasks", "list_bridges", "search"]
+      },
+      {
+        "name": "Details",
+        "hint": "Get full entity details including status, approvals, and linked documents",
+        "tools": ["get_initiative", "get_project", "get_decision", "get_task", "get_bridge"]
+      },
+      {
+        "name": "Create & Update",
+        "hint": "Create and modify initiatives, projects, decisions, tasks, and bridges",
+        "tools": ["create_initiative", "create_project", "create_decision", "create_task", "create_bridge", "update_initiative", "update_project", "update_decision", "update_task", "update_bridge"]
+      },
+      {
+        "name": "Approvals",
+        "hint": "Approve, reject, or supersede decisions",
+        "tools": ["approve_decision", "reject_decision", "supersede_decision", "unsupersede_decision", "complete_task"]
+      },
+      {
+        "name": "Documents",
+        "hint": "Link documents to entities, search LudFlow docs, find entities by document",
+        "tools": ["link_document", "list_entity_documents", "search_ludflow_documents", "find_entities_by_ludflow_document"]
+      }
+    ],
+    "renderer_names": ["decidr_list", "decidr_dashboard", "decidr_graph"]
+  },
   "tool_rules": {
     "my_action_items": "Best starting point for any session. Push result to decidr_dashboard for visual overview, or drill into individual items with get_decision/get_task.",
     "list_initiatives": "Use to discover all initiatives. Push to decidr_list. Use format=compact to save tokens. Pass initiative IDs to decidr_graph for a visual map.",
@@ -143,7 +181,7 @@
     }
   ],
   "mcp": {
-    "url": "__DECIDR_BASE_URL__/api/mcp",
+    "url": "https://app.decidrmcp.com/api/mcp",
     "auth": {
       "type": "oauth",
       "client_id": "fc99d041-1923-416c-8173-a4c02ae9b3a7",
