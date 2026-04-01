@@ -176,7 +176,9 @@
       "description": "Full dashboard with initiative grouping, health bars, project cards, and prioritized action items",
       "scope": "universal",
       "rule": "Push directly to show the dashboard — do NOT call my_action_items or any other tool first. The renderer fetches all data from the API. Only pass organization_id. For fast access, push immediately when user asks for dashboard or overview.",
-      "data_hint": "{ organization_id: string }"
+      "data_hint": "{ organization_id: string }",
+      "standalone": true,
+      "standalone_label": "Dashboard"
     },
     {
       "name": "decidr_graph",
@@ -184,7 +186,9 @@
       "scope": "universal",
       "rule": "Push directly when user asks for a visual map, graph, or diagram — do NOT call list_initiatives or any other tool first. The renderer fetches all data from the API. Only pass organization_id and optionally initiative_ids to scope the view. For fast access, push immediately.",
       "invoke_schema": "{ \"type\": \"object\", \"properties\": { \"initiative_ids\": { \"type\": \"array\", \"items\": { \"type\": \"string\" }, \"description\": \"Initiative IDs to scope the graph view. Omit for all initiatives.\" } } }",
-      "data_hint": "{ organization_id: string, initiative_ids?: string[] }"
+      "data_hint": "{ organization_id: string, initiative_ids?: string[] }",
+      "standalone": true,
+      "standalone_label": "Graph View"
     }
   ],
   "mcp": {
