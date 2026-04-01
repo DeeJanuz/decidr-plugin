@@ -169,8 +169,8 @@
       return categories;
     }
 
-    var ACTIONABLE_STATUSES = { OPEN: true, IN_PROGRESS: true, PROPOSED: true, UNDER_DISCUSSION: true };
-    var TERMINAL_STATUSES = { DECIDED: true, IMPLEMENTED: true, SUPERSEDED: true, DEFERRED: true, ARCHIVED: true };
+    var ACTIONABLE_STATUSES = { PROPOSED: true, IN_PROGRESS: true };
+    var TERMINAL_STATUSES = { IMPLEMENTED: true, REJECTED: true, ARCHIVED: true };
 
     function isActionableStatus(status) {
       return !!ACTIONABLE_STATUSES[status ? String(status).toUpperCase() : ''];
@@ -196,7 +196,7 @@
         } else if (tab === 'active') {
           if (!TERMINAL_STATUSES[status]) results.push(dec);
         } else if (tab === 'resolved') {
-          if (status === 'DECIDED' || status === 'IMPLEMENTED') results.push(dec);
+          if (status === 'APPROVED' || status === 'IMPLEMENTED') results.push(dec);
         }
       }
       return sortByCreatedDesc(results);

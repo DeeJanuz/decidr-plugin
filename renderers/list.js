@@ -616,15 +616,14 @@
 
   function inferPriority(entity) {
     var s = (entity.status || '').toUpperCase();
-    if (s === 'BLOCKED' || s === 'OPEN' || s === 'PROPOSED') return 'high';
-    if (s === 'IN_PROGRESS' || s === 'UNDER_DISCUSSION') return 'medium';
+    if (s === 'PROPOSED') return 'high';
+    if (s === 'IN_PROGRESS' || s === 'APPROVED') return 'medium';
     return 'low';
   }
 
   function inferReason(entity, entityType) {
     var s = (entity.status || '').toUpperCase();
-    if (s === 'BLOCKED') return 'Blocked — needs attention';
-    if (entityType === 'decision' && (s === 'OPEN' || s === 'PROPOSED' || s === 'UNDER_DISCUSSION')) {
+    if (entityType === 'decision' && s === 'PROPOSED') {
       return 'Decision pending';
     }
     if (entityType === 'task' && (s === 'TODO' || s === 'IN_PROGRESS')) {

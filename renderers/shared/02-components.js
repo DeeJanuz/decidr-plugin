@@ -49,17 +49,18 @@
     ON_HOLD: 'On Hold',
     COMPLETED: 'Completed',
     ARCHIVED: 'Archived',
-    OPEN: 'Open',
-    IN_PROGRESS: 'In Progress',
-    DECIDED: 'Decided',
-    BLOCKED: 'Blocked',
-    DEFERRED: 'Deferred',
-    TODO: 'To Do',
-    DONE: 'Done',
     PROPOSED: 'Proposed',
-    UNDER_DISCUSSION: 'Under Discussion',
-    AGREED: 'Agreed',
-    IMPLEMENTED: 'Implemented'
+    APPROVED: 'Approved',
+    REJECTED: 'Rejected',
+    IN_PROGRESS: 'In Progress',
+    IMPLEMENTED: 'Implemented',
+    PLANNING: 'Planning',
+    ACTIVE: 'Active',
+    ON_HOLD: 'On Hold',
+    COMPLETED: 'Completed',
+    ARCHIVED: 'Archived',
+    TODO: 'To Do',
+    DONE: 'Done'
   };
 
   var PRIORITY_LABELS = {
@@ -2683,7 +2684,7 @@
       }
       html += '</div></div>';
     }
-    if (decision.status === 'DECIDED') {
+    if (decision.status === 'APPROVED' || decision.status === 'IMPLEMENTED') {
       html += '<button class="decidr-so-btn" id="decidr-so-btn-supersede">Supersede</button>';
     }
     html += '<span class="decidr-so-spacer"></span>';
