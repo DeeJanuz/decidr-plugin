@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    branches: [master]
+    paths: [manifest.json]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check version change
+        id: version
+        run: |
+          CURRENT=$(python3 -c "import json; print(json.load(open('manifest.json'))['version'])")
+          PREVIOUS=$(git show HEAD~1:manifest.json 2>/dev/null | python3 -c "import json,sys; print(json.load(sys.stdin)['version'])" 2>/dev/null || echo "")
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          if [ "$CURRENT" != "$PREVIOUS" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build plugin
+        if: steps.version.outputs.changed == 'true'
+        run: bash build.sh
+
+      - name: Create release
+        if: steps.version.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.current }}"
+          gh release create "$VERSION" release/decidr.zip \
+            --title "$VERSION" \
+            --generate-notes
