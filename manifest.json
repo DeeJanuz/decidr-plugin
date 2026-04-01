@@ -1,6 +1,6 @@
 {
   "name": "decidr",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "prompt_definitions": [
     {
       "name": "initiative_planning",
@@ -15,7 +15,7 @@
       "source": "prompts/initiative-planning.md"
     }
   ],
-  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.2/decidr.zip",
+  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.3/decidr.zip",
   "registry_index": {
     "summary": "Decision governance \u2014 initiatives, projects, decisions, tasks, and bridges with approval workflows",
     "tags": [
