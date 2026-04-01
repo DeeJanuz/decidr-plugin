@@ -15,47 +15,92 @@
       "source": "prompts/initiative-planning.md"
     }
   ],
-  "_download_url_note": "download_url is injected by build.sh from version field",
+  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.2/decidr.zip",
   "registry_index": {
-    "summary": "Decision governance — initiatives, projects, decisions, tasks, and bridges with approval workflows",
-    "tags": ["governance", "decisions", "project-management", "approvals"],
+    "summary": "Decision governance \u2014 initiatives, projects, decisions, tasks, and bridges with approval workflows",
+    "tags": [
+      "governance",
+      "decisions",
+      "project-management",
+      "approvals"
+    ],
     "tool_groups": [
       {
         "name": "Action Items",
         "hint": "Dashboard of prioritized work: pending approvals, assigned tasks, stalled decisions",
-        "tools": ["my_action_items"]
+        "tools": [
+          "my_action_items"
+        ]
       },
       {
         "name": "Browse",
         "hint": "List and search initiatives, projects, decisions, tasks, and bridges",
-        "tools": ["list_initiatives", "list_projects", "list_decisions", "list_tasks", "list_bridges", "search"]
+        "tools": [
+          "list_initiatives",
+          "list_projects",
+          "list_decisions",
+          "list_tasks",
+          "list_bridges",
+          "search"
+        ]
       },
       {
         "name": "Details",
         "hint": "Get full entity details including status, approvals, and linked documents",
-        "tools": ["get_initiative", "get_project", "get_decision", "get_task", "get_bridge"]
+        "tools": [
+          "get_initiative",
+          "get_project",
+          "get_decision",
+          "get_task",
+          "get_bridge"
+        ]
       },
       {
         "name": "Create & Update",
         "hint": "Create and modify initiatives, projects, decisions, tasks, and bridges",
-        "tools": ["create_initiative", "create_project", "create_decision", "create_task", "create_bridge", "update_initiative", "update_project", "update_decision", "update_task", "update_bridge"]
+        "tools": [
+          "create_initiative",
+          "create_project",
+          "create_decision",
+          "create_task",
+          "create_bridge",
+          "update_initiative",
+          "update_project",
+          "update_decision",
+          "update_task",
+          "update_bridge"
+        ]
       },
       {
         "name": "Organization",
         "hint": "Create organizations and manage members",
-        "tools": ["create_organization", "list_organizations", "list_members", "manage_member"]
+        "tools": [
+          "create_organization",
+          "list_organizations",
+          "list_members",
+          "manage_member"
+        ]
       },
       {
         "name": "Documents",
         "hint": "Link documents to entities, search LudFlow docs, find entities by document",
-        "tools": ["link_document", "list_entity_documents", "search_ludflow_documents", "find_entities_by_ludflow_document"]
+        "tools": [
+          "link_document",
+          "list_entity_documents",
+          "search_ludflow_documents",
+          "find_entities_by_ludflow_document"
+        ]
       }
     ],
-    "renderer_names": ["decidr_list", "decidr_dashboard", "decidr_graph"]
+    "renderer_names": [
+      "decidr_list",
+      "decidr_dashboard",
+      "decidr_graph"
+    ]
   },
   "tool_rules": {
-    "my_action_items": "Returns prioritized action items as entity refs. Push results to decidr_list — the renderer fetches full data from the API. Drill into individual items with get_decision/get_task. For a visual dashboard overview, push directly to decidr_dashboard with just { organization_id } instead — no tool call needed.",
-    "list_initiatives": "Use to discover all initiatives. Push to decidr_list. Use format=compact to save tokens. For a visual graph, push directly to decidr_graph with just { organization_id } — no tool call needed.",
+    "my_action_items": "Returns prioritized action items as entity refs. Push results to decidr_list \u2014 the renderer fetches full data from the API. Drill into individual items with get_decision/get_task. For a visual dashboard overview, push directly to decidr_dashboard with just { organization_id } instead \u2014 no tool call needed.",
+    "list_initiatives": "Use to discover all initiatives. Push to decidr_list. Use format=compact to save tokens. For a visual graph, push directly to decidr_graph with just { organization_id } \u2014 no tool call needed.",
     "list_projects": "Use to discover projects. Push to decidr_list. Filter by status to find active work. Use initiative_id to filter by initiative.",
     "list_decisions": "Use to discover decisions. Push to decidr_list. Call get_decision for full details including approval progress.",
     "list_tasks": "Use to discover tasks. Push to decidr_list. Filter by assigned_to_me=true for the user's work.",
@@ -135,9 +180,9 @@
   "renderer_definitions": [
     {
       "name": "decidr_list",
-      "description": "Universal entity renderer — displays lists, details, search results, and action items with slide-out panels for navigation",
+      "description": "Universal entity renderer \u2014 displays lists, details, search results, and action items with slide-out panels for navigation",
       "scope": "tool",
-      "rule": "Use for all entity list, detail, and search views. Always use ref-only mode — pass entity type + ID, never full payloads.",
+      "rule": "Use for all entity list, detail, and search views. Always use ref-only mode \u2014 pass entity type + ID, never full payloads.",
       "tools": [
         "list_initiatives",
         "list_projects",
@@ -169,13 +214,13 @@
         "search_ludflow_documents",
         "find_entities_by_ludflow_document"
       ],
-      "data_hint": "IMPORTANT: Always use ref-only mode. Pass entity references — the renderer fetches full data from the API. Format: { entities: [{ type: 'initiative'|'project'|'decision'|'task'|'bridge', id: string }], meta: { organization_id: string, result_count: number, tool_name: string } }. The tool_name determines rendering mode: 'list_decisions' for list view, 'get_decision' for detail view, 'my_action_items' for action items, 'search' for search results. Entity type names are singular lowercase. Never pass full entity payloads — only type and id."
+      "data_hint": "IMPORTANT: Always use ref-only mode. Pass entity references \u2014 the renderer fetches full data from the API. Format: { entities: [{ type: 'initiative'|'project'|'decision'|'task'|'bridge', id: string }], meta: { organization_id: string, result_count: number, tool_name: string } }. The tool_name determines rendering mode: 'list_decisions' for list view, 'get_decision' for detail view, 'my_action_items' for action items, 'search' for search results. Entity type names are singular lowercase. Never pass full entity payloads \u2014 only type and id."
     },
     {
       "name": "decidr_dashboard",
       "description": "Full dashboard with initiative grouping, health bars, project cards, and prioritized action items",
       "scope": "universal",
-      "rule": "Push directly to show the dashboard — do NOT call my_action_items or any other tool first. The renderer fetches all data from the API. Only pass organization_id. For fast access, push immediately when user asks for dashboard or overview.",
+      "rule": "Push directly to show the dashboard \u2014 do NOT call my_action_items or any other tool first. The renderer fetches all data from the API. Only pass organization_id. For fast access, push immediately when user asks for dashboard or overview.",
       "data_hint": "{ organization_id: string }",
       "standalone": true,
       "standalone_label": "Dashboard"
@@ -184,7 +229,7 @@
       "name": "decidr_graph",
       "description": "Force-directed SVG graph of projects and bridges with interactive nodes and semantic zoom",
       "scope": "universal",
-      "rule": "Push directly when user asks for a visual map, graph, or diagram — do NOT call list_initiatives or any other tool first. The renderer fetches all data from the API. Only pass organization_id and optionally initiative_ids to scope the view. For fast access, push immediately.",
+      "rule": "Push directly when user asks for a visual map, graph, or diagram \u2014 do NOT call list_initiatives or any other tool first. The renderer fetches all data from the API. Only pass organization_id and optionally initiative_ids to scope the view. For fast access, push immediately.",
       "invoke_schema": "{ \"type\": \"object\", \"properties\": { \"initiative_ids\": { \"type\": \"array\", \"items\": { \"type\": \"string\" }, \"description\": \"Initiative IDs to scope the graph view. Omit for all initiatives.\" } } }",
       "data_hint": "{ organization_id: string, initiative_ids?: string[] }",
       "standalone": true,
@@ -198,7 +243,9 @@
       "client_id": "fc99d041-1923-416c-8173-a4c02ae9b3a7",
       "auth_url": "https://app.ludflow.com/oauth/authorize",
       "token_url": "https://app.ludflow.com/oauth/token",
-      "scopes": ["mcp:tools"]
+      "scopes": [
+        "mcp:tools"
+      ]
     },
     "tool_prefix": "decidr__"
   }

@@ -15,18 +15,23 @@ mkdir -p "${RELEASE_DIR}"
 # Create build directory
 mkdir -p "${BUILD_DIR}/renderers"
 
-# Read version from manifest and inject download_url
+# Read version from manifest and sync download_url in both source and build
 VERSION=$(python3 -c "import json; print(json.load(open('manifest.json'))['version'])")
-REPO="https://github.com/DeeJanuz/decidr-plugin/releases/download/${VERSION}/decidr.zip"
+DOWNLOAD_URL="https://github.com/DeeJanuz/decidr-plugin/releases/download/${VERSION}/decidr.zip"
+
+# Update source manifest so raw GitHub URL has correct download_url
 python3 -c "
-import json, sys
+import json
 m = json.load(open('manifest.json'))
-m.pop('_download_url_note', None)
-m['download_url'] = '${REPO}'
-json.dump(m, open('${BUILD_DIR}/manifest.json', 'w'), indent=2)
+m['download_url'] = '${DOWNLOAD_URL}'
+json.dump(m, open('manifest.json', 'w'), indent=2)
+print('  Updated source manifest download_url')
 "
+
+# Copy to build dir
+cp manifest.json "${BUILD_DIR}/manifest.json"
 echo "  Version: ${VERSION}"
-echo "  Download URL: ${REPO}"
+echo "  Download URL: ${DOWNLOAD_URL}"
 
 # Bundle shared files into each renderer
 # Companion loads one renderer file per tool — shared deps must be inlined
