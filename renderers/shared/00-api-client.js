@@ -50,6 +50,40 @@
     return response.json();
   }
 
+  function _hasTauri() {
+    return window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function';
+  }
+
+  function _refreshToken() {
+    if (!_hasTauri()) {
+      return Promise.reject(new Error('Tauri IPC not available for token refresh'));
+    }
+    return window.__TAURI__.core.invoke('get_plugin_auth_header', { pluginName: 'decidr' })
+      .then(function(authHeader) {
+        var t = (authHeader || '').replace(/^Bearer\s+/i, '');
+        _token = t;
+        return _token;
+      });
+  }
+
+  function _fetchWithRetry(url, opts) {
+    return fetch(url, opts).then(function(response) {
+      if (response.status === 401 && _hasTauri()) {
+        return _refreshToken().then(function() {
+          var retryOpts = {};
+          for (var key in opts) {
+            if (opts.hasOwnProperty(key)) {
+              retryOpts[key] = opts[key];
+            }
+          }
+          retryOpts.headers = _headers(!!retryOpts.body);
+          return fetch(url, retryOpts).then(_handleResponse);
+        });
+      }
+      return _handleResponse(response);
+    });
+  }
+
   var api = {
     _baseUrl: '',
     _currentUserId: null,
@@ -150,28 +184,28 @@
 
     get: function(path) {
       _validatePathIds(path);
-      return fetch(api._baseUrl + path, {
+      return _fetchWithRetry(api._baseUrl + path, {
         method: 'GET',
         headers: _headers(false)
-      }).then(_handleResponse);
+      });
     },
 
     post: function(path, body) {
       _validatePathIds(path);
-      return fetch(api._baseUrl + path, {
+      return _fetchWithRetry(api._baseUrl + path, {
         method: 'POST',
         headers: _headers(true),
         body: JSON.stringify(body)
-      }).then(_handleResponse);
+      });
     },
 
     patch: function(path, body) {
       _validatePathIds(path);
-      return fetch(api._baseUrl + path, {
+      return _fetchWithRetry(api._baseUrl + path, {
         method: 'PATCH',
         headers: _headers(true),
         body: JSON.stringify(body)
-      }).then(_handleResponse);
+      });
     },
 
     // --- List endpoints ---
@@ -332,10 +366,10 @@
 
     deleteDocument: function(id) {
       _validatePathIds('/documents/' + id);
-      return fetch(api._baseUrl + '/documents/' + id, {
+      return _fetchWithRetry(api._baseUrl + '/documents/' + id, {
         method: 'DELETE',
         headers: _headers(false)
-      }).then(_handleResponse);
+      });
     },
 
     searchLudflowDocuments: function(query) {
