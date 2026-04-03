@@ -1515,7 +1515,8 @@
         overlay.addEventListener('click', function() {
           UI.SlideOut.close();
         });
-        document.body.appendChild(overlay);
+        var host = document.querySelector('.session-content.active') || document.body;
+        host.appendChild(overlay);
         UI.SlideOut._overlay = overlay;
       }
 
@@ -1531,7 +1532,8 @@
 
         panel.appendChild(header);
         panel.appendChild(content);
-        document.body.appendChild(panel);
+        var host2 = document.querySelector('.session-content.active') || document.body;
+        host2.appendChild(panel);
 
         // Escape key handler
         document.addEventListener('keydown', function(e) {
