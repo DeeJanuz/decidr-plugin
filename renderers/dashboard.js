@@ -59,8 +59,8 @@
       API.listTasks({ take: 200 }).then(function(resp) { fetches.tasks = unwrapList(resp); }),
       API.listBridges({ take: 200 }).then(function(resp) { fetches.bridges = unwrapList(resp); }),
       API.getActionItems({ take: 200 }).then(function(resp) { fetches.actionItems = unwrapList(resp); }),
-      API.listOrganizations().then(function(orgs) { fetches.organizations = orgs; }),
-      API.listPluginOrgs().then(function(orgIds) { fetches.pluginOrgs = orgIds; })
+      API.listOrganizations().then(function(orgs) { fetches.organizations = orgs; }).catch(function() { fetches.organizations = []; }),
+      API.listPluginOrgs().then(function(orgIds) { fetches.pluginOrgs = orgIds; }).catch(function() { fetches.pluginOrgs = []; })
     ]).then(function() {
       // Projects have direct initiativeId
       var projectToInit = {};

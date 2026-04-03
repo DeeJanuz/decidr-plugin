@@ -90,8 +90,8 @@
         API.listDecisions(),
         API.listProjects(),
         API.listOrgMembers(),
-        API.listOrganizations(),
-        API.listPluginOrgs()
+        API.listOrganizations().catch(function() { return []; }),
+        API.listPluginOrgs().catch(function() { return []; })
       ]).then(function(results) {
         var initiatives = _extractArray(results[0]);
         var allBridges = _extractArray(results[1]);
