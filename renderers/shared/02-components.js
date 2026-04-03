@@ -928,6 +928,7 @@
     _stack: [],
     _overlay: null,
     _onCloseCallback: null,
+    _onMutateCallback: null,
     _busy: false,
 
     open: function(type, id, opts) {
@@ -937,6 +938,9 @@
       // Store onClose callback only when opening root panel
       if (UI.SlideOut._stack.length === 0 && o.onClose) {
         UI.SlideOut._onCloseCallback = o.onClose;
+      }
+      if (UI.SlideOut._stack.length === 0 && o.onMutate) {
+        UI.SlideOut._onMutateCallback = o.onMutate;
       }
 
       // If preloaded data is provided, push and render immediately
@@ -1134,6 +1138,9 @@
         current.data = freshData;
         UI.SlideOut._render();
         UI.SlideOut._enrichAndRender(type, id, freshData);
+        if (UI.SlideOut._onMutateCallback) {
+          try { UI.SlideOut._onMutateCallback(type, id); } catch(e) { console.error('[decidr] onMutate callback error:', e); }
+        }
       }).catch(function(err) {
         UI.SlideOut._busy = false;
         console.error('[decidr] Refetch failed:', err);
@@ -1490,6 +1497,7 @@
       els.panel.classList.remove('decidr-so-open');
       var callback = UI.SlideOut._onCloseCallback;
       UI.SlideOut._onCloseCallback = null;
+      UI.SlideOut._onMutateCallback = null;
       setTimeout(function() {
         els.overlay.style.display = 'none';
         els.panel.style.display = 'none';
@@ -1708,6 +1716,9 @@
             if (UI.SlideOut._guardBusy()) return;
             API.updateDecision(id, { deletedAt: new Date().toISOString() }).then(function() {
               UI.SlideOut._busy = false;
+              if (UI.SlideOut._onMutateCallback) {
+                try { UI.SlideOut._onMutateCallback('decision', id); } catch(e) { console.error('[decidr] onMutate callback error:', e); }
+              }
               UI.SlideOut.back();
             }).catch(function(err) { UI.SlideOut._busy = false; console.error('[decidr] Delete failed:', err); });
           }
@@ -2013,6 +2024,9 @@
             if (UI.SlideOut._guardBusy()) return;
             API.updateTask(id, { deletedAt: new Date().toISOString() }).then(function() {
               UI.SlideOut._busy = false;
+              if (UI.SlideOut._onMutateCallback) {
+                try { UI.SlideOut._onMutateCallback('task', id); } catch(e) { console.error('[decidr] onMutate callback error:', e); }
+              }
               UI.SlideOut.back();
             }).catch(function(err) { UI.SlideOut._busy = false; console.error('[decidr] Delete task failed:', err); });
           }

@@ -1323,7 +1323,9 @@
             e.stopPropagation();
             var mergedIds = edgeEl.getAttribute('data-edge-ids');
             var edgeId = mergedIds ? mergedIds.split(',')[0] : edgeEl.getAttribute('data-edge-id');
-            UI.SlideOut.open('bridge', edgeId);
+            UI.SlideOut.open('bridge', edgeId, {
+              onMutate: function() { _refetchAndRerender(); }
+            });
             return;
           }
 
@@ -1422,7 +1424,9 @@
           }
 
           // Open slide-out panel
-          UI.SlideOut.open(type, id);
+          UI.SlideOut.open(type, id, {
+            onMutate: function() { _refetchAndRerender(); }
+          });
 
           // Update detail strip
           updateDetailStrip(id);

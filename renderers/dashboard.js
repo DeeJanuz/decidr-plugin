@@ -96,6 +96,41 @@
       container.innerHTML = UI.emptyState('Failed to load dashboard data. Please try again.');
     });
 
+    function refreshDashboard() {
+      Promise.all([
+        API.listInitiatives({ take: 200 }).then(function(resp) { return unwrapList(resp); }),
+        API.listProjects({ take: 200 }).then(function(resp) { return unwrapList(resp); }),
+        API.listDecisions({ take: 200 }).then(function(resp) { return unwrapList(resp); }),
+        API.listTasks({ take: 200 }).then(function(resp) { return unwrapList(resp); }),
+        API.listBridges({ take: 200 }).then(function(resp) { return unwrapList(resp); }),
+        API.getActionItems({ take: 200 }).then(function(resp) { return unwrapList(resp); })
+      ]).then(function(results) {
+        var projects = results[1] || [];
+        var projectToInit = {};
+        for (var p = 0; p < projects.length; p++) {
+          var proj = projects[p];
+          var initId = proj.initiativeId || proj.initiative_id;
+          if (initId) { projectToInit[proj.id] = initId; }
+        }
+        var projectMap = {};
+        for (var p = 0; p < projects.length; p++) {
+          var proj = projects[p];
+          var initId = projectToInit[proj.id] || '_ungrouped';
+          if (!projectMap[initId]) projectMap[initId] = [];
+          projectMap[initId].push(proj);
+        }
+        dashState.initiatives = results[0];
+        dashState.projectsByInitiative = projectMap;
+        dashState.allDecisions = results[2];
+        dashState.allTasks = results[3];
+        dashState.allBridges = results[4];
+        dashState.actionItems = results[5];
+        renderDashboard();
+      }).catch(function(err) {
+        console.error('[decidr] Dashboard refresh failed:', err);
+      });
+    }
+
     // ── Data Helpers ───────────────────────────────────────
 
     function getAllProjects() {
@@ -639,7 +674,8 @@
             var entityId = el.getAttribute('data-entity-id');
             if (entityType && entityId) {
               UI.SlideOut.open(entityType, entityId, {
-                onClose: function() { /* no-op, dashboard stays as-is */ }
+                onClose: function() {},
+                onMutate: function() { refreshDashboard(); }
               });
             }
           });
