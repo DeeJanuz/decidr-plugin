@@ -1,6 +1,6 @@
 {
   "name": "decidr",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "prompt_definitions": [
     {
       "name": "initiative_planning",
@@ -15,7 +15,11 @@
       "source": "prompts/initiative-planning.md"
     }
   ],
-  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.3/decidr.zip",
+  "plugin_rules": [
+    "When the user asks for action items, to-do items, pending work, or what needs attention: call my_action_items and push to decidr_list. Never open decidr_dashboard for these requests.",
+    "When showing entity details (get_initiative, get_project, get_decision, get_task, get_bridge): always push to decidr_list. Only open decidr_dashboard or decidr_graph when the user explicitly asks for a 'dashboard', 'overview', 'graph', or 'map'."
+  ],
+  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.4/decidr.zip",
   "registry_index": {
     "summary": "Decision governance \u2014 initiatives, projects, decisions, tasks, and bridges with approval workflows",
     "tags": [
@@ -27,7 +31,7 @@
     "tool_groups": [
       {
         "name": "Action Items",
-        "hint": "Dashboard of prioritized work: pending approvals, assigned tasks, stalled decisions",
+        "hint": "Prioritized action items: pending approvals, assigned tasks, stalled decisions. Push results to decidr_list.",
         "tools": [
           "my_action_items"
         ]
@@ -99,7 +103,7 @@
     ]
   },
   "tool_rules": {
-    "my_action_items": "Returns prioritized action items as entity refs. Push results to decidr_list \u2014 the renderer fetches full data from the API. Drill into individual items with get_decision/get_task. For a visual dashboard overview, push directly to decidr_dashboard with just { organization_id } instead \u2014 no tool call needed.",
+    "my_action_items": "Returns prioritized action items as entity refs. ALWAYS push results to decidr_list \u2014 the renderer fetches full data from the API. Never use decidr_dashboard for action item requests. Drill into individual items with get_decision/get_task.",
     "list_initiatives": "Use to discover all initiatives. Push to decidr_list. Use format=compact to save tokens. For a visual graph, push directly to decidr_graph with just { organization_id } \u2014 no tool call needed.",
     "list_projects": "Use to discover projects. Push to decidr_list. Filter by status to find active work. Use initiative_id to filter by initiative.",
     "list_decisions": "Use to discover decisions. Push to decidr_list. Call get_decision for full details including approval progress.",
