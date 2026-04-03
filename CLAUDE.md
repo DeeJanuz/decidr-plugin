@@ -60,6 +60,8 @@ node -c renderers/shared/02-components.js  # Syntax check shared code
 - Every MCP tool must map to a renderer in the `renderers` object.
 - `renderer_definitions` must include `data_hint` describing the expected data shape.
 - `tool_prefix` must be `"decidr_"`.
+- `plugin_rules` is an array of plain-English behavioral rules injected into agent sessions. Use for renderer routing guidance (e.g., which renderer to use for action items vs dashboards). Keep rules short and unambiguous.
+- `tool_rules` provide per-tool routing hints. Must be consistent with `plugin_rules` — if a plugin rule says "always use decidr_list for X", the corresponding tool_rule must not suggest an alternative.
 
 ## Adding New Components
 
