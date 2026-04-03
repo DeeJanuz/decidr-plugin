@@ -12,7 +12,10 @@
     // ── State ─────────────────────────────────────────────────
     var graphState = {
       selectedNode: null,       // { type: 'project', id: '...' }
-      transform: { x: 0, y: 0, k: 1 }
+      transform: { x: 0, y: 0, k: 1 },
+      // Org picker
+      organizations: [],
+      activeOrgId: null
     };
 
     var currentLayout = null;
@@ -86,13 +89,34 @@
         API.listBridges(),
         API.listDecisions(),
         API.listProjects(),
-        API.listOrgMembers()
+        API.listOrgMembers(),
+        API.listOrganizations(),
+        API.listPluginOrgs()
       ]).then(function(results) {
         var initiatives = _extractArray(results[0]);
         var allBridges = _extractArray(results[1]);
         var allDecisions = _extractArray(results[2]);
         var allProjects = _extractArray(results[3]);
         var allMembers = _extractArray(results[4]);
+
+        // Merge org token status
+        var orgs = results[5] || [];
+        var pluginOrgs = results[6] || [];
+        var pluginOrgSet = {};
+        for (var po = 0; po < pluginOrgs.length; po++) {
+          pluginOrgSet[pluginOrgs[po]] = true;
+        }
+        for (var o = 0; o < orgs.length; o++) {
+          orgs[o].tokenStatus = pluginOrgSet[orgs[o].id] ? 'valid' : 'no-token';
+        }
+        graphState.organizations = orgs;
+        if (!graphState.activeOrgId && orgs.length > 0) {
+          if (data && data.organization_id) {
+            graphState.activeOrgId = data.organization_id;
+          } else {
+            graphState.activeOrgId = orgs[0].id;
+          }
+        }
 
         // Build user lookup map
         var userMap = {};
@@ -902,7 +926,8 @@
     function buildZoomControls() {
       // Action buttons — top left, horizontal text buttons
       var actions = '<div style="position:absolute;top:var(--space-3);left:var(--space-3);'
-        + 'display:flex;gap:var(--space-2);z-index:10;">'
+        + 'display:flex;gap:var(--space-2);align-items:center;z-index:10;">'
+        + UI.orgPicker(graphState.organizations, graphState.activeOrgId)
         + '<button class="decidr-graph-zoom-btn" data-action="new-initiative"'
         + ' style="padding:6px 14px;width:auto;font-size:12px;">New Initiative</button>'
         + '<button class="decidr-graph-zoom-btn" data-action="new-project"'
@@ -1494,6 +1519,56 @@
         } else if (action === 'new-bridge') {
           showAddBridgeModal();
         }
+      }
+
+      // ── Org picker wiring ─────────────────────────────────
+      var orgToggle = container.querySelector('#decidr-org-picker-toggle');
+      var orgMenu = container.querySelector('#decidr-org-picker-menu');
+      if (orgToggle && orgMenu) {
+        orgToggle.addEventListener('click', function(e) {
+          e.stopPropagation();
+          orgMenu.classList.toggle('open');
+        });
+
+        document.addEventListener('click', function() {
+          orgMenu.classList.remove('open');
+        });
+
+        orgMenu.addEventListener('click', function(e) {
+          var btn = e.target.closest('[data-org-id]');
+          if (!btn) return;
+          var orgId = btn.getAttribute('data-org-id');
+          if (orgId === graphState.activeOrgId) {
+            orgMenu.classList.remove('open');
+            return;
+          }
+          graphState.activeOrgId = orgId;
+          orgMenu.classList.remove('open');
+          container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;'
+            + 'height:100%;min-height:400px;">'
+            + UI.loadingSpinner('Switching organization...')
+            + '</div>';
+          API.switchOrg(orgId).then(function() {
+            _refetchAndRerender();
+          }).catch(function(err) {
+            console.error('[decidr] Graph org switch failed:', err);
+            container.innerHTML = '<div style="padding: var(--space-6); text-align: center;">'
+              + '<p style="color: var(--text-secondary); margin-bottom: var(--space-4);">'
+              + 'No authentication for this organization.</p>'
+              + '<button id="decidr-org-auth-btn" style="padding: 8px 16px; border: 1px solid var(--accent-primary);'
+              + ' border-radius: var(--border-radius-md); background: var(--accent-primary); color: white;'
+              + ' cursor: pointer; font-family: var(--font-sans);">Authenticate</button>'
+              + '</div>';
+            var authBtn = container.querySelector('#decidr-org-auth-btn');
+            if (authBtn) {
+              authBtn.addEventListener('click', function() {
+                if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
+                  window.__TAURI__.core.invoke('start_plugin_auth', { pluginName: 'decidr', orgId: orgId });
+                }
+              });
+            }
+          });
+        });
       }
     }
 

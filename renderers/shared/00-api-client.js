@@ -2,6 +2,7 @@
   'use strict';
 
   var _token = '';
+  var _activeOrgId = null;
 
   function isValidId(id) {
     return typeof id === 'string' && /^[a-zA-Z0-9_-]+$/.test(id);
@@ -58,7 +59,9 @@
     if (!_hasTauri()) {
       return Promise.reject(new Error('Tauri IPC not available for token refresh'));
     }
-    return window.__TAURI__.core.invoke('get_plugin_auth_header', { pluginName: 'decidr' })
+    var ipcArgs = { pluginName: 'decidr' };
+    if (_activeOrgId) ipcArgs.orgId = _activeOrgId;
+    return window.__TAURI__.core.invoke('get_plugin_auth_header', ipcArgs)
       .then(function(authHeader) {
         var t = (authHeader || '').replace(/^Bearer\s+/i, '');
         _token = t;
@@ -93,6 +96,14 @@
       _token = t || '';
     },
 
+    setActiveOrg: function(orgId) {
+      _activeOrgId = orgId || null;
+    },
+
+    getActiveOrgId: function() {
+      return _activeOrgId;
+    },
+
     init: function(baseUrl, token) {
       api._baseUrl = baseUrl.replace(/\/$/, '');
       _token = token || '';
@@ -117,7 +128,9 @@
 
       // Resolve token
       if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
-        return window.__TAURI__.core.invoke('get_plugin_auth_header', { pluginName: 'decidr' })
+        var initIpcArgs = { pluginName: 'decidr' };
+        if (_activeOrgId) initIpcArgs.orgId = _activeOrgId;
+        return window.__TAURI__.core.invoke('get_plugin_auth_header', initIpcArgs)
           .then(function(authHeader) {
             var t = (authHeader || '').replace(/^Bearer\s+/i, '');
             _token = t;
@@ -398,6 +411,26 @@
 
     listOrgMembers: function() {
       return api.get('/auth/members');
+    },
+
+    listOrganizations: function() {
+      return api.get('/organizations').then(function(resp) {
+        if (resp && Array.isArray(resp.data)) return resp.data;
+        if (Array.isArray(resp)) return resp;
+        return [];
+      });
+    },
+
+    listPluginOrgs: function() {
+      if (!_hasTauri()) return Promise.resolve([]);
+      return window.__TAURI__.core.invoke('list_plugin_orgs', { pluginName: 'decidr' });
+    },
+
+    switchOrg: function(orgId) {
+      _activeOrgId = orgId || null;
+      _token = '';
+      api._initialized = false;
+      return api.autoInit({});
     },
 
     // --- Generic entity dispatcher ---

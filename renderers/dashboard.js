@@ -26,7 +26,10 @@
       // New section state
       activeDecisionTab: 'action',
       nextStepsExpanded: false,
-      decisionsExpanded: false
+      decisionsExpanded: false,
+      // Org picker
+      organizations: [],
+      activeOrgId: null
     };
 
     // ── Show loading ───────────────────────────────────────
@@ -55,7 +58,9 @@
       API.listDecisions({ take: 200 }).then(function(resp) { fetches.decisions = unwrapList(resp); }),
       API.listTasks({ take: 200 }).then(function(resp) { fetches.tasks = unwrapList(resp); }),
       API.listBridges({ take: 200 }).then(function(resp) { fetches.bridges = unwrapList(resp); }),
-      API.getActionItems({ take: 200 }).then(function(resp) { fetches.actionItems = unwrapList(resp); })
+      API.getActionItems({ take: 200 }).then(function(resp) { fetches.actionItems = unwrapList(resp); }),
+      API.listOrganizations().then(function(orgs) { fetches.organizations = orgs; }),
+      API.listPluginOrgs().then(function(orgIds) { fetches.pluginOrgs = orgIds; })
     ]).then(function() {
       // Projects have direct initiativeId
       var projectToInit = {};
@@ -77,6 +82,24 @@
       }
       return projectMap;
     }).then(function(projectMap) {
+      // Merge token status into organizations
+      var pluginOrgs = fetches.pluginOrgs || [];
+      var pluginOrgSet = {};
+      for (var po = 0; po < pluginOrgs.length; po++) {
+        pluginOrgSet[pluginOrgs[po]] = true;
+      }
+      var orgs = fetches.organizations || [];
+      for (var o = 0; o < orgs.length; o++) {
+        orgs[o].tokenStatus = pluginOrgSet[orgs[o].id] ? 'valid' : 'no-token';
+      }
+      dashState.organizations = orgs;
+      // Use data.organization_id from push data if available, or first org with token
+      if (data && data.organization_id) {
+        dashState.activeOrgId = data.organization_id;
+      } else if (orgs.length > 0) {
+        dashState.activeOrgId = orgs[0].id;
+      }
+
       dashState.initiatives = fetches.initiatives;
       dashState.projectsByInitiative = projectMap;
       dashState.allDecisions = fetches.decisions;
@@ -490,9 +513,11 @@
       var html = '<div style="max-width: 1200px; margin: 0 auto; padding: var(--space-6) var(--space-4);'
         + ' font-family: var(--font-sans); color: var(--text-primary);">';
 
-      // Title
-      html += '<h1 style="font-size: var(--text-h1); font-weight: var(--weight-bold);'
-        + ' margin: 0 0 var(--space-6) 0;">Dashboard</h1>';
+      // Title with org picker
+      html += '<div style="display: flex; align-items: center; justify-content: space-between; margin: 0 0 var(--space-6) 0;">'
+        + '<h1 style="font-size: var(--text-h1); font-weight: var(--weight-bold); margin: 0;">Dashboard</h1>'
+        + UI.orgPicker(dashState.organizations, dashState.activeOrgId)
+        + '</div>';
 
       // Stats
       html += renderStatsSection();
@@ -540,6 +565,55 @@
       wireDecisionsShowMore();
       wireInitiativeToggle();
       wireEntityClicks(container);
+      wireOrgPicker();
+    }
+
+    function wireOrgPicker() {
+      var toggle = container.querySelector('#decidr-org-picker-toggle');
+      var menu = container.querySelector('#decidr-org-picker-menu');
+      if (!toggle || !menu) return;
+
+      toggle.addEventListener('click', function(e) {
+        e.stopPropagation();
+        menu.classList.toggle('open');
+      });
+
+      document.addEventListener('click', function() {
+        menu.classList.remove('open');
+      });
+
+      menu.addEventListener('click', function(e) {
+        var btn = e.target.closest('[data-org-id]');
+        if (!btn) return;
+        var orgId = btn.getAttribute('data-org-id');
+        if (orgId === dashState.activeOrgId) {
+          menu.classList.remove('open');
+          return;
+        }
+        dashState.activeOrgId = orgId;
+        menu.classList.remove('open');
+        container.innerHTML = UI.loadingSpinner('Switching organization...');
+        API.switchOrg(orgId).then(function() {
+          refreshDashboard();
+        }).catch(function(err) {
+          console.error('[decidr] Org switch failed:', err);
+          container.innerHTML = '<div style="padding: var(--space-6); text-align: center;">'
+            + '<p style="color: var(--text-secondary); margin-bottom: var(--space-4);">'
+            + 'No authentication for this organization.</p>'
+            + '<button id="decidr-org-auth-btn" style="padding: 8px 16px; border: 1px solid var(--accent-primary);'
+            + ' border-radius: var(--border-radius-md); background: var(--accent-primary); color: white;'
+            + ' cursor: pointer; font-family: var(--font-sans);">Authenticate</button>'
+            + '</div>';
+          var authBtn = container.querySelector('#decidr-org-auth-btn');
+          if (authBtn) {
+            authBtn.addEventListener('click', function() {
+              if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
+                window.__TAURI__.core.invoke('start_plugin_auth', { pluginName: 'decidr', orgId: orgId });
+              }
+            });
+          }
+        });
+      });
     }
 
     function wireNextStepsShowMore() {

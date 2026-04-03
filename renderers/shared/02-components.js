@@ -3174,4 +3174,44 @@
     return html;
   };
 
+  // ── Org Picker Component ──────────────────────────────────
+
+  UI.orgPicker = function(orgs, activeOrgId, opts) {
+    opts = opts || {};
+    if (!orgs || orgs.length <= 1) return '';
+
+    var activeOrg = null;
+    for (var i = 0; i < orgs.length; i++) {
+      if (orgs[i].id === activeOrgId) {
+        activeOrg = orgs[i];
+        break;
+      }
+    }
+
+    var label = activeOrg ? activeOrg.name : 'Select Organization';
+
+    var html = '<div class="decidr-org-picker">'
+      + '<button class="decidr-org-picker-btn" id="decidr-org-picker-toggle">'
+      + '<span>' + (label.length > 30 ? label.substring(0, 27) + '...' : label) + '</span>'
+      + '<svg class="decidr-org-picker-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">'
+      + '<path d="M3 4.5L6 7.5L9 4.5"/>'
+      + '</svg>'
+      + '</button>'
+      + '<div class="decidr-org-picker-menu" id="decidr-org-picker-menu">';
+
+    for (var i = 0; i < orgs.length; i++) {
+      var org = orgs[i];
+      var isActive = org.id === activeOrgId;
+      var tokenStatus = org.tokenStatus || 'no-token';
+      html += '<button class="decidr-org-picker-option' + (isActive ? ' active' : '') + '"'
+        + ' data-org-id="' + org.id + '">'
+        + '<span class="decidr-org-picker-dot ' + tokenStatus + '"></span>'
+        + '<span>' + (org.name || org.id) + '</span>'
+        + '</button>';
+    }
+
+    html += '</div></div>';
+    return html;
+  };
+
 })();
