@@ -1,6 +1,13 @@
 # Unreleased
 
+- **feat**: Org picker in dashboard and graph renderers — switch between organizations without re-pushing from the agent
+- **fix**: Make org fetch non-fatal in dashboard and graph renderers — gracefully handle missing or expired org tokens
+- **fix**: Scope slideout panels to session container instead of viewport — prevents slideouts from overlapping other companion panels
+- **feat**: Task creation from project slideout — create tasks directly from the project detail panel, not just from decisions
+- **feat**: Dashboard next steps grouped by type — action items organized by category for better scanning
+- **feat**: Dashboard status visibility, dynamic filters, and activity indicators — filter projects by status, see recent activity at a glance
 - **feat**: Parent renderer refresh on SlideOut mutations — dashboard and graph auto-refresh when entities are changed, deleted, or approved from the slide-out panel
+- **fix**: Refresh parent slideouts when mutations occur in nested views — parent stack entries marked stale after child mutations, re-fetched on Back navigation
 
 # 0.1.4
 
