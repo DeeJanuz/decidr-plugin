@@ -21,10 +21,11 @@
       allDecisions: [],
       allTasks: [],
       allBridges: [],
+      lastActivityByEntity: {},  // { entityId: { action, label, createdAt } }
       loaded: false,
       error: null,
       // New section state
-      activeDecisionTab: 'action',
+      activeDecisionFilters: { PROPOSED: true, IN_PROGRESS: true, APPROVED: true },
       nextStepsExpanded: false,
       nextStepsGroupExpanded: {},
       decisionsExpanded: false,
@@ -61,7 +62,8 @@
       API.listBridges({ take: 200 }).then(function(resp) { fetches.bridges = unwrapList(resp); }),
       API.getActionItems({ take: 200 }).then(function(resp) { fetches.actionItems = unwrapList(resp); }),
       API.listOrganizations().then(function(orgs) { fetches.organizations = orgs; }).catch(function() { fetches.organizations = []; }),
-      API.listPluginOrgs().then(function(orgIds) { fetches.pluginOrgs = orgIds; }).catch(function() { fetches.pluginOrgs = []; })
+      API.listPluginOrgs().then(function(orgIds) { fetches.pluginOrgs = orgIds; }).catch(function() { fetches.pluginOrgs = []; }),
+      API.getTimeline({ take: 200 }).then(function(resp) { fetches.timeline = unwrapList(resp); }).catch(function() { fetches.timeline = []; })
     ]).then(function() {
       // Projects have direct initiativeId
       var projectToInit = {};
@@ -107,6 +109,10 @@
       dashState.allTasks = fetches.tasks;
       dashState.allBridges = fetches.bridges;
       dashState.actionItems = fetches.actionItems;
+
+      // Build last-activity-per-entity map from timeline events
+      dashState.lastActivityByEntity = buildActivityMap(fetches.timeline || []);
+
       dashState.loaded = true;
 
       // Default all initiatives to collapsed
@@ -127,7 +133,8 @@
         API.listDecisions({ take: 200 }).then(function(resp) { return unwrapList(resp); }),
         API.listTasks({ take: 200 }).then(function(resp) { return unwrapList(resp); }),
         API.listBridges({ take: 200 }).then(function(resp) { return unwrapList(resp); }),
-        API.getActionItems({ take: 200 }).then(function(resp) { return unwrapList(resp); })
+        API.getActionItems({ take: 200 }).then(function(resp) { return unwrapList(resp); }),
+        API.getTimeline({ take: 200 }).then(function(resp) { return unwrapList(resp); }).catch(function() { return []; })
       ]).then(function(results) {
         var projects = results[1] || [];
         var projectToInit = {};
@@ -149,6 +156,9 @@
         dashState.allTasks = results[3];
         dashState.allBridges = results[4];
         dashState.actionItems = results[5];
+
+        dashState.lastActivityByEntity = buildActivityMap(results[6] || []);
+
         renderDashboard();
       }).catch(function(err) {
         console.error('[decidr] Dashboard refresh failed:', err);
@@ -156,6 +166,31 @@
     }
 
     // ── Data Helpers ───────────────────────────────────────
+
+    var ACTIVITY_LABELS = {
+      CREATED: 'Created', UPDATED: 'Edited', STATUS_CHANGED: 'Status changed',
+      COMMENTED: 'Comment', LINKED: 'Document linked', UNLINKED: 'Document unlinked',
+      ARCHIVED: 'Archived', RESTORED: 'Restored'
+    };
+
+    function buildActivityMap(timeline) {
+      var actMap = {};
+      var ENTITY_KEYS = ['decisionId', 'taskId', 'projectId', 'bridgeId', 'initiativeId'];
+      for (var ti = 0; ti < timeline.length; ti++) {
+        var evt = timeline[ti];
+        for (var k = 0; k < ENTITY_KEYS.length; k++) {
+          var eid = evt[ENTITY_KEYS[k]];
+          if (eid && !actMap[eid]) {
+            actMap[eid] = {
+              action: evt.action,
+              label: ACTIVITY_LABELS[evt.action] || evt.action,
+              createdAt: evt.createdAt
+            };
+          }
+        }
+      }
+      return actMap;
+    }
 
     function getAllProjects() {
       var projects = [];
@@ -228,13 +263,6 @@
       return categories;
     }
 
-    var ACTIONABLE_STATUSES = { PROPOSED: true, IN_PROGRESS: true };
-    var TERMINAL_STATUSES = { IMPLEMENTED: true, REJECTED: true, ARCHIVED: true };
-
-    function isActionableStatus(status) {
-      return !!ACTIONABLE_STATUSES[status ? String(status).toUpperCase() : ''];
-    }
-
     function normalizeStatus(dec) {
       return dec.status ? String(dec.status).toUpperCase() : '';
     }
@@ -245,18 +273,12 @@
       });
     }
 
-    function getActiveDecisions(tab) {
+    function getActiveDecisions() {
       var results = [];
       for (var i = 0; i < dashState.allDecisions.length; i++) {
         var dec = dashState.allDecisions[i];
         var status = normalizeStatus(dec);
-        if (tab === 'action') {
-          if (isActionableStatus(status)) results.push(dec);
-        } else if (tab === 'active') {
-          if (!TERMINAL_STATUSES[status]) results.push(dec);
-        } else if (tab === 'resolved') {
-          if (status === 'APPROVED' || status === 'IMPLEMENTED') results.push(dec);
-        }
+        if (dashState.activeDecisionFilters[status]) results.push(dec);
       }
       return sortByCreatedDesc(results);
     }
@@ -274,7 +296,8 @@
       }
       for (var i = 0; i < dashState.allDecisions.length; i++) {
         var dec = dashState.allDecisions[i];
-        if (isActionableStatus(dec.status)) {
+        var status = normalizeStatus(dec);
+        if (status === 'PROPOSED' || status === 'IN_PROGRESS') {
           results.push({ decision: dec, projectName: projectMap[dec.projectId] || '' });
         }
       }
@@ -379,11 +402,15 @@
           html += '<div class="decidr-next-steps-group-items">';
           for (var j = 0; j < groupItems.length; j++) {
             var item = groupItems[j];
-            var cfg = getActionConfig(item.reason);
+            // Skip action badge for decisions — status badge is sufficient
+            var cfg = (item.entityType === 'DECISION' || item.entityType === 'decision')
+              ? { badge: '', cls: '' }
+              : getActionConfig(item.reason);
             html += UI.nextStepCard(item, {
               animDelay: 0.05 + j * 0.05,
               actionBadge: cfg.badge,
-              actionClass: cfg.cls
+              actionClass: cfg.cls,
+              lastActivity: dashState.lastActivityByEntity[item.entityId || item.id] || null
             });
           }
           html += '</div>';
@@ -401,8 +428,7 @@
     }
 
     function renderActiveDecisionsContent() {
-      var tab = dashState.activeDecisionTab;
-      var decisions = getActiveDecisions(tab);
+      var decisions = getActiveDecisions();
 
       if (decisions.length === 0) {
         return UI.emptyState('No decisions in this view.');
@@ -416,7 +442,8 @@
       for (var i = 0; i < visible.length; i++) {
         html += UI.decisionListItem(visible[i], {
           animDelay: 0.05 + i * 0.05,
-          allDecisions: dashState.allDecisions
+          allDecisions: dashState.allDecisions,
+          lastActivity: dashState.lastActivityByEntity[visible[i].id] || null
         });
       }
 
@@ -432,19 +459,40 @@
     }
 
     function renderActiveDecisionsSection() {
-      var actionCount = getActiveDecisions('action').length;
-      var activeCount = getActiveDecisions('active').length;
-      var resolvedCount = getActiveDecisions('resolved').length;
-      var tab = dashState.activeDecisionTab;
+      // Scan all decisions for unique statuses
+      var statusSet = {};
+      for (var i = 0; i < dashState.allDecisions.length; i++) {
+        var s = normalizeStatus(dashState.allDecisions[i]);
+        if (s) statusSet[s] = true;
+      }
 
-      var tabBar = '<div style="display: flex; gap: var(--space-2); margin-bottom: var(--space-4);">'
-        + '<button class="decidr-dash-tab' + (tab === 'action' ? ' active' : '') + '" data-decision-tab="action">Needs Action (' + actionCount + ')</button>'
-        + '<button class="decidr-dash-tab' + (tab === 'active' ? ' active' : '') + '" data-decision-tab="active">All Active (' + activeCount + ')</button>'
-        + '<button class="decidr-dash-tab' + (tab === 'resolved' ? ' active' : '') + '" data-decision-tab="resolved">Recently Resolved (' + resolvedCount + ')</button>'
-        + '</div>';
+      var STATUS_ORDER = ['PROPOSED', 'IN_PROGRESS', 'APPROVED', 'IMPLEMENTED', 'REJECTED', 'ARCHIVED'];
+      var statuses = [];
+      for (var j = 0; j < STATUS_ORDER.length; j++) {
+        if (statusSet[STATUS_ORDER[j]]) statuses.push(STATUS_ORDER[j]);
+      }
+      // Add any remaining statuses not in the order
+      for (var sk in statusSet) {
+        if (statusSet.hasOwnProperty(sk) && statuses.indexOf(sk) === -1) statuses.push(sk);
+      }
+
+      var pillBar = '<div style="display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-4);">';
+      for (var p = 0; p < statuses.length; p++) {
+        var st = statuses[p];
+        var isActive = !!dashState.activeDecisionFilters[st];
+        var label = st.charAt(0).toUpperCase() + st.slice(1).toLowerCase().replace(/_/g, ' ');
+        // Count decisions with this status
+        var count = 0;
+        for (var c = 0; c < dashState.allDecisions.length; c++) {
+          if (normalizeStatus(dashState.allDecisions[c]) === st) count++;
+        }
+        pillBar += '<button class="decidr-dash-status-pill' + (isActive ? ' active' : '') + '" data-decision-status="' + UI.escapeHtml(st) + '">'
+          + UI.escapeHtml(label) + ' (' + count + ')</button>';
+      }
+      pillBar += '</div>';
 
       return UI.section('decision', 'Active Decisions', null,
-        tabBar + '<div id="decidr-active-decisions-container">' + renderActiveDecisionsContent() + '</div>');
+        pillBar + '<div id="decidr-active-decisions-container">' + renderActiveDecisionsContent() + '</div>');
     }
 
     function renderInitiativeSections() {
@@ -486,7 +534,8 @@
           var needsReviewCount = 0;
           for (var pd = 0; pd < projDecisions.length; pd++) {
             var pDec = projDecisions[pd];
-            if (isActionableStatus(pDec.status)) {
+            var pStatus = normalizeStatus(pDec);
+            if (pStatus === 'PROPOSED' || pStatus === 'IN_PROGRESS') {
               pendingCount++;
               // Check if current user is a reviewer on this decision
               if (currentUserId && pDec.reviewers && Array.isArray(pDec.reviewers)) {
@@ -606,7 +655,7 @@
 
     function wireInteractions() {
       wireNextStepsShowMore();
-      wireDecisionTabs();
+      wireDecisionStatusPills();
       wireDecisionsShowMore();
       wireInitiativeToggle();
       wireEntityClicks(container);
@@ -681,32 +730,32 @@
       }
     }
 
-    function wireDecisionTabs() {
-      var tabs = container.querySelectorAll('.decidr-dash-tab[data-decision-tab]');
-      for (var i = 0; i < tabs.length; i++) {
-        (function(tab) {
-          tab.addEventListener('click', function() {
-            var newTab = tab.getAttribute('data-decision-tab');
-            if (newTab === dashState.activeDecisionTab) return;
-            dashState.activeDecisionTab = newTab;
+    function wireDecisionStatusPills() {
+      var pills = container.querySelectorAll('.decidr-dash-status-pill[data-decision-status]');
+      for (var i = 0; i < pills.length; i++) {
+        (function(pill) {
+          pill.addEventListener('click', function() {
+            var status = pill.getAttribute('data-decision-status');
+            if (dashState.activeDecisionFilters[status]) {
+              delete dashState.activeDecisionFilters[status];
+            } else {
+              dashState.activeDecisionFilters[status] = true;
+            }
             dashState.decisionsExpanded = false;
-            // Update tab active states
-            var allTabs = container.querySelectorAll('.decidr-dash-tab[data-decision-tab]');
-            for (var t = 0; t < allTabs.length; t++) {
-              allTabs[t].classList.remove('active');
-              if (allTabs[t].getAttribute('data-decision-tab') === newTab) {
-                allTabs[t].classList.add('active');
+            // Re-render the entire section to update pill states + content
+            var sectionEl = container.querySelector('#decidr-active-decisions-container');
+            if (sectionEl) {
+              // Need to re-render the whole section for pill state updates
+              var parent = sectionEl.closest('.decidr-section');
+              if (parent) {
+                parent.outerHTML = renderActiveDecisionsSection();
+                wireDecisionStatusPills();
+                wireDecisionsShowMore();
+                wireEntityClicks(container);
               }
             }
-            // Re-render decisions content
-            var cont = container.querySelector('#decidr-active-decisions-container');
-            if (cont) {
-              cont.innerHTML = renderActiveDecisionsContent();
-              wireDecisionsShowMore();
-              wireEntityClicks(cont);
-            }
           });
-        })(tabs[i]);
+        })(pills[i]);
       }
     }
 

@@ -171,6 +171,20 @@
     return '<span class="decidr-badge decidr-entity-' + norm + '">' + UI.escapeHtml(label) + '</span>';
   };
 
+  // ─── Activity Label ─────────────────────────────────────────────────
+
+  UI.activityLabel = function(lastActivity) {
+    if (!lastActivity) return '';
+    var action = lastActivity.action ? String(lastActivity.action).toUpperCase() : '';
+    var label = lastActivity.label || action || '';
+    var time = lastActivity.createdAt ? UI.timeAgo(lastActivity.createdAt) : '';
+    if (!label) return '';
+    var actionClass = 'decidr-activity-' + action.toLowerCase().replace(/_/g, '-');
+    return '<span class="decidr-activity-label ' + actionClass + '">'
+      + UI.escapeHtml(label) + '</span>'
+      + (time ? '<span class="decidr-activity-time"> \u00b7 ' + UI.escapeHtml(time) + '</span>' : '');
+  };
+
   // ─── Avatar + User Chip ────────────────────────────────────────────
 
   UI.avatar = function(user, size) {
@@ -595,9 +609,8 @@
     var animStyle = typeof o.animDelay === 'number'
       ? ' style="animation-delay: ' + o.animDelay.toFixed(2) + 's;"' : '';
 
-    var reasonHtml = item.reason
-      ? '<div class="decidr-card-desc">' + UI.escapeHtml(UI.truncate(item.reason, 100)) + '</div>'
-      : '';
+    // Reason text removed — status badge in header is sufficient
+    var reasonHtml = '';
 
     var metaParts = [];
     if (item.parentName) metaParts.push(item.parentName);
@@ -643,14 +656,22 @@
         + UI.escapeHtml(o.actionBadge) + '</span>';
     }
 
-    // Build subtitle: "Status · for "parent" on Project · time ago"
+    // Build subtitle: "for "parent" · time ago"
     var subtitleParts = [];
-    if (item.status) subtitleParts.push(item.status.charAt(0).toUpperCase() + item.status.slice(1).toLowerCase().replace(/_/g, ' '));
     if (item.parentName) subtitleParts.push('for \u201c' + item.parentName + '\u201d');
     if (item.createdAt) subtitleParts.push(UI.timeAgo(item.createdAt));
     var subtitleHtml = subtitleParts.length > 0
       ? '<div class="decidr-next-step-meta">' + UI.escapeHtml(subtitleParts.join(' \u00b7 ')) + '</div>'
       : '';
+
+    // Last activity line
+    var activityHtml = '';
+    if (o.lastActivity) {
+      var actContent = UI.activityLabel(o.lastActivity);
+      if (actContent) {
+        activityHtml = '<div class="decidr-next-step-activity">' + actContent + '</div>';
+      }
+    }
 
     return '<div class="decidr-next-step-item" '
       + 'data-entity-type="' + UI.escapeHtml(entityType) + '" '
@@ -661,9 +682,11 @@
       + '<div class="decidr-next-step-header">'
       + '<span class="decidr-next-step-type-label">' + UI.escapeHtml(typeLabel) + '</span>'
       + actionBadgeHtml
+      + (item.status ? ' ' + UI.statusBadge(item.status) : '')
       + '</div>'
       + '<div class="decidr-next-step-title">' + UI.escapeHtml(item.title) + '</div>'
       + subtitleHtml
+      + activityHtml
       + '</div>'
       + '</div>';
   };
@@ -789,10 +812,20 @@
     var supersedesBadge = supersededDec
       ? ' <span class="decidr-decision-item-supersedes-badge">Supersedes</span>' : '';
 
+    // Last activity indicator
+    var activityHtml = '';
+    if (o.lastActivity) {
+      var actContent = UI.activityLabel(o.lastActivity);
+      if (actContent) {
+        activityHtml = '<div class="decidr-decision-item-activity">' + actContent + '</div>';
+      }
+    }
+
     var html = '<div class="decidr-decision-item" data-entity-type="decision" data-entity-id="' + UI.escapeHtml(decision.id) + '"' + animStyle + '>'
       + '<div class="decidr-decision-item-body">'
       + '<div class="decidr-decision-item-title">' + UI.escapeHtml(decision.title) + '</div>'
       + '<div class="decidr-decision-item-meta">' + UI.escapeHtml(ago) + '</div>'
+      + activityHtml
       + '</div>'
       + UI.statusBadge(decision.status)
       + supersedesBadge
