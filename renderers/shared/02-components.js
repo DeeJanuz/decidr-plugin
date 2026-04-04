@@ -978,13 +978,13 @@
 
       // If preloaded data is provided, push and render immediately
       if (o.data) {
-        UI.SlideOut._stack.push({ type: type, id: id, data: o.data });
+        UI.SlideOut._stack.push({ type: type, id: id, data: o.data, stale: false });
         UI.SlideOut._render();
         return;
       }
 
       // Push a loading state and render
-      UI.SlideOut._stack.push({ type: type, id: id, data: null });
+      UI.SlideOut._stack.push({ type: type, id: id, data: null, stale: false });
       UI.SlideOut._render();
 
       // Fetch from API
@@ -1169,6 +1169,10 @@
         var current = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
         if (!current || current.type !== type || current.id !== id) return;
         current.data = freshData;
+        // Mark parent stack entries as stale so they re-fetch on Back navigation
+        for (var i = 0; i < UI.SlideOut._stack.length - 1; i++) {
+          UI.SlideOut._stack[i].stale = true;
+        }
         UI.SlideOut._render();
         UI.SlideOut._enrichAndRender(type, id, freshData);
         if (UI.SlideOut._onMutateCallback) {
@@ -1520,7 +1524,27 @@
       if (UI.SlideOut._stack.length === 0) {
         UI.SlideOut.close();
       } else {
-        UI.SlideOut._render();
+        var top = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
+        if (top.stale) {
+          top.stale = false;
+          // Re-fetch entity data and enrichments
+          var API = window.__decidrAPI;
+          if (API && top.type && top.id) {
+            UI.SlideOut._render(); // Show current (stale) data immediately
+            API.getEntity(top.type, top.id).then(function(freshData) {
+              var current = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
+              if (!current || current.type !== top.type || current.id !== top.id) return;
+              current.data = freshData;
+              UI.SlideOut._enrichAndRender(top.type, top.id, freshData);
+            }).catch(function(err) {
+              console.error('[decidr] Stale refetch failed:', err);
+            });
+          } else {
+            UI.SlideOut._render();
+          }
+        } else {
+          UI.SlideOut._render();
+        }
       }
     },
 
