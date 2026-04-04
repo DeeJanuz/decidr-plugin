@@ -26,6 +26,7 @@
       // New section state
       activeDecisionTab: 'action',
       nextStepsExpanded: false,
+      nextStepsGroupExpanded: {},
       decisionsExpanded: false,
       // Org picker
       organizations: [],
@@ -324,27 +325,71 @@
         return UI.emptyState('No action items right now. You are all caught up!');
       }
 
-      var limit = dashState.nextStepsExpanded ? items.length : 5;
-      var visible = items.slice(0, limit);
-      var remaining = items.length - limit;
-
-      var html = '';
-      for (var i = 0; i < visible.length; i++) {
-        var item = visible[i];
-        var cfg = getActionConfig(item.reason);
-        html += UI.nextStepCard(item, {
-          animDelay: 0.05 + i * 0.05,
-          actionBadge: cfg.badge,
-          actionClass: cfg.cls
-        });
+      // Group by entityType
+      var groups = {};
+      var groupOrder = [];
+      for (var i = 0; i < items.length; i++) {
+        var type = items[i].entityType || 'other';
+        if (!groups[type]) {
+          groups[type] = [];
+          groupOrder.push(type);
+        }
+        groups[type].push(items[i]);
       }
 
-      if (remaining > 0 && !dashState.nextStepsExpanded) {
-        html += '<button class="decidr-dash-show-more" id="decidr-next-steps-show-more">'
-          + 'Show ' + remaining + ' more</button>';
-      } else if (dashState.nextStepsExpanded && items.length > 5) {
-        html += '<button class="decidr-dash-show-more" id="decidr-next-steps-show-less">'
-          + 'Show less</button>';
+      var ENTITY_LABELS = {
+        DECISION: 'Decisions',
+        TASK: 'Tasks',
+        PROJECT: 'Projects',
+        BRIDGE: 'Bridges',
+        INITIATIVE: 'Initiatives'
+      };
+
+      var html = '';
+      for (var g = 0; g < groupOrder.length; g++) {
+        var groupType = groupOrder[g];
+        var groupItems = groups[groupType];
+        var label = ENTITY_LABELS[groupType] || (groupType.charAt(0).toUpperCase() + groupType.slice(1).toLowerCase() + 's');
+        var isExpanded = !!dashState.nextStepsGroupExpanded[groupType];
+        var chevron = isExpanded ? '\u25BC' : '\u25B6';
+
+        // Build status breakdown
+        var statusCounts = {};
+        for (var s = 0; s < groupItems.length; s++) {
+          var st = groupItems[s].status || 'unknown';
+          statusCounts[st] = (statusCounts[st] || 0) + 1;
+        }
+        var statusHtml = '<span class="decidr-next-steps-group-statuses">';
+        for (var sk in statusCounts) {
+          if (statusCounts.hasOwnProperty(sk)) {
+            statusHtml += UI.statusBadge(sk.toUpperCase()) + '<span style="color:var(--text-tertiary);font-size:10px;font-weight:600;">' + statusCounts[sk] + '</span>';
+          }
+        }
+        statusHtml += '</span>';
+
+        html += '<div class="decidr-next-steps-group">';
+        html += '<button class="decidr-next-steps-group-header" data-next-steps-group="' + UI.escapeHtml(groupType) + '">';
+        html += '<span class="decidr-next-steps-group-chevron">' + chevron + '</span>';
+        html += '<span class="decidr-next-steps-group-label">' + UI.escapeHtml(label) + '</span>';
+        html += statusHtml;
+        html += '<span class="decidr-next-steps-group-count">' + groupItems.length + '</span>';
+        html += '</button>';
+
+        if (isExpanded) {
+          html += '<div class="decidr-next-steps-group-items">';
+          for (var j = 0; j < groupItems.length; j++) {
+            var item = groupItems[j];
+            var cfg = getActionConfig(item.reason);
+            html += UI.nextStepCard(item, {
+              animDelay: 0.05 + j * 0.05,
+              actionBadge: cfg.badge,
+              actionClass: cfg.cls
+            });
+          }
+          html += '</div>';
+        }
+
+        html += '</div>';
       }
 
       return html;
@@ -617,31 +662,22 @@
     }
 
     function wireNextStepsShowMore() {
-      var moreBtn = container.querySelector('#decidr-next-steps-show-more');
-      var lessBtn = container.querySelector('#decidr-next-steps-show-less');
-
-      if (moreBtn) {
-        moreBtn.addEventListener('click', function() {
-          dashState.nextStepsExpanded = true;
-          var cont = container.querySelector('#decidr-next-steps-container');
-          if (cont) {
-            cont.innerHTML = renderNextStepsContent();
-            wireNextStepsShowMore();
-            wireEntityClicks(cont);
-          }
-        });
-      }
-
-      if (lessBtn) {
-        lessBtn.addEventListener('click', function() {
-          dashState.nextStepsExpanded = false;
-          var cont = container.querySelector('#decidr-next-steps-container');
-          if (cont) {
-            cont.innerHTML = renderNextStepsContent();
-            wireNextStepsShowMore();
-            wireEntityClicks(cont);
-          }
-        });
+      var groupHeaders = container.querySelectorAll('[data-next-steps-group]');
+      for (var i = 0; i < groupHeaders.length; i++) {
+        (function(header) {
+          if (header._decidrWired) return;
+          header._decidrWired = true;
+          header.addEventListener('click', function() {
+            var groupType = header.getAttribute('data-next-steps-group');
+            dashState.nextStepsGroupExpanded[groupType] = !dashState.nextStepsGroupExpanded[groupType];
+            var cont = container.querySelector('#decidr-next-steps-container');
+            if (cont) {
+              cont.innerHTML = renderNextStepsContent();
+              wireNextStepsShowMore();
+              wireEntityClicks(cont);
+            }
+          });
+        })(groupHeaders[i]);
       }
     }
 

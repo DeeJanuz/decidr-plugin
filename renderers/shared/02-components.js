@@ -1465,6 +1465,7 @@
     _projectPanelState: {
       timelineFilter: 'all',
       addDocFormOpen: false,
+      addTaskFormOpen: false,
       docFormTab: 'search'
     },
 
@@ -2084,6 +2085,40 @@
         })(checkboxes[ci]);
       }
 
+      // Add Task form (project)
+      var addTaskBtn = panel.querySelector('#decidr-so-btn-add-project-task');
+      if (addTaskBtn) {
+        addTaskBtn.onclick = function() {
+          state.addTaskFormOpen = true;
+          var form = panel.querySelector('#decidr-so-form-add-project-task');
+          if (form) form.classList.add('visible');
+        };
+      }
+      var cancelTaskBtn = panel.querySelector('#decidr-so-btn-cancel-project-task');
+      if (cancelTaskBtn) {
+        cancelTaskBtn.onclick = function() {
+          state.addTaskFormOpen = false;
+          var form = panel.querySelector('#decidr-so-form-add-project-task');
+          if (form) form.classList.remove('visible');
+        };
+      }
+      var saveTaskBtn = panel.querySelector('#decidr-so-btn-save-project-task');
+      if (saveTaskBtn) {
+        saveTaskBtn.onclick = function() {
+          var titleInput = panel.querySelector('#decidr-so-input-project-task-title');
+          var title = titleInput ? titleInput.value.trim() : '';
+          if (!title || !API) return;
+          if (UI.SlideOut._guardBusy()) return;
+          API.createTask({
+            title: title,
+            projectId: id
+          }).then(function() {
+            state.addTaskFormOpen = false;
+            UI.SlideOut._refetchAndRender();
+          }).catch(function(err) { UI.SlideOut._busy = false; console.error('[decidr] Create task failed:', err); });
+        };
+      }
+
       // Comment posting
       var postBtn = panel.querySelector('#decidr-so-btn-post-project-comment');
       if (postBtn) {
@@ -2521,6 +2556,19 @@
       }
       html += '</div>';
     }
+
+    // Quick actions: Add Task
+    html += '<div class="decidr-so-quick-actions">';
+    html += '<button class="decidr-so-btn decidr-so-btn-sm" id="decidr-so-btn-add-project-task">+ Add Task</button>';
+    html += '</div>';
+
+    // Add Task inline form
+    html += '<div class="decidr-so-inline-form' + (state.addTaskFormOpen ? ' visible' : '') + '" id="decidr-so-form-add-project-task">';
+    html += '<input type="text" id="decidr-so-input-project-task-title" placeholder="Task title...">';
+    html += '<div class="decidr-so-form-actions">'
+      + '<button class="decidr-so-btn decidr-so-btn-sm" id="decidr-so-btn-cancel-project-task">Cancel</button>'
+      + '<button class="decidr-so-btn decidr-so-btn-primary decidr-so-btn-sm" id="decidr-so-btn-save-project-task">Save</button>'
+      + '</div></div>';
 
     // Decisions (with supersession grouping built from flat list)
     var decisions = (enriched.decisions && enriched.decisions.data) || enriched.decisions || [];
