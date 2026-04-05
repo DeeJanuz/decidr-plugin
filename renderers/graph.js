@@ -926,7 +926,7 @@
     function buildZoomControls() {
       // Action buttons — top left, horizontal text buttons
       var actions = '<div style="position:absolute;top:var(--space-3);left:var(--space-3);'
-        + 'display:flex;gap:var(--space-2);align-items:center;z-index:10;">'
+        + 'display:flex;gap:var(--space-2);align-items:center;z-index:100;">'
         + UI.orgPicker(graphState.organizations, graphState.activeOrgId)
         + '<button class="decidr-graph-zoom-btn" data-action="new-initiative"'
         + ' style="padding:6px 14px;width:auto;font-size:12px;">New Initiative</button>'
@@ -938,7 +938,7 @@
 
       // Zoom buttons — top right, horizontal
       var zoom = '<div id="decidr-zoom-controls" style="position:absolute;top:var(--space-3);right:var(--space-3);'
-        + 'display:flex;gap:var(--space-1);z-index:10;">'
+        + 'display:flex;gap:var(--space-1);z-index:100;">'
         + '<button class="decidr-graph-zoom-btn" data-action="zoom-in" title="Zoom In">+</button>'
         + '<button class="decidr-graph-zoom-btn" data-action="zoom-out" title="Zoom Out">&minus;</button>'
         + '<button class="decidr-graph-zoom-btn" data-action="zoom-reset" title="Fit to View">&#10227;</button>'
@@ -1301,6 +1301,9 @@
 
         window.addEventListener('mousemove', function(e) {
           if (isPanning) {
+            var dx = e.clientX - panStart.x - graphState.transform.x;
+            var dy = e.clientY - panStart.y - graphState.transform.y;
+            if (!didPan && (dx * dx + dy * dy) < 25) return; // 5px dead zone
             didPan = true;
             graphState.transform.x = e.clientX - panStart.x;
             graphState.transform.y = e.clientY - panStart.y;
