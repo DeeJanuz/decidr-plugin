@@ -1,5 +1,6 @@
 # Unreleased
 
+- **fix**: Graph node clicks swallowed by pan detection — added 5px dead zone so sub-pixel mouse movement during clicks no longer suppresses click events; raised action/zoom button z-index from 10 to 100 to prevent overlap
 - **feat**: Org picker in dashboard and graph renderers — switch between organizations without re-pushing from the agent
 - **fix**: Make org fetch non-fatal in dashboard and graph renderers — gracefully handle missing or expired org tokens
 - **fix**: Scope slideout panels to session container instead of viewport — prevents slideouts from overlapping other companion panels
