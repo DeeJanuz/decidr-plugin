@@ -424,6 +424,9 @@
       html += '<span style="color:var(--text-tertiary);font-weight:var(--weight-medium);margin-right:4px;">#' + (issue.githubIssueNumber || '') + '</span>';
       html += UI.escapeHtml(issue.githubIssueTitle || 'Untitled');
       html += '</span>';
+      if (issue.githubState) {
+        html += UI.statusBadge(issue.githubState);
+      }
       if (issue.source) {
         html += '<span class="decidr-so-doc-type-badge">' + UI.escapeHtml(issue.source) + '</span>';
       }
@@ -1242,24 +1245,68 @@
       'decision-timeline': function(data) { return UI.slideOutTimeline(data, 'decision'); },
       issue: function(issue) {
         var html = '<div class="decidr-so-detail">';
+
+        // Title row: icon + title + state badge
         html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:var(--space-2);">';
         html += '<span class="decidr-entity-icon">' + (ENTITY_ICONS.issue || '') + '</span>';
         html += '<h2 style="margin:0;font-size:var(--text-h2);">' + UI.escapeHtml(issue.githubIssueTitle || '') + '</h2>';
+        if (issue.githubState) html += UI.statusBadge(issue.githubState);
         html += '</div>';
+
+        // Meta row
         var metaItems = [];
         if (issue.githubIssueNumber) metaItems.push({ html: '<strong>#' + issue.githubIssueNumber + '</strong>' });
-        if (issue.source) metaItems.push({ html: UI.escapeHtml(issue.source) });
-        if (issue.githubAuthorUsername) metaItems.push({ html: UI.escapeHtml(issue.githubAuthorUsername) });
+        if (issue.source) metaItems.push({ html: '<strong>Source:</strong> ' + UI.escapeHtml(issue.source) });
+        if (issue.githubAuthorUsername) metaItems.push({ html: '<strong>Author:</strong> ' + UI.escapeHtml(issue.githubAuthorUsername) });
+        if (issue.githubCreatedAt) metaItems.push({ html: '<strong>Created:</strong> ' + UI.formatDate(issue.githubCreatedAt) });
+        if (issue.githubUpdatedAt) metaItems.push({ html: '<strong>Updated:</strong> ' + UI.formatDate(issue.githubUpdatedAt) });
         if (issue.githubIssueUrl) metaItems.push({ html: '<a href="' + UI.escapeHtml(issue.githubIssueUrl) + '" target="_blank" style="color:var(--accent-primary);text-decoration:none;">View on GitHub</a>' });
         if (metaItems.length > 0) html += UI.SlideOut._renderMeta(metaItems);
+
+        // Description (githubBody)
+        if (issue.githubBody) {
+          html += '<div class="decidr-so-section">';
+          html += UI.SlideOut._renderSectionHeader('Description', 0);
+          html += '<div class="decidr-so-description" style="white-space:pre-wrap;word-break:break-word;">' + UI.escapeHtml(issue.githubBody).replace(/\n/g, '<br>') + '</div>';
+          html += '</div>';
+        }
+
+        // Labels
+        var labels = issue.githubLabels;
+        if (labels && labels.length > 0) {
+          html += '<div class="decidr-so-section">';
+          html += UI.SlideOut._renderSectionHeader('Labels', labels.length);
+          html += '<div style="display:flex;flex-wrap:wrap;gap:6px;">';
+          for (var li = 0; li < labels.length; li++) {
+            var lbl = labels[li];
+            var lblName = typeof lbl === 'string' ? lbl : (lbl.name || '');
+            var lblColor = (typeof lbl === 'object' && lbl.color) ? lbl.color : '';
+            if (lblColor && lblColor.charAt(0) !== '#') lblColor = '#' + lblColor;
+            var lblStyle = lblColor
+              ? 'background:' + UI.sanitizeColor(lblColor) + '22;color:' + UI.sanitizeColor(lblColor) + ';border:1px solid ' + UI.sanitizeColor(lblColor) + '44;'
+              : 'background:var(--glass-bg);color:var(--text-secondary);border:1px solid var(--border-subtle);';
+            html += '<span style="' + lblStyle + 'padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;">' + UI.escapeHtml(lblName) + '</span>';
+          }
+          html += '</div>';
+          html += '</div>';
+        }
+
+        // Linked Entities (using decidr-so-decision-item pattern with entityName)
         if (issue.entityLinks && issue.entityLinks.length > 0) {
-          html += '<h3 style="margin:var(--space-4) 0 var(--space-2);font-size:var(--text-body);color:var(--text-secondary);">Linked Entities</h3>';
+          html += '<div class="decidr-so-section">';
+          html += UI.SlideOut._renderSectionHeader('Linked Entities', issue.entityLinks.length);
           for (var i = 0; i < issue.entityLinks.length; i++) {
             var link = issue.entityLinks[i];
-            html += '<div class="decidr-card decidr-card-sm" data-entity-type="' + UI.escapeHtml(link.entityType.toLowerCase()) + '" data-entity-id="' + UI.escapeHtml(link.entityId) + '" style="cursor:pointer;margin-bottom:var(--space-1);">'
-              + '<span>' + UI.escapeHtml(link.entityType) + ': ' + UI.escapeHtml(link.entityId) + '</span></div>';
+            var elType = (link.entityType || '').toLowerCase();
+            html += '<div class="decidr-so-decision-item" data-entity-type="' + UI.escapeHtml(elType) + '" data-entity-id="' + UI.escapeHtml(link.entityId) + '">';
+            html += UI.entityTypeBadge(link.entityType);
+            html += '<span class="decidr-so-decision-title">' + UI.escapeHtml(link.entityName || link.entityId) + '</span>';
+            html += '<span class="decidr-so-decision-chevron">\u203a</span>';
+            html += '</div>';
           }
+          html += '</div>';
         }
+
         // Linked PRs (from enrichment)
         var issueEnriched = issue._enriched || {};
         var linkedPRs = issueEnriched.linkedPRs;
@@ -1274,6 +1321,7 @@
         } else if (!issue._enrichmentDone) {
           html += '<div class="decidr-so-section"><div class="decidr-so-section-header">Linked PRs</div><div class="decidr-so-section-empty">Loading...</div></div>';
         }
+
         html += '</div>';
         return html;
       },

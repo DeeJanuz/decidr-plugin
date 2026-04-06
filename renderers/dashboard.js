@@ -399,38 +399,50 @@
         pull_request: 'Pull Requests'
       };
 
-      // Inject issues as a group
+      // Inject open issues (skip closed issues + issues whose PRs are all merged)
+      var CLOSED_PR_STATUSES = { MERGED: true, CLOSED: true };
       var issues = dashState.allIssues || [];
-      if (issues.length > 0) {
-        if (!groups['issue']) { groups['issue'] = []; groupOrder.push('issue'); }
-        for (var ii = 0; ii < issues.length; ii++) {
-          var iss = issues[ii];
-          groups['issue'].push({
-            entityType: 'issue',
-            entityId: iss.id,
-            id: iss.id,
-            title: '#' + (iss.githubIssueNumber || '') + ' ' + (iss.githubIssueTitle || 'Untitled'),
-            status: iss.source || 'EXTERNAL',
-            createdAt: iss.createdAt
-          });
+      var prs = dashState.allPRs || [];
+      // Build a map of issueRefId -> array of PR statuses
+      var prStatusByIssue = {};
+      for (var pm = 0; pm < prs.length; pm++) {
+        var pid = prs[pm].issueRefId;
+        if (pid) {
+          if (!prStatusByIssue[pid]) prStatusByIssue[pid] = [];
+          prStatusByIssue[pid].push(prs[pm].status || 'OPEN');
         }
       }
+      for (var ii = 0; ii < issues.length; ii++) {
+        var iss = issues[ii];
+        // Skip closed issues directly
+        if (iss.githubState === 'closed') continue;
+        // Fallback: skip if all linked PRs are merged/closed
+        var issuePrStatuses = prStatusByIssue[iss.id] || [];
+        if (issuePrStatuses.length > 0 && issuePrStatuses.every(function(s) { return CLOSED_PR_STATUSES[s]; })) continue;
+        if (!groups['issue']) { groups['issue'] = []; groupOrder.push('issue'); }
+        groups['issue'].push({
+          entityType: 'issue',
+          entityId: iss.id,
+          id: iss.id,
+          title: '#' + (iss.githubIssueNumber || '') + ' ' + (iss.githubIssueTitle || 'Untitled'),
+          status: iss.githubState ? iss.githubState.toUpperCase() : (iss.source || 'EXTERNAL'),
+          createdAt: iss.createdAt
+        });
+      }
 
-      // Inject PRs as a group
-      var prs = dashState.allPRs || [];
-      if (prs.length > 0) {
+      // Inject open PRs (skip merged/closed)
+      for (var pi = 0; pi < prs.length; pi++) {
+        var prItem = prs[pi];
+        if (CLOSED_PR_STATUSES[prItem.status]) continue;
         if (!groups['pull_request']) { groups['pull_request'] = []; groupOrder.push('pull_request'); }
-        for (var pi = 0; pi < prs.length; pi++) {
-          var prItem = prs[pi];
-          groups['pull_request'].push({
-            entityType: 'pull_request',
-            entityId: prItem.id,
-            id: prItem.id,
-            title: '#' + (prItem.githubPrNumber || '') + ' ' + (prItem.branchName || 'Unknown branch'),
-            status: prItem.status || 'OPEN',
-            createdAt: prItem.createdAt
-          });
-        }
+        groups['pull_request'].push({
+          entityType: 'pull_request',
+          entityId: prItem.id,
+          id: prItem.id,
+          title: '#' + (prItem.githubPrNumber || '') + ' ' + (prItem.branchName || 'Unknown branch'),
+          status: prItem.status || 'OPEN',
+          createdAt: prItem.createdAt
+        });
       }
 
       var html = '';
