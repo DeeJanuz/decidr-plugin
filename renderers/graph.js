@@ -5,6 +5,7 @@
   window.__renderers.decidr_graph = function(container, data, meta, toolArgs, reviewRequired, onDecision) {
     container.innerHTML = '';
 
+    var _orgId = (data && data.organization_id) ? data.organization_id : null;
     window.__decidrAPI.withReady(container, meta, function() {
     var UI = window.__decidrUI;
     var API = window.__decidrAPI;
@@ -1575,6 +1576,6 @@
       }
     }
 
-    });
+    }, _orgId);
   };
 })();

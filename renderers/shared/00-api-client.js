@@ -161,7 +161,7 @@
         }).catch(function() { /* session fetch is best-effort */ });
     },
 
-    withReady: function(container, meta, renderFn) {
+    withReady: function(container, meta, renderFn, orgId) {
       // Dependency guard
       if (!window.__decidrUI || !window.__decidrAPI) {
         var _retries = 0;
@@ -169,7 +169,7 @@
           _retries++;
           if (window.__decidrUI && window.__decidrAPI) {
             clearInterval(_check);
-            api.withReady(container, meta, renderFn);
+            api.withReady(container, meta, renderFn, orgId);
           } else if (_retries >= 10) {
             clearInterval(_check);
             container.innerHTML = '<div style="color:var(--color-error-text);padding:var(--space-4);">'
@@ -184,6 +184,12 @@
       container.innerHTML = '<div style="padding:var(--space-6);">'
         + UI.loadingSpinner('Initializing...')
         + '</div>';
+
+      var targetOrg = orgId || null;
+      if (targetOrg !== _activeOrgId) {
+        _activeOrgId = targetOrg;
+        api._initialized = false;
+      }
 
       api.autoInit(meta || {}).then(function() {
         renderFn(UI, api);
