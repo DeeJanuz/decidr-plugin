@@ -155,7 +155,8 @@
     "renderer_names": [
       "decidr_list",
       "decidr_dashboard",
-      "decidr_graph"
+      "decidr_graph",
+      "decidr_github_auth"
     ]
   },
   "tool_rules": {
@@ -273,7 +274,7 @@
     "find_entities_by_ludflow_document": "decidr_list",
     "archive_entity": "decidr_list",
     "restore_entity": "decidr_list",
-    "connect_github": "decidr_list",
+    "connect_github": "decidr_github_auth",
     "disconnect_github": "decidr_list",
     "link_repo": "decidr_list",
     "unlink_repo": "decidr_list",
@@ -361,6 +362,16 @@
       "standalone_label": "Dashboard"
     },
     {
+      "name": "decidr_github_auth",
+      "description": "Secure GitHub authentication form \u2014 enter PAT directly in the companion without passing through the AI agent",
+      "scope": "tool",
+      "rule": "Use when the user wants to connect their GitHub account. Opens a secure form for token entry.",
+      "tools": [
+        "connect_github"
+      ],
+      "data_hint": "{ github_username?: string }"
+    },
+    {
       "name": "decidr_graph",
       "description": "Force-directed SVG graph of projects and bridges with interactive nodes and semantic zoom",
       "scope": "universal",
@@ -372,7 +383,7 @@
     }
   ],
   "mcp": {
-    "url": "https://app.decidrmcp.com/api/mcp",
+    "url": "http://localhost:3001/api/mcp",
     "auth": {
       "type": "oauth",
       "client_id": "fc99d041-1923-416c-8173-a4c02ae9b3a7",
