@@ -402,8 +402,84 @@
       + (badgesHtml ? ' ' + badgesHtml : '')
       + '</div>'
       + statHtml
+      + UI.githubCountBadges(o.githubCounts)
       + progressHtml
       + '</div>';
+  };
+
+  // ─── GitHub Helper Components ─────────────────────────────────────
+
+  UI.githubIssuesList = function(issues, opts) {
+    opts = opts || {};
+    var limit = opts.limit || 5;
+    var items = issues.slice(0, limit);
+    if (!items.length) {
+      return opts.showEmpty !== false ? '<div class="decidr-so-empty-hint">No linked issues</div>' : '';
+    }
+    var html = '';
+    for (var i = 0; i < items.length; i++) {
+      var issue = items[i];
+      html += '<div class="decidr-so-doc-item" data-entity-type="issue" data-entity-id="' + issue.id + '">';
+      html += '<span class="decidr-so-doc-link" style="pointer-events:none;">';
+      html += '<span style="color:var(--text-tertiary);font-weight:var(--weight-medium);margin-right:4px;">#' + (issue.githubIssueNumber || '') + '</span>';
+      html += UI.escapeHtml(issue.githubIssueTitle || 'Untitled');
+      html += '</span>';
+      if (issue.source) {
+        html += '<span class="decidr-so-doc-type-badge">' + UI.escapeHtml(issue.source) + '</span>';
+      }
+      html += '</div>';
+    }
+    if (issues.length > limit) {
+      html += '<div class="decidr-so-empty-hint">+ ' + (issues.length - limit) + ' more</div>';
+    }
+    return html;
+  };
+
+  UI.githubPRsList = function(prs, opts) {
+    opts = opts || {};
+    var limit = opts.limit || 5;
+    var items = prs.slice(0, limit);
+    if (!items.length) {
+      return opts.showEmpty !== false ? '<div class="decidr-so-empty-hint">No linked pull requests</div>' : '';
+    }
+    var html = '';
+    for (var i = 0; i < items.length; i++) {
+      var pr = items[i];
+      html += '<div class="decidr-so-decision-item" data-entity-type="pull_request" data-entity-id="' + pr.id + '">';
+      html += UI.statusBadge(pr.status || 'OPEN');
+      html += '<span class="decidr-so-decision-title">';
+      html += '<span style="color:var(--text-tertiary);margin-right:4px;">#' + (pr.githubPrNumber || '') + '</span>';
+      html += UI.escapeHtml(pr.branchName || 'Unknown branch');
+      html += '</span>';
+      if (pr.reviewer) {
+        html += '<span class="decidr-so-doc-type-badge">' + UI.escapeHtml(pr.reviewer.name || 'Reviewer') + '</span>';
+      }
+      html += '<span class="decidr-so-decision-chevron">\u203a</span>';
+      html += '</div>';
+    }
+    if (prs.length > limit) {
+      html += '<div class="decidr-so-empty-hint">+ ' + (prs.length - limit) + ' more</div>';
+    }
+    return html;
+  };
+
+  UI.githubCountBadges = function(counts) {
+    if (!counts) return '';
+    var html = '';
+    var any = false;
+    if (counts.issues > 0) {
+      html += '<span class="decidr-dash-proj-badge decidr-gh-badge-issues">' + counts.issues + ' issue' + (counts.issues !== 1 ? 's' : '') + '</span>';
+      any = true;
+    }
+    if (counts.openPrs > 0) {
+      html += '<span class="decidr-dash-proj-badge decidr-gh-badge-prs">' + counts.openPrs + ' open PR' + (counts.openPrs !== 1 ? 's' : '') + '</span>';
+      any = true;
+    }
+    if (counts.pendingReviewPrs > 0) {
+      html += '<span class="decidr-dash-proj-badge decidr-gh-badge-review">' + counts.pendingReviewPrs + ' needs review</span>';
+      any = true;
+    }
+    return any ? html : '';
   };
 
   // ─── Graph Project Card (SVG foreignObject content) ───────────────
@@ -1171,10 +1247,10 @@
         html += '<h2 style="margin:0;font-size:var(--text-h2);">' + UI.escapeHtml(issue.githubIssueTitle || '') + '</h2>';
         html += '</div>';
         var metaItems = [];
-        if (issue.githubIssueNumber) metaItems.push({ label: 'Number', value: '#' + issue.githubIssueNumber });
-        if (issue.source) metaItems.push({ label: 'Source', value: issue.source });
-        if (issue.githubAuthorUsername) metaItems.push({ label: 'Author', value: issue.githubAuthorUsername });
-        if (issue.githubIssueUrl) metaItems.push({ label: 'URL', value: issue.githubIssueUrl });
+        if (issue.githubIssueNumber) metaItems.push({ html: '<strong>#' + issue.githubIssueNumber + '</strong>' });
+        if (issue.source) metaItems.push({ html: UI.escapeHtml(issue.source) });
+        if (issue.githubAuthorUsername) metaItems.push({ html: UI.escapeHtml(issue.githubAuthorUsername) });
+        if (issue.githubIssueUrl) metaItems.push({ html: '<a href="' + UI.escapeHtml(issue.githubIssueUrl) + '" target="_blank" style="color:var(--accent-primary);text-decoration:none;">View on GitHub</a>' });
         if (metaItems.length > 0) html += UI.SlideOut._renderMeta(metaItems);
         if (issue.entityLinks && issue.entityLinks.length > 0) {
           html += '<h3 style="margin:var(--space-4) 0 var(--space-2);font-size:var(--text-body);color:var(--text-secondary);">Linked Entities</h3>';
@@ -1183,6 +1259,20 @@
             html += '<div class="decidr-card decidr-card-sm" data-entity-type="' + UI.escapeHtml(link.entityType.toLowerCase()) + '" data-entity-id="' + UI.escapeHtml(link.entityId) + '" style="cursor:pointer;margin-bottom:var(--space-1);">'
               + '<span>' + UI.escapeHtml(link.entityType) + ': ' + UI.escapeHtml(link.entityId) + '</span></div>';
           }
+        }
+        // Linked PRs (from enrichment)
+        var issueEnriched = issue._enriched || {};
+        var linkedPRs = issueEnriched.linkedPRs;
+        if (linkedPRs) {
+          var prList = (linkedPRs && linkedPRs.data) ? linkedPRs.data : (Array.isArray(linkedPRs) ? linkedPRs : []);
+          if (prList.length > 0) {
+            html += '<div class="decidr-so-section">';
+            html += UI.SlideOut._renderSectionHeader('Linked Pull Requests', prList.length);
+            html += UI.githubPRsList(prList);
+            html += '</div>';
+          }
+        } else if (!issue._enrichmentDone) {
+          html += '<div class="decidr-so-section"><div class="decidr-so-section-header">Linked PRs</div><div class="decidr-so-section-empty">Loading...</div></div>';
         }
         html += '</div>';
         return html;
@@ -1195,12 +1285,46 @@
         if (pr.status) html += UI.statusBadge(pr.status);
         html += '</div>';
         var metaItems = [];
-        if (pr.branchName) metaItems.push({ label: 'Branch', value: pr.branchName });
-        if (pr.source) metaItems.push({ label: 'Source', value: pr.source });
-        if (pr.githubAuthorUsername) metaItems.push({ label: 'Author', value: pr.githubAuthorUsername });
-        if (pr.githubPrUrl) metaItems.push({ label: 'URL', value: pr.githubPrUrl });
-        if (pr.reviewPromptGenerated) metaItems.push({ label: 'Review Prompt', value: 'Generated' });
+        if (pr.branchName) metaItems.push({ html: '<strong>Branch:</strong> ' + UI.escapeHtml(pr.branchName) });
+        if (pr.source) metaItems.push({ html: '<strong>Source:</strong> ' + UI.escapeHtml(pr.source) });
+        if (pr.createdBy && pr.createdBy.name) metaItems.push({ html: '<strong>Created by:</strong> ' + UI.escapeHtml(pr.createdBy.name) });
+        else if (pr.githubAuthorUsername) metaItems.push({ html: '<strong>Author:</strong> ' + UI.escapeHtml(pr.githubAuthorUsername) });
+        if (pr.reviewer && pr.reviewer.name) metaItems.push({ html: '<strong>Reviewer:</strong> ' + UI.escapeHtml(pr.reviewer.name) });
+        if (pr.githubPrUrl) metaItems.push({ html: '<a href="' + UI.escapeHtml(pr.githubPrUrl) + '" target="_blank" style="color:var(--accent-primary);text-decoration:none;">View on GitHub</a>' });
+        if (pr.reviewPromptGenerated) metaItems.push({ html: '<strong>Review Prompt:</strong> Generated' });
         if (metaItems.length > 0) html += UI.SlideOut._renderMeta(metaItems);
+
+        // Linked issue
+        if (pr.issueRef) {
+          html += '<div class="decidr-so-section">';
+          html += UI.SlideOut._renderSectionHeader('Linked Issue', 1);
+          html += '<div class="decidr-so-doc-item" data-entity-type="issue" data-entity-id="' + UI.escapeHtml(pr.issueRef.id) + '">';
+          html += '<span class="decidr-so-doc-link" style="pointer-events:none;">';
+          html += '<span style="color:var(--text-tertiary);font-weight:var(--weight-medium);margin-right:4px;">#' + (pr.issueRef.githubIssueNumber || '') + '</span>';
+          html += UI.escapeHtml(pr.issueRef.githubIssueTitle || 'Untitled');
+          html += '</span>';
+          if (pr.issueRef.source) html += '<span class="decidr-so-doc-type-badge">' + UI.escapeHtml(pr.issueRef.source) + '</span>';
+          html += '</div>';
+          html += '</div>';
+
+          // Linked DecidR entities (from the issue's entity links)
+          var entityLinks = pr.issueRef.entityLinks || [];
+          if (entityLinks.length > 0) {
+            html += '<div class="decidr-so-section">';
+            html += UI.SlideOut._renderSectionHeader('Linked Entities', entityLinks.length);
+            for (var eli = 0; eli < entityLinks.length; eli++) {
+              var elink = entityLinks[eli];
+              var elType = (elink.entityType || '').toLowerCase();
+              html += '<div class="decidr-so-decision-item" data-entity-type="' + UI.escapeHtml(elType) + '" data-entity-id="' + UI.escapeHtml(elink.entityId) + '">';
+              html += UI.entityTypeBadge(elink.entityType);
+              html += '<span class="decidr-so-decision-title">' + UI.escapeHtml(elink.entityName || elink.entityId) + '</span>';
+              html += '<span class="decidr-so-decision-chevron">\u203a</span>';
+              html += '</div>';
+            }
+            html += '</div>';
+          }
+        }
+
         html += '</div>';
         return html;
       },
@@ -1211,8 +1335,8 @@
         html += '<h2 style="margin:0;font-size:var(--text-h2);">' + UI.escapeHtml(repo.githubOwner + '/' + repo.githubRepo) + '</h2>';
         html += '</div>';
         var metaItems = [];
-        if (repo.defaultBranch) metaItems.push({ label: 'Default Branch', value: repo.defaultBranch });
-        if (repo.stagingBranch) metaItems.push({ label: 'Staging Branch', value: repo.stagingBranch });
+        if (repo.defaultBranch) metaItems.push({ html: '<strong>Default:</strong> ' + UI.escapeHtml(repo.defaultBranch) });
+        if (repo.stagingBranch) metaItems.push({ html: '<strong>Staging:</strong> ' + UI.escapeHtml(repo.stagingBranch) });
         if (metaItems.length > 0) html += UI.SlideOut._renderMeta(metaItems);
         html += '</div>';
         return html;
@@ -1330,11 +1454,14 @@
         if (data.parentId) {
           fetches.push({ key: 'parentDecision', promise: API.getDecision(data.parentId) });
         }
+        // GitHub summary
+        fetches.push({ key: 'githubSummary', promise: API.getEntityGithubSummary('DECISION', id) });
       } else if (type === 'project') {
         fetches.push({ key: 'decisions', promise: API.listDecisions({ projectId: id }) });
         fetches.push({ key: 'tasks', promise: API.listTasks({ projectId: id }) });
         fetches.push({ key: 'bridges', promise: API.listBridges({ projectId: id }) });
         fetches.push({ key: 'timeline', promise: API.getTimeline({ projectId: id, take: 20 }) });
+        fetches.push({ key: 'githubSummary', promise: API.getEntityGithubSummary('PROJECT', id) });
         if (data.initiativeId) {
           fetches.push({ key: 'initiative', promise: API.getInitiative(data.initiativeId) });
         }
@@ -1345,6 +1472,9 @@
         if (data.projectId && !data.project) {
           fetches.push({ key: 'parentProject', promise: API.getProject(data.projectId) });
         }
+        fetches.push({ key: 'githubSummary', promise: API.getEntityGithubSummary('TASK', id) });
+      } else if (type === 'issue') {
+        fetches.push({ key: 'linkedPRs', promise: API.listPRs({ issueRefId: id }) });
       } else if (type === 'bridge') {
         fetches.push({ key: 'timeline', promise: API.getTimeline({ bridgeId: id, take: 20 }) });
       } else if (type === 'initiative') {
@@ -2719,6 +2849,24 @@
   // Registered on UI so renderers can call them directly.
   // ═══════════════════════════════════════════════════════════════════
 
+  function _renderGithubSection(summary) {
+    if (!summary) return '';
+    var html = '';
+    if (summary.issues && summary.issues.length) {
+      html += '<div class="decidr-so-section">';
+      html += UI.SlideOut._renderSectionHeader('Issues', summary.issues.length);
+      html += UI.githubIssuesList(summary.issues);
+      html += '</div>';
+    }
+    if (summary.prs && summary.prs.length) {
+      html += '<div class="decidr-so-section">';
+      html += UI.SlideOut._renderSectionHeader('Pull Requests', summary.prs.length);
+      html += UI.githubPRsList(summary.prs);
+      html += '</div>';
+    }
+    return html;
+  }
+
   /**
    * Render project slide-out detail panel.
    * @param {Object} project - Project data with _enriched sub-objects
@@ -2923,6 +3071,14 @@
 
     // Documents section (shared helper)
     html += UI.SlideOut._renderDocumentSection('PROJECT', project.id, project.documents || [], state);
+
+    // GitHub Issues & PRs
+    var ghSummary = enriched.githubSummary;
+    if (ghSummary) {
+      html += _renderGithubSection(ghSummary);
+    } else if (!project._enrichmentDone) {
+      html += '<div class="decidr-so-loading-section"><div class="decidr-spinner"></div> Loading issues & PRs...</div>';
+    }
 
     // Timeline
     html += UI.SlideOut._renderTimeline(enriched.timeline, state.timelineFilter, { filterPrefix: 'project-timeline', parentType: 'project', parentId: project.id });
@@ -3148,6 +3304,14 @@
     // Documents section (shared helper)
     html += UI.SlideOut._renderDocumentSection('DECISION', decision.id, decision.documents || [], state);
 
+    // GitHub Issues & PRs
+    var ghSummaryDec = enriched.githubSummary;
+    if (ghSummaryDec) {
+      html += _renderGithubSection(ghSummaryDec);
+    } else if (!decision._enrichmentDone) {
+      html += '<div class="decidr-so-loading-section"><div class="decidr-spinner"></div> Loading issues & PRs...</div>';
+    }
+
     // Sub-decisions
     var children = decision.children || [];
     if (children.length > 0) {
@@ -3294,6 +3458,14 @@
 
     // Documents section (shared helper)
     html += UI.SlideOut._renderDocumentSection('TASK', task.id, task.documents || [], state);
+
+    // GitHub Issues & PRs
+    var ghSummaryTask = enriched.githubSummary;
+    if (ghSummaryTask) {
+      html += _renderGithubSection(ghSummaryTask);
+    } else if (!task._enrichmentDone) {
+      html += '<div class="decidr-so-loading-section"><div class="decidr-spinner"></div> Loading issues & PRs...</div>';
+    }
 
     html += '</div>';
     return html;

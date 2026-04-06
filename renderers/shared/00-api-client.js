@@ -515,6 +515,14 @@
       return api.get('/github/sync/' + repoId);
     },
 
+    getEntityGithubSummary: function(entityType, entityId) {
+      return api.get('/github/entity-summary' + _qs({ entityType: entityType, entityId: entityId }));
+    },
+
+    getEntityGithubCounts: function(entityType, entityIds) {
+      return api.get('/github/entity-counts' + _qs({ entityType: entityType, entityIds: entityIds.join(',') }));
+    },
+
     // --- Generic entity dispatcher ---
 
     getEntity: function(entityType, entityId) {

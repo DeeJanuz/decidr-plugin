@@ -2415,7 +2415,11 @@
     + '}'
     + '.decidr-org-picker-chevron {'
     + '  transition: transform 0.15s ease;'
-    + '}';
+    + '}'
+    + '/* GitHub dashboard badge color variants */'
+    + '.decidr-gh-badge-issues { background: rgba(34,197,94,0.15); color: var(--color-success); }'
+    + '.decidr-gh-badge-prs { background: rgba(99,102,241,0.15); color: #818cf8; }'
+    + '.decidr-gh-badge-review { background: rgba(245,158,11,0.15); color: #f59e0b; }';
 
   style.textContent = css;
   document.head.appendChild(style);
