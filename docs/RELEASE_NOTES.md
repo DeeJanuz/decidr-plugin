@@ -1,5 +1,6 @@
 # Unreleased
 
+- **feat**: Rich issue slideout with description, labels, linked entity names, and state badge; githubState badge on issue list rows; closed issues and merged PRs filtered from dashboard Next Steps
 - **feat**: Surface GitHub issues and PRs across all views — issue/PR sections in project, decision, and task slideouts via enrichment; issues and pull requests groups in dashboard Next Steps; GitHub count badges on dashboard project cards and graph nodes; fix pre-existing meta rendering bug in issue/PR/repo slideouts
 - **fix**: Pass organization_id through withReady so non-default orgs load correctly — dashboard and graph renderers now sync _activeOrgId before token fetch, fixing org-specific data not loading
 - **fix**: Graph node clicks swallowed by pan detection — added 5px dead zone so sub-pixel mouse movement during clicks no longer suppresses click events; raised action/zoom button z-index from 10 to 100 to prevent overlap
