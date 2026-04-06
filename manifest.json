@@ -13,6 +13,30 @@
         }
       ],
       "source": "prompts/initiative-planning.md"
+    },
+    {
+      "name": "fix_generation",
+      "description": "Generate a code fix prompt from a GitHub issue with full DecidR context. Provides project, task, and decision context for the issue.",
+      "arguments": [
+        {
+          "name": "issue_ref_id",
+          "description": "The issue ref ID to generate a fix prompt for",
+          "required": true
+        }
+      ],
+      "source": "prompts/fix-generation.md"
+    },
+    {
+      "name": "review_generation",
+      "description": "Generate a PR review prompt with full DecidR context. Provides issue, project, and decision context for reviewing external PRs.",
+      "arguments": [
+        {
+          "name": "pr_artifact_id",
+          "description": "The PR artifact ID to generate a review prompt for",
+          "required": true
+        }
+      ],
+      "source": "prompts/review-generation.md"
     }
   ],
   "plugin_rules": [
@@ -94,12 +118,45 @@
           "search_ludflow_documents",
           "find_entities_by_ludflow_document"
         ]
+      },
+      {
+        "name": "Archive & Restore",
+        "hint": "Soft-delete (archive) entities or restore previously archived ones",
+        "tools": [
+          "archive_entity",
+          "restore_entity"
+        ]
+      },
+      {
+        "name": "GitHub",
+        "hint": "GitHub integration \u2014 connect repos, sync issues, manage PRs, generate prompts",
+        "tools": [
+          "connect_github",
+          "disconnect_github",
+          "link_repo",
+          "unlink_repo",
+          "list_repos",
+          "list_issues",
+          "link_issue",
+          "unlink_issue",
+          "list_issue_links",
+          "create_pr",
+          "list_prs",
+          "review_pr",
+          "merge_pr",
+          "generate_fix_prompt",
+          "generate_review_prompt",
+          "sync_issues",
+          "sync_status",
+          "manage_repo_admin"
+        ]
       }
     ],
     "renderer_names": [
       "decidr_list",
       "decidr_dashboard",
-      "decidr_graph"
+      "decidr_graph",
+      "decidr_github_auth"
     ]
   },
   "tool_rules": {
@@ -111,18 +168,18 @@
     "list_bridges": "Use to discover cross-project bridges. Push to decidr_list.",
     "get_initiative": "Get full initiative details. Push to decidr_list for detail view.",
     "get_project": "Get full project details including task/decision/bridge counts. Push to decidr_list.",
-    "get_decision": "Get full decision details including approval progress and linked documents. If status is IN_PROGRESS, tell user they can use update_decision with action: approve or reject. Check list_entity_documents for supporting context.",
+    "get_decision": "Get full decision details including approval progress and linked documents. DRAFT decisions need documents linked before transitioning to PROPOSED. If status is IN_PROGRESS, tell user they can use update_decision with action: approve or reject. Check list_entity_documents for supporting context.",
     "get_task": "Get full task details. If status is TODO or IN_PROGRESS, user can use update_task with status: DONE. Push to decidr_list.",
     "get_bridge": "Get full bridge details including connected projects and decisions. Push to decidr_list.",
     "search": "Use when user describes something by name or keyword. Push results to decidr_list. Offer to drill into specific results with get_* tools.",
     "create_initiative": "Create a new initiative. Returns full created entity. Consider creating projects under it next.",
     "create_project": "Create a new project. Pass initiative_id to link to an initiative and member_ids to assign members. Returns full created entity. Consider adding decisions or tasks next.",
-    "create_decision": "Create a new decision. Requires entity_type and matching parent ID. Returns full created entity. Consider linking supporting documents with link_document.",
+    "create_decision": "Create a new decision. Requires entity_type and matching parent ID. Decisions default to DRAFT status \u2014 transition to PROPOSED when ready for review (requires linked documents). Consider linking supporting documents with link_document.",
     "create_task": "Create a new task. Returns full created entity. Consider assigning with update_task or linking a document.",
     "create_bridge": "Create a bridge between two projects. Returns full created entity.",
     "update_initiative": "Update initiative fields. Returns full updated entity.",
     "update_project": "Update project fields and/or transition status. Returns full updated entity.",
-    "update_decision": "Update decision fields and/or transition status. Use action param for approve/reject/supersede/unsupersede. Returns full updated entity. Field updates applied before status transition.",
+    "update_decision": "Update decision fields and/or transition status. Use action param for approve/reject/supersede/unsupersede. DRAFT\u2192PROPOSED transition requires at least one linked document. Returns full updated entity. Field updates applied before status transition.",
     "update_task": "Update task fields and/or transition status. Set status to DONE to complete a task. Returns full updated entity.",
     "update_bridge": "Update bridge fields and/or transition status. Returns full updated entity.",
     "create_organization": "Create a new organization. The caller becomes OWNER. Use manage_member to invite others.",
@@ -132,7 +189,27 @@
     "link_document": "Attach a document to any entity. Use type URL for external links, LUDFLOW for LudFlow documents. Search LudFlow docs first with search_ludflow_documents.",
     "list_entity_documents": "List all documents linked to an entity. Essential context before approving decisions.",
     "search_ludflow_documents": "Search LudFlow documents by title. Use results with link_document to attach to DecidR entities.",
-    "find_entities_by_ludflow_document": "Find all DecidR entities linked to a LudFlow document. Enables bidirectional navigation."
+    "find_entities_by_ludflow_document": "Find all DecidR entities linked to a LudFlow document. Enables bidirectional navigation.",
+    "archive_entity": "Soft-delete (archive) an entity. Archived entities are hidden from default lists but can be restored. Use when the user wants to remove or delete an entity.",
+    "restore_entity": "Restore a previously archived entity. Use when the user wants to undelete or bring back an archived entity.",
+    "connect_github": "Connect a GitHub account to the current org. No auto-push.",
+    "disconnect_github": "Disconnect GitHub account from the current org. No auto-push.",
+    "link_repo": "Link a GitHub repo to the current org. No auto-push.",
+    "unlink_repo": "Unlink a GitHub repo from the current org. No auto-push.",
+    "list_repos": "List linked GitHub repos. Push to decidr_list.",
+    "list_issues": "List synced GitHub issues. Push to decidr_list.",
+    "link_issue": "Link a GitHub issue to a DecidR entity. No auto-push.",
+    "unlink_issue": "Unlink a GitHub issue from a DecidR entity. No auto-push.",
+    "list_issue_links": "List entity links for a GitHub issue. Push to decidr_list.",
+    "create_pr": "Create a PR artifact tracking record. No auto-push.",
+    "list_prs": "List PR artifacts. Push to decidr_list.",
+    "review_pr": "Assign reviewer and transition PR to IN_REVIEW. No auto-push.",
+    "merge_pr": "Transition PR to MERGED status. No auto-push.",
+    "generate_fix_prompt": "Generate a code fix prompt from issue context. Returns text. No auto-push.",
+    "generate_review_prompt": "Generate a PR review prompt. Returns text. No auto-push.",
+    "sync_issues": "Sync GitHub issues into DecidR. No auto-push.",
+    "sync_status": "Get sync status for a linked repo. Push to decidr_list.",
+    "manage_repo_admin": "Add or remove repo admin. No auto-push."
   },
   "no_auto_push": [
     "create_initiative",
@@ -147,7 +224,22 @@
     "update_bridge",
     "create_organization",
     "manage_member",
-    "link_document"
+    "link_document",
+    "archive_entity",
+    "restore_entity",
+    "connect_github",
+    "disconnect_github",
+    "link_repo",
+    "unlink_repo",
+    "link_issue",
+    "unlink_issue",
+    "create_pr",
+    "review_pr",
+    "merge_pr",
+    "generate_fix_prompt",
+    "generate_review_prompt",
+    "sync_issues",
+    "manage_repo_admin"
   ],
   "renderers": {
     "list_initiatives": "decidr_list",
@@ -179,7 +271,27 @@
     "link_document": "decidr_list",
     "list_entity_documents": "decidr_list",
     "search_ludflow_documents": "decidr_list",
-    "find_entities_by_ludflow_document": "decidr_list"
+    "find_entities_by_ludflow_document": "decidr_list",
+    "archive_entity": "decidr_list",
+    "restore_entity": "decidr_list",
+    "connect_github": "decidr_github_auth",
+    "disconnect_github": "decidr_list",
+    "link_repo": "decidr_list",
+    "unlink_repo": "decidr_list",
+    "list_repos": "decidr_list",
+    "list_issues": "decidr_list",
+    "link_issue": "decidr_list",
+    "unlink_issue": "decidr_list",
+    "list_issue_links": "decidr_list",
+    "create_pr": "decidr_list",
+    "list_prs": "decidr_list",
+    "review_pr": "decidr_list",
+    "merge_pr": "decidr_list",
+    "generate_fix_prompt": "decidr_list",
+    "generate_review_prompt": "decidr_list",
+    "sync_issues": "decidr_list",
+    "sync_status": "decidr_list",
+    "manage_repo_admin": "decidr_list"
   },
   "renderer_definitions": [
     {
@@ -216,9 +328,29 @@
         "link_document",
         "list_entity_documents",
         "search_ludflow_documents",
-        "find_entities_by_ludflow_document"
+        "find_entities_by_ludflow_document",
+        "archive_entity",
+        "restore_entity",
+        "connect_github",
+        "disconnect_github",
+        "link_repo",
+        "unlink_repo",
+        "list_repos",
+        "list_issues",
+        "link_issue",
+        "unlink_issue",
+        "list_issue_links",
+        "create_pr",
+        "list_prs",
+        "review_pr",
+        "merge_pr",
+        "generate_fix_prompt",
+        "generate_review_prompt",
+        "sync_issues",
+        "sync_status",
+        "manage_repo_admin"
       ],
-      "data_hint": "IMPORTANT: Always use ref-only mode. Pass entity references \u2014 the renderer fetches full data from the API. Format: { entities: [{ type: 'initiative'|'project'|'decision'|'task'|'bridge', id: string }], meta: { organization_id: string, result_count: number, tool_name: string } }. The tool_name determines rendering mode: 'list_decisions' for list view, 'get_decision' for detail view, 'my_action_items' for action items, 'search' for search results. Entity type names are singular lowercase. Never pass full entity payloads \u2014 only type and id."
+      "data_hint": "IMPORTANT: Always use ref-only mode. Pass entity references \u2014 the renderer fetches full data from the API. Format: { entities: [{ type: 'initiative'|'project'|'decision'|'task'|'bridge'|'issue'|'pull_request'|'repo', id: string }], meta: { organization_id: string, result_count: number, tool_name: string } }. The tool_name determines rendering mode: 'list_decisions' for list view, 'get_decision' for detail view, 'my_action_items' for action items, 'search' for search results. Entity type names are singular lowercase. Never pass full entity payloads \u2014 only type and id."
     },
     {
       "name": "decidr_dashboard",
@@ -228,6 +360,16 @@
       "data_hint": "{ organization_id: string }",
       "standalone": true,
       "standalone_label": "Dashboard"
+    },
+    {
+      "name": "decidr_github_auth",
+      "description": "Secure GitHub authentication form \u2014 enter PAT directly in the companion without passing through the AI agent",
+      "scope": "tool",
+      "rule": "Use when the user wants to connect their GitHub account. Opens a secure form for token entry.",
+      "tools": [
+        "connect_github"
+      ],
+      "data_hint": "{ github_username?: string }"
     },
     {
       "name": "decidr_graph",

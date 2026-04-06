@@ -161,7 +161,7 @@
         }).catch(function() { /* session fetch is best-effort */ });
     },
 
-    withReady: function(container, meta, renderFn) {
+    withReady: function(container, meta, renderFn, orgId) {
       // Dependency guard
       if (!window.__decidrUI || !window.__decidrAPI) {
         var _retries = 0;
@@ -169,7 +169,7 @@
           _retries++;
           if (window.__decidrUI && window.__decidrAPI) {
             clearInterval(_check);
-            api.withReady(container, meta, renderFn);
+            api.withReady(container, meta, renderFn, orgId);
           } else if (_retries >= 10) {
             clearInterval(_check);
             container.innerHTML = '<div style="color:var(--color-error-text);padding:var(--space-4);">'
@@ -184,6 +184,12 @@
       container.innerHTML = '<div style="padding:var(--space-6);">'
         + UI.loadingSpinner('Initializing...')
         + '</div>';
+
+      var targetOrg = orgId || null;
+      if (targetOrg !== _activeOrgId) {
+        _activeOrgId = targetOrg;
+        api._initialized = false;
+      }
 
       api.autoInit(meta || {}).then(function() {
         renderFn(UI, api);
@@ -218,6 +224,14 @@
         method: 'PATCH',
         headers: _headers(true),
         body: JSON.stringify(body)
+      });
+    },
+
+    delete: function(path) {
+      _validatePathIds(path);
+      return _fetchWithRetry(api._baseUrl + path, {
+        method: 'DELETE',
+        headers: _headers(false)
       });
     },
 
@@ -357,14 +371,48 @@
       return api.patch('/bridges/' + id, data);
     },
 
-    // --- Soft-delete endpoints ---
+    // --- Archive endpoints ---
 
-    deleteDecision: function(id) {
-      return api.patch('/decisions/' + id, { deletedAt: new Date().toISOString() });
+    archiveInitiative: function(id) {
+      return api.delete('/initiatives/' + id);
     },
 
-    deleteTask: function(id) {
-      return api.patch('/tasks/' + id, { deletedAt: new Date().toISOString() });
+    archiveProject: function(id) {
+      return api.delete('/projects/' + id);
+    },
+
+    archiveDecision: function(id) {
+      return api.delete('/decisions/' + id);
+    },
+
+    archiveTask: function(id) {
+      return api.delete('/tasks/' + id);
+    },
+
+    archiveBridge: function(id) {
+      return api.delete('/bridges/' + id);
+    },
+
+    // --- Restore endpoints ---
+
+    restoreInitiative: function(id) {
+      return api.post('/initiatives/' + id + '/restore');
+    },
+
+    restoreProject: function(id) {
+      return api.post('/projects/' + id + '/restore');
+    },
+
+    restoreDecision: function(id) {
+      return api.post('/decisions/' + id + '/restore');
+    },
+
+    restoreTask: function(id) {
+      return api.post('/tasks/' + id + '/restore');
+    },
+
+    restoreBridge: function(id) {
+      return api.post('/bridges/' + id + '/restore');
     },
 
     // --- Document linking ---
@@ -433,6 +481,48 @@
       return api.autoInit({});
     },
 
+    // --- GitHub endpoints ---
+
+    listRepos: function(params) {
+      return api.get('/github/repos' + _qs(params));
+    },
+
+    getRepo: function(id) {
+      return api.get('/github/repos/' + id);
+    },
+
+    listIssues: function(params) {
+      return api.get('/github/issues' + _qs(params));
+    },
+
+    getIssue: function(id) {
+      return api.get('/github/issues/' + id);
+    },
+
+    listPRs: function(params) {
+      return api.get('/github/prs' + _qs(params));
+    },
+
+    getPR: function(id) {
+      return api.get('/github/prs/' + id);
+    },
+
+    syncIssues: function(repoId) {
+      return api.post('/github/sync/' + repoId);
+    },
+
+    getSyncStatus: function(repoId) {
+      return api.get('/github/sync/' + repoId);
+    },
+
+    getEntityGithubSummary: function(entityType, entityId) {
+      return api.get('/github/entity-summary' + _qs({ entityType: entityType, entityId: entityId }));
+    },
+
+    getEntityGithubCounts: function(entityType, entityIds) {
+      return api.get('/github/entity-counts' + _qs({ entityType: entityType, entityIds: entityIds.join(',') }));
+    },
+
     // --- Generic entity dispatcher ---
 
     getEntity: function(entityType, entityId) {
@@ -441,7 +531,10 @@
         project: api.getProject,
         decision: api.getDecision,
         task: api.getTask,
-        bridge: api.getBridge
+        bridge: api.getBridge,
+        issue: function(id) { return api.getIssue(id); },
+        pull_request: function(id) { return api.getPR(id); },
+        repo: function(id) { return api.getRepo(id); }
       };
       var fn = fetchers[entityType];
       if (!fn) return Promise.reject(new Error('Unknown entity type: ' + entityType));

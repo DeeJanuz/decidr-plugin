@@ -11,6 +11,13 @@
 
   function detectEntityType(toolName) {
     if (!toolName) return '';
+    // Handle GitHub-specific tools that don't match the standard regex
+    if (toolName === 'sync_issues' || toolName === 'list_issue_links') return 'issue';
+    if (toolName === 'sync_status' || toolName === 'link_repo' || toolName === 'unlink_repo' || toolName === 'manage_repo_admin') return 'repo';
+    if (toolName === 'connect_github' || toolName === 'disconnect_github') return '';
+    if (toolName === 'link_issue' || toolName === 'unlink_issue') return 'issue';
+    if (toolName === 'review_pr' || toolName === 'merge_pr') return 'pull_request';
+    if (toolName === 'generate_fix_prompt' || toolName === 'generate_review_prompt') return '';
     var match = toolName.match(/(?:list|get|create|update)_(\w+)/);
     if (!match) return '';
     var raw = match[1];
@@ -19,7 +26,10 @@
       projects: 'project',
       decisions: 'decision',
       tasks: 'task',
-      bridges: 'bridge'
+      bridges: 'bridge',
+      issues: 'issue',
+      prs: 'pull_request',
+      repos: 'repo'
     };
     return pluralMap[raw] || raw;
   }
@@ -44,7 +54,10 @@
     project: 'Project',
     decision: 'Decision',
     task: 'Task',
-    bridge: 'Bridge'
+    bridge: 'Bridge',
+    issue: 'Issue',
+    pull_request: 'Pull Request',
+    repo: 'Repository'
   };
 
   function entityLabel(type, plural) {
@@ -66,7 +79,10 @@
     decision: function(entity, o, UI) { return UI.decisionCard(entity, o); },
     task: function(entity, o, UI) { return UI.taskCard(entity, o); },
     bridge: function(entity, o, UI) { return UI.bridgeCard(entity, o); },
-    initiative: function(entity, o, UI) { return UI.initiativeCard(entity, o); }
+    initiative: function(entity, o, UI) { return UI.initiativeCard(entity, o); },
+    issue: function(entity, o, UI) { return UI.issueCard(entity, o); },
+    pull_request: function(entity, o, UI) { return UI.prArtifactCard(entity, o); },
+    repo: function(entity, o, UI) { return UI.repoCard(entity, o); }
   };
 
   function renderCard(UI, entity, entityType, opts) {
@@ -242,7 +258,10 @@
             project: API.listProjects,
             decision: API.listDecisions,
             task: API.listTasks,
-            bridge: API.listBridges
+            bridge: API.listBridges,
+            issue: function(p) { return API.listIssues(p); },
+            pull_request: function(p) { return API.listPRs(p); },
+            repo: function(p) { return API.listRepos(p); }
           };
           fetchFn = LIST_FETCHERS[entityType];
         }

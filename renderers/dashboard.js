@@ -5,6 +5,7 @@
   window.__renderers.decidr_dashboard = function(container, data, meta, toolArgs, reviewRequired, onDecision) {
     container.innerHTML = '';
 
+    var _orgId = (data && data.organization_id) ? data.organization_id : null;
     window.__decidrAPI.withReady(container, meta, function() {
     var UI = window.__decidrUI;
     var API = window.__decidrAPI;
@@ -19,6 +20,8 @@
       initiatives: [],
       projectsByInitiative: {},  // { initId: [projects] }
       allDecisions: [],
+      allIssues: [],
+      allPRs: [],
       allTasks: [],
       allBridges: [],
       lastActivityByEntity: {},  // { entityId: { action, label, createdAt } }
@@ -60,6 +63,8 @@
       API.listDecisions({ take: 200 }).then(function(resp) { fetches.decisions = unwrapList(resp); }),
       API.listTasks({ take: 200 }).then(function(resp) { fetches.tasks = unwrapList(resp); }),
       API.listBridges({ take: 200 }).then(function(resp) { fetches.bridges = unwrapList(resp); }),
+      API.listIssues({ take: 200 }).then(function(resp) { fetches.issues = unwrapList(resp); }).catch(function() { fetches.issues = []; }),
+      API.listPRs({ take: 200 }).then(function(resp) { fetches.prs = unwrapList(resp); }).catch(function() { fetches.prs = []; }),
       API.getActionItems({ take: 200 }).then(function(resp) { fetches.actionItems = unwrapList(resp); }),
       API.listOrganizations().then(function(orgs) { fetches.organizations = orgs; }).catch(function() { fetches.organizations = []; }),
       API.listPluginOrgs().then(function(orgIds) { fetches.pluginOrgs = orgIds; }).catch(function() { fetches.pluginOrgs = []; }),
@@ -108,6 +113,8 @@
       dashState.allDecisions = fetches.decisions;
       dashState.allTasks = fetches.tasks;
       dashState.allBridges = fetches.bridges;
+      dashState.allIssues = fetches.issues || [];
+      dashState.allPRs = fetches.prs || [];
       dashState.actionItems = fetches.actionItems;
 
       // Build last-activity-per-entity map from timeline events
@@ -120,6 +127,20 @@
         dashState.collapsedInitiatives[dashState.initiatives[i].id] = true;
       }
 
+      // Fetch GitHub counts for all projects
+      var allProjects = fetches.projects || [];
+      var projectIds = [];
+      for (var gi = 0; gi < allProjects.length; gi++) {
+        projectIds.push(allProjects[gi].id);
+      }
+      if (projectIds.length) {
+        API.getEntityGithubCounts('PROJECT', projectIds).then(function(result) {
+          dashState.githubCounts = result;
+          // Re-render if already displayed
+          if (dashState.loaded) renderDashboard();
+        }).catch(function() { dashState.githubCounts = {}; });
+      }
+
       renderDashboard();
     }).catch(function(err) {
       dashState.error = err;
@@ -127,16 +148,22 @@
     });
 
     function refreshDashboard() {
+      var rf = {
+        initiatives: null, projects: null, decisions: null, tasks: null,
+        bridges: null, issues: null, prs: null, actionItems: null, timeline: null
+      };
       Promise.all([
-        API.listInitiatives({ take: 200 }).then(function(resp) { return unwrapList(resp); }),
-        API.listProjects({ take: 200 }).then(function(resp) { return unwrapList(resp); }),
-        API.listDecisions({ take: 200 }).then(function(resp) { return unwrapList(resp); }),
-        API.listTasks({ take: 200 }).then(function(resp) { return unwrapList(resp); }),
-        API.listBridges({ take: 200 }).then(function(resp) { return unwrapList(resp); }),
-        API.getActionItems({ take: 200 }).then(function(resp) { return unwrapList(resp); }),
-        API.getTimeline({ take: 200 }).then(function(resp) { return unwrapList(resp); }).catch(function() { return []; })
-      ]).then(function(results) {
-        var projects = results[1] || [];
+        API.listInitiatives({ take: 200 }).then(function(resp) { rf.initiatives = unwrapList(resp); }),
+        API.listProjects({ take: 200 }).then(function(resp) { rf.projects = unwrapList(resp); }),
+        API.listDecisions({ take: 200 }).then(function(resp) { rf.decisions = unwrapList(resp); }),
+        API.listTasks({ take: 200 }).then(function(resp) { rf.tasks = unwrapList(resp); }),
+        API.listBridges({ take: 200 }).then(function(resp) { rf.bridges = unwrapList(resp); }),
+        API.listIssues({ take: 200 }).then(function(resp) { rf.issues = unwrapList(resp); }).catch(function() { rf.issues = []; }),
+        API.listPRs({ take: 200 }).then(function(resp) { rf.prs = unwrapList(resp); }).catch(function() { rf.prs = []; }),
+        API.getActionItems({ take: 200 }).then(function(resp) { rf.actionItems = unwrapList(resp); }),
+        API.getTimeline({ take: 200 }).then(function(resp) { rf.timeline = unwrapList(resp); }).catch(function() { rf.timeline = []; })
+      ]).then(function() {
+        var projects = rf.projects || [];
         var projectToInit = {};
         for (var p = 0; p < projects.length; p++) {
           var proj = projects[p];
@@ -150,14 +177,16 @@
           if (!projectMap[initId]) projectMap[initId] = [];
           projectMap[initId].push(proj);
         }
-        dashState.initiatives = results[0];
+        dashState.initiatives = rf.initiatives;
         dashState.projectsByInitiative = projectMap;
-        dashState.allDecisions = results[2];
-        dashState.allTasks = results[3];
-        dashState.allBridges = results[4];
-        dashState.actionItems = results[5];
+        dashState.allDecisions = rf.decisions;
+        dashState.allTasks = rf.tasks;
+        dashState.allBridges = rf.bridges;
+        dashState.allIssues = rf.issues || [];
+        dashState.allPRs = rf.prs || [];
+        dashState.actionItems = rf.actionItems;
 
-        dashState.lastActivityByEntity = buildActivityMap(results[6] || []);
+        dashState.lastActivityByEntity = buildActivityMap(rf.timeline || []);
 
         renderDashboard();
       }).catch(function(err) {
@@ -365,8 +394,44 @@
         TASK: 'Tasks',
         PROJECT: 'Projects',
         BRIDGE: 'Bridges',
-        INITIATIVE: 'Initiatives'
+        INITIATIVE: 'Initiatives',
+        issue: 'Issues',
+        pull_request: 'Pull Requests'
       };
+
+      // Inject issues as a group
+      var issues = dashState.allIssues || [];
+      if (issues.length > 0) {
+        if (!groups['issue']) { groups['issue'] = []; groupOrder.push('issue'); }
+        for (var ii = 0; ii < issues.length; ii++) {
+          var iss = issues[ii];
+          groups['issue'].push({
+            entityType: 'issue',
+            entityId: iss.id,
+            id: iss.id,
+            title: '#' + (iss.githubIssueNumber || '') + ' ' + (iss.githubIssueTitle || 'Untitled'),
+            status: iss.source || 'EXTERNAL',
+            createdAt: iss.createdAt
+          });
+        }
+      }
+
+      // Inject PRs as a group
+      var prs = dashState.allPRs || [];
+      if (prs.length > 0) {
+        if (!groups['pull_request']) { groups['pull_request'] = []; groupOrder.push('pull_request'); }
+        for (var pi = 0; pi < prs.length; pi++) {
+          var prItem = prs[pi];
+          groups['pull_request'].push({
+            entityType: 'pull_request',
+            entityId: prItem.id,
+            id: prItem.id,
+            title: '#' + (prItem.githubPrNumber || '') + ' ' + (prItem.branchName || 'Unknown branch'),
+            status: prItem.status || 'OPEN',
+            createdAt: prItem.createdAt
+          });
+        }
+      }
 
       var html = '';
       for (var g = 0; g < groupOrder.length; g++) {
@@ -549,12 +614,14 @@
             }
           }
           var isOwner = currentUserId && (proj.ownerId === currentUserId || proj.createdById === currentUserId);
+          var ghCounts = (dashState.githubCounts || {})[proj.id] || {};
           cards += UI.dashboardProjectCard(proj, {
             decisions: projDecisions,
             tasks: projTasks,
             isOwner: isOwner,
             pendingDecisions: pendingCount,
             needsYourReview: needsReviewCount,
+            githubCounts: ghCounts,
             animDelay: 0.05 + animIdx * 0.05
           });
           animIdx++;
@@ -842,6 +909,6 @@
       }
     }
 
-    });
+    }, _orgId);
   };
 })();

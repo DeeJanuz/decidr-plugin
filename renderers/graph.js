@@ -5,6 +5,7 @@
   window.__renderers.decidr_graph = function(container, data, meta, toolArgs, reviewRequired, onDecision) {
     container.innerHTML = '';
 
+    var _orgId = (data && data.organization_id) ? data.organization_id : null;
     window.__decidrAPI.withReady(container, meta, function() {
     var UI = window.__decidrUI;
     var API = window.__decidrAPI;
@@ -150,6 +151,17 @@
             if (!projectsByInit[initKey]) projectsByInit[initKey] = [];
             projectsByInit[initKey].push(proj);
           }
+        }
+
+        // Fetch GitHub counts for all project IDs (fire-and-forget, re-renders on completion)
+        var ghProjectIds = [];
+        for (var gpi = 0; gpi < allProjects.length; gpi++) {
+          ghProjectIds.push(allProjects[gpi].id);
+        }
+        if (ghProjectIds.length) {
+          API.getEntityGithubCounts('PROJECT', ghProjectIds).then(function(result) {
+            graphState.githubCounts = result || {};
+          }).catch(function() { graphState.githubCounts = {}; });
         }
 
         return {
@@ -772,6 +784,24 @@
           + ' font-family="Figtree,sans-serif" font-size="10" fill="var(--text-tertiary)"'
           + ' text-anchor="end">'
           + node.decisionCount + 'd</text>';
+
+        // GitHub indicator: show small dot + count if pending review PRs exist
+        var ghNodeCounts = (graphState.githubCounts || {})[node.id];
+        if (ghNodeCounts && (ghNodeCounts.pendingReviewPrs > 0 || ghNodeCounts.openPrs > 0)) {
+          var ghY = footerY + 16;
+          var ghLabel = '';
+          if (ghNodeCounts.pendingReviewPrs > 0) {
+            ghLabel = ghNodeCounts.pendingReviewPrs + ' review';
+          } else {
+            ghLabel = ghNodeCounts.openPrs + ' PR' + (ghNodeCounts.openPrs !== 1 ? 's' : '');
+          }
+          svg += '<circle cx="' + (node.globalX + 16) + '" cy="' + ghY + '" r="3"'
+            + ' fill="' + (ghNodeCounts.pendingReviewPrs > 0 ? '#d29922' : '#8884ff') + '"/>';
+          svg += '<text x="' + (node.globalX + 26) + '" y="' + (ghY + 3) + '"'
+            + ' font-family="Figtree,sans-serif" font-size="9" fill="var(--text-tertiary)">'
+            + UI.escapeHtml(ghLabel) + '</text>';
+        }
+
         svg += '</g>';
       }
 
@@ -1575,6 +1605,6 @@
       }
     }
 
-    });
+    }, _orgId);
   };
 })();

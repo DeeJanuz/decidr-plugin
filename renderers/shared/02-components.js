@@ -60,7 +60,18 @@
     COMPLETED: 'Completed',
     ARCHIVED: 'Archived',
     TODO: 'To Do',
-    DONE: 'Done'
+    DONE: 'Done',
+    DRAFT: 'Draft',
+    OPEN: 'Open',
+    EXTERNAL_OPEN: 'External',
+    IN_REVIEW: 'In Review',
+    CHANGES_REQUESTED: 'Changes Requested',
+    SUPERSEDED: 'Superseded',
+    COUNTER_REVIEW: 'Counter Review',
+    COUNTER_SUPERSEDED: 'Counter Superseded',
+    MERGED: 'Merged',
+    INTERNAL: 'Internal',
+    EXTERNAL: 'External'
   };
 
   var PRIORITY_LABELS = {
@@ -77,7 +88,10 @@
     bridge: 'Bridge',
     task: 'Task',
     project: 'Project',
-    initiative: 'Initiative'
+    initiative: 'Initiative',
+    issue: 'Issue',
+    pull_request: 'Pull Request',
+    repo: 'Repository'
   };
 
   // ─── Utility Functions ────────────────────────────────────────────
@@ -226,7 +240,10 @@
       + '<path d="M10 10l7-4"/>'
       + '<path d="M10 10v7"/>'
       + '<path d="M10 10L3 6"/>'
-      + '</svg>'
+      + '</svg>',
+    issue: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="11" r="1" fill="currentColor"/><path d="M8 5v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    pull_request: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="5" cy="4" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="11" cy="12" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="5" cy="12" r="2" stroke="currentColor" stroke-width="1.5"/><path d="M5 6v4M11 4v6" stroke="currentColor" stroke-width="1.5"/></svg>',
+    repo: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 0 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5v-9z" fill="currentColor"/></svg>'
   };
 
   var ICON_EDIT = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 2.5l2.5 2.5L5.5 13H3v-2.5z"/><line x1="9" y1="4.5" x2="11.5" y2="7"/></svg>';
@@ -385,8 +402,84 @@
       + (badgesHtml ? ' ' + badgesHtml : '')
       + '</div>'
       + statHtml
+      + UI.githubCountBadges(o.githubCounts)
       + progressHtml
       + '</div>';
+  };
+
+  // ─── GitHub Helper Components ─────────────────────────────────────
+
+  UI.githubIssuesList = function(issues, opts) {
+    opts = opts || {};
+    var limit = opts.limit || 5;
+    var items = issues.slice(0, limit);
+    if (!items.length) {
+      return opts.showEmpty !== false ? '<div class="decidr-so-empty-hint">No linked issues</div>' : '';
+    }
+    var html = '';
+    for (var i = 0; i < items.length; i++) {
+      var issue = items[i];
+      html += '<div class="decidr-so-doc-item" data-entity-type="issue" data-entity-id="' + issue.id + '">';
+      html += '<span class="decidr-so-doc-link" style="pointer-events:none;">';
+      html += '<span style="color:var(--text-tertiary);font-weight:var(--weight-medium);margin-right:4px;">#' + (issue.githubIssueNumber || '') + '</span>';
+      html += UI.escapeHtml(issue.githubIssueTitle || 'Untitled');
+      html += '</span>';
+      if (issue.source) {
+        html += '<span class="decidr-so-doc-type-badge">' + UI.escapeHtml(issue.source) + '</span>';
+      }
+      html += '</div>';
+    }
+    if (issues.length > limit) {
+      html += '<div class="decidr-so-empty-hint">+ ' + (issues.length - limit) + ' more</div>';
+    }
+    return html;
+  };
+
+  UI.githubPRsList = function(prs, opts) {
+    opts = opts || {};
+    var limit = opts.limit || 5;
+    var items = prs.slice(0, limit);
+    if (!items.length) {
+      return opts.showEmpty !== false ? '<div class="decidr-so-empty-hint">No linked pull requests</div>' : '';
+    }
+    var html = '';
+    for (var i = 0; i < items.length; i++) {
+      var pr = items[i];
+      html += '<div class="decidr-so-decision-item" data-entity-type="pull_request" data-entity-id="' + pr.id + '">';
+      html += UI.statusBadge(pr.status || 'OPEN');
+      html += '<span class="decidr-so-decision-title">';
+      html += '<span style="color:var(--text-tertiary);margin-right:4px;">#' + (pr.githubPrNumber || '') + '</span>';
+      html += UI.escapeHtml(pr.branchName || 'Unknown branch');
+      html += '</span>';
+      if (pr.reviewer) {
+        html += '<span class="decidr-so-doc-type-badge">' + UI.escapeHtml(pr.reviewer.name || 'Reviewer') + '</span>';
+      }
+      html += '<span class="decidr-so-decision-chevron">\u203a</span>';
+      html += '</div>';
+    }
+    if (prs.length > limit) {
+      html += '<div class="decidr-so-empty-hint">+ ' + (prs.length - limit) + ' more</div>';
+    }
+    return html;
+  };
+
+  UI.githubCountBadges = function(counts) {
+    if (!counts) return '';
+    var html = '';
+    var any = false;
+    if (counts.issues > 0) {
+      html += '<span class="decidr-dash-proj-badge decidr-gh-badge-issues">' + counts.issues + ' issue' + (counts.issues !== 1 ? 's' : '') + '</span>';
+      any = true;
+    }
+    if (counts.openPrs > 0) {
+      html += '<span class="decidr-dash-proj-badge decidr-gh-badge-prs">' + counts.openPrs + ' open PR' + (counts.openPrs !== 1 ? 's' : '') + '</span>';
+      any = true;
+    }
+    if (counts.pendingReviewPrs > 0) {
+      html += '<span class="decidr-dash-proj-badge decidr-gh-badge-review">' + counts.pendingReviewPrs + ' needs review</span>';
+      any = true;
+    }
+    return any ? html : '';
   };
 
   // ─── Graph Project Card (SVG foreignObject content) ───────────────
@@ -601,6 +694,55 @@
       + metaHtml
       + '</div>'
       + '</div>';
+  };
+
+  UI.issueCard = function(issue, opts) {
+    var o = opts || {};
+    var delay = o.animDelay || 0;
+    var html = '<div class="decidr-card" data-entity-type="issue" data-entity-id="' + UI.escapeHtml(issue.id) + '" style="cursor:pointer;animation-delay:' + delay + 's;">';
+    html += '<div class="decidr-card-header">';
+    html += '<span class="decidr-entity-icon">' + (ENTITY_ICONS.issue || '') + '</span>';
+    html += '<span class="decidr-card-title">' + UI.escapeHtml(issue.githubIssueTitle || issue.title || '') + '</span>';
+    if (issue.source) html += UI.statusBadge(issue.source);
+    html += '</div>';
+    html += '<div class="decidr-card-meta">';
+    if (issue.githubIssueNumber) html += '<span>#' + issue.githubIssueNumber + '</span>';
+    if (issue.githubAuthorUsername) html += '<span>by ' + UI.escapeHtml(issue.githubAuthorUsername) + '</span>';
+    html += '</div>';
+    html += '</div>';
+    return html;
+  };
+
+  UI.prArtifactCard = function(pr, opts) {
+    var o = opts || {};
+    var delay = o.animDelay || 0;
+    var html = '<div class="decidr-card" data-entity-type="pull_request" data-entity-id="' + UI.escapeHtml(pr.id) + '" style="cursor:pointer;animation-delay:' + delay + 's;">';
+    html += '<div class="decidr-card-header">';
+    html += '<span class="decidr-entity-icon">' + (ENTITY_ICONS.pull_request || '') + '</span>';
+    html += '<span class="decidr-card-title">PR #' + (pr.githubPrNumber || '') + '</span>';
+    if (pr.status) html += UI.statusBadge(pr.status);
+    html += '</div>';
+    html += '<div class="decidr-card-meta">';
+    if (pr.branchName) html += '<span>' + UI.escapeHtml(pr.branchName) + '</span>';
+    if (pr.githubAuthorUsername) html += '<span>by ' + UI.escapeHtml(pr.githubAuthorUsername) + '</span>';
+    html += '</div>';
+    html += '</div>';
+    return html;
+  };
+
+  UI.repoCard = function(repo, opts) {
+    var o = opts || {};
+    var delay = o.animDelay || 0;
+    var html = '<div class="decidr-card" data-entity-type="repo" data-entity-id="' + UI.escapeHtml(repo.id) + '" style="cursor:pointer;animation-delay:' + delay + 's;">';
+    html += '<div class="decidr-card-header">';
+    html += '<span class="decidr-entity-icon">' + (ENTITY_ICONS.repo || '') + '</span>';
+    html += '<span class="decidr-card-title">' + UI.escapeHtml(repo.githubOwner + '/' + repo.githubRepo) + '</span>';
+    html += '</div>';
+    html += '<div class="decidr-card-meta">';
+    if (repo.defaultBranch) html += '<span>' + UI.escapeHtml(repo.defaultBranch) + '</span>';
+    html += '</div>';
+    html += '</div>';
+    return html;
   };
 
   UI.actionItemCard = function(item, opts) {
@@ -997,6 +1139,9 @@
       else if (type === 'task') fetchFn = API.getTask;
       else if (type === 'bridge') fetchFn = API.getBridge;
       else if (type === 'initiative') fetchFn = API.getInitiative;
+      else if (type === 'issue') fetchFn = function(id) { return API.getIssue(id); };
+      else if (type === 'pull_request') fetchFn = function(id) { return API.getPR(id); };
+      else if (type === 'repo') fetchFn = function(id) { return API.getRepo(id); };
 
       if (fetchFn) {
         fetchFn(id).then(function(data) {
@@ -1094,7 +1239,108 @@
       bridge: function(data) { return UI.slideOutBridge(data); },
       initiative: function(data) { return UI.slideOutInitiative(data); },
       'project-timeline': function(data) { return UI.slideOutTimeline(data, 'project'); },
-      'decision-timeline': function(data) { return UI.slideOutTimeline(data, 'decision'); }
+      'decision-timeline': function(data) { return UI.slideOutTimeline(data, 'decision'); },
+      issue: function(issue) {
+        var html = '<div class="decidr-so-detail">';
+        html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:var(--space-2);">';
+        html += '<span class="decidr-entity-icon">' + (ENTITY_ICONS.issue || '') + '</span>';
+        html += '<h2 style="margin:0;font-size:var(--text-h2);">' + UI.escapeHtml(issue.githubIssueTitle || '') + '</h2>';
+        html += '</div>';
+        var metaItems = [];
+        if (issue.githubIssueNumber) metaItems.push({ html: '<strong>#' + issue.githubIssueNumber + '</strong>' });
+        if (issue.source) metaItems.push({ html: UI.escapeHtml(issue.source) });
+        if (issue.githubAuthorUsername) metaItems.push({ html: UI.escapeHtml(issue.githubAuthorUsername) });
+        if (issue.githubIssueUrl) metaItems.push({ html: '<a href="' + UI.escapeHtml(issue.githubIssueUrl) + '" target="_blank" style="color:var(--accent-primary);text-decoration:none;">View on GitHub</a>' });
+        if (metaItems.length > 0) html += UI.SlideOut._renderMeta(metaItems);
+        if (issue.entityLinks && issue.entityLinks.length > 0) {
+          html += '<h3 style="margin:var(--space-4) 0 var(--space-2);font-size:var(--text-body);color:var(--text-secondary);">Linked Entities</h3>';
+          for (var i = 0; i < issue.entityLinks.length; i++) {
+            var link = issue.entityLinks[i];
+            html += '<div class="decidr-card decidr-card-sm" data-entity-type="' + UI.escapeHtml(link.entityType.toLowerCase()) + '" data-entity-id="' + UI.escapeHtml(link.entityId) + '" style="cursor:pointer;margin-bottom:var(--space-1);">'
+              + '<span>' + UI.escapeHtml(link.entityType) + ': ' + UI.escapeHtml(link.entityId) + '</span></div>';
+          }
+        }
+        // Linked PRs (from enrichment)
+        var issueEnriched = issue._enriched || {};
+        var linkedPRs = issueEnriched.linkedPRs;
+        if (linkedPRs) {
+          var prList = (linkedPRs && linkedPRs.data) ? linkedPRs.data : (Array.isArray(linkedPRs) ? linkedPRs : []);
+          if (prList.length > 0) {
+            html += '<div class="decidr-so-section">';
+            html += UI.SlideOut._renderSectionHeader('Linked Pull Requests', prList.length);
+            html += UI.githubPRsList(prList);
+            html += '</div>';
+          }
+        } else if (!issue._enrichmentDone) {
+          html += '<div class="decidr-so-section"><div class="decidr-so-section-header">Linked PRs</div><div class="decidr-so-section-empty">Loading...</div></div>';
+        }
+        html += '</div>';
+        return html;
+      },
+      pull_request: function(pr) {
+        var html = '<div class="decidr-so-detail">';
+        html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:var(--space-2);">';
+        html += '<span class="decidr-entity-icon">' + (ENTITY_ICONS.pull_request || '') + '</span>';
+        html += '<h2 style="margin:0;font-size:var(--text-h2);">PR #' + (pr.githubPrNumber || '') + '</h2>';
+        if (pr.status) html += UI.statusBadge(pr.status);
+        html += '</div>';
+        var metaItems = [];
+        if (pr.branchName) metaItems.push({ html: '<strong>Branch:</strong> ' + UI.escapeHtml(pr.branchName) });
+        if (pr.source) metaItems.push({ html: '<strong>Source:</strong> ' + UI.escapeHtml(pr.source) });
+        if (pr.createdBy && pr.createdBy.name) metaItems.push({ html: '<strong>Created by:</strong> ' + UI.escapeHtml(pr.createdBy.name) });
+        else if (pr.githubAuthorUsername) metaItems.push({ html: '<strong>Author:</strong> ' + UI.escapeHtml(pr.githubAuthorUsername) });
+        if (pr.reviewer && pr.reviewer.name) metaItems.push({ html: '<strong>Reviewer:</strong> ' + UI.escapeHtml(pr.reviewer.name) });
+        if (pr.githubPrUrl) metaItems.push({ html: '<a href="' + UI.escapeHtml(pr.githubPrUrl) + '" target="_blank" style="color:var(--accent-primary);text-decoration:none;">View on GitHub</a>' });
+        if (pr.reviewPromptGenerated) metaItems.push({ html: '<strong>Review Prompt:</strong> Generated' });
+        if (metaItems.length > 0) html += UI.SlideOut._renderMeta(metaItems);
+
+        // Linked issue
+        if (pr.issueRef) {
+          html += '<div class="decidr-so-section">';
+          html += UI.SlideOut._renderSectionHeader('Linked Issue', 1);
+          html += '<div class="decidr-so-doc-item" data-entity-type="issue" data-entity-id="' + UI.escapeHtml(pr.issueRef.id) + '">';
+          html += '<span class="decidr-so-doc-link" style="pointer-events:none;">';
+          html += '<span style="color:var(--text-tertiary);font-weight:var(--weight-medium);margin-right:4px;">#' + (pr.issueRef.githubIssueNumber || '') + '</span>';
+          html += UI.escapeHtml(pr.issueRef.githubIssueTitle || 'Untitled');
+          html += '</span>';
+          if (pr.issueRef.source) html += '<span class="decidr-so-doc-type-badge">' + UI.escapeHtml(pr.issueRef.source) + '</span>';
+          html += '</div>';
+          html += '</div>';
+
+          // Linked DecidR entities (from the issue's entity links)
+          var entityLinks = pr.issueRef.entityLinks || [];
+          if (entityLinks.length > 0) {
+            html += '<div class="decidr-so-section">';
+            html += UI.SlideOut._renderSectionHeader('Linked Entities', entityLinks.length);
+            for (var eli = 0; eli < entityLinks.length; eli++) {
+              var elink = entityLinks[eli];
+              var elType = (elink.entityType || '').toLowerCase();
+              html += '<div class="decidr-so-decision-item" data-entity-type="' + UI.escapeHtml(elType) + '" data-entity-id="' + UI.escapeHtml(elink.entityId) + '">';
+              html += UI.entityTypeBadge(elink.entityType);
+              html += '<span class="decidr-so-decision-title">' + UI.escapeHtml(elink.entityName || elink.entityId) + '</span>';
+              html += '<span class="decidr-so-decision-chevron">\u203a</span>';
+              html += '</div>';
+            }
+            html += '</div>';
+          }
+        }
+
+        html += '</div>';
+        return html;
+      },
+      repo: function(repo) {
+        var html = '<div class="decidr-so-detail">';
+        html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:var(--space-2);">';
+        html += '<span class="decidr-entity-icon">' + (ENTITY_ICONS.repo || '') + '</span>';
+        html += '<h2 style="margin:0;font-size:var(--text-h2);">' + UI.escapeHtml(repo.githubOwner + '/' + repo.githubRepo) + '</h2>';
+        html += '</div>';
+        var metaItems = [];
+        if (repo.defaultBranch) metaItems.push({ html: '<strong>Default:</strong> ' + UI.escapeHtml(repo.defaultBranch) });
+        if (repo.stagingBranch) metaItems.push({ html: '<strong>Staging:</strong> ' + UI.escapeHtml(repo.stagingBranch) });
+        if (metaItems.length > 0) html += UI.SlideOut._renderMeta(metaItems);
+        html += '</div>';
+        return html;
+      }
     },
 
     _renderDetail: function(type, data) {
@@ -1208,11 +1454,14 @@
         if (data.parentId) {
           fetches.push({ key: 'parentDecision', promise: API.getDecision(data.parentId) });
         }
+        // GitHub summary
+        fetches.push({ key: 'githubSummary', promise: API.getEntityGithubSummary('DECISION', id) });
       } else if (type === 'project') {
         fetches.push({ key: 'decisions', promise: API.listDecisions({ projectId: id }) });
         fetches.push({ key: 'tasks', promise: API.listTasks({ projectId: id }) });
         fetches.push({ key: 'bridges', promise: API.listBridges({ projectId: id }) });
         fetches.push({ key: 'timeline', promise: API.getTimeline({ projectId: id, take: 20 }) });
+        fetches.push({ key: 'githubSummary', promise: API.getEntityGithubSummary('PROJECT', id) });
         if (data.initiativeId) {
           fetches.push({ key: 'initiative', promise: API.getInitiative(data.initiativeId) });
         }
@@ -1223,6 +1472,9 @@
         if (data.projectId && !data.project) {
           fetches.push({ key: 'parentProject', promise: API.getProject(data.projectId) });
         }
+        fetches.push({ key: 'githubSummary', promise: API.getEntityGithubSummary('TASK', id) });
+      } else if (type === 'issue') {
+        fetches.push({ key: 'linkedPRs', promise: API.listPRs({ issueRefId: id }) });
       } else if (type === 'bridge') {
         fetches.push({ key: 'timeline', promise: API.getTimeline({ bridgeId: id, take: 20 }) });
       } else if (type === 'initiative') {
@@ -1767,20 +2019,20 @@
         })(statusOptions[s]);
       }
 
-      // Delete
-      var deleteBtn = panel.querySelector('#decidr-so-btn-delete');
-      if (deleteBtn) {
-        deleteBtn.onclick = function() {
-          if (!confirm('Delete this decision?')) return;
+      // Archive
+      var archiveBtn = panel.querySelector('#decidr-so-btn-archive');
+      if (archiveBtn) {
+        archiveBtn.onclick = function() {
+          if (!confirm('Archive this decision?')) return;
           if (API) {
             if (UI.SlideOut._guardBusy()) return;
-            API.updateDecision(id, { deletedAt: new Date().toISOString() }).then(function() {
+            API.archiveDecision(id).then(function() {
               UI.SlideOut._busy = false;
               if (UI.SlideOut._onMutateCallback) {
                 try { UI.SlideOut._onMutateCallback('decision', id); } catch(e) { console.error('[decidr] onMutate callback error:', e); }
               }
               UI.SlideOut.back();
-            }).catch(function(err) { UI.SlideOut._busy = false; console.error('[decidr] Delete failed:', err); });
+            }).catch(function(err) { UI.SlideOut._busy = false; console.error('[decidr] Archive failed:', err); });
           }
         };
       }
@@ -2075,20 +2327,20 @@
         })(statusOptions[s]);
       }
 
-      // Delete
-      var deleteBtn = panel.querySelector('#decidr-so-btn-task-delete');
-      if (deleteBtn) {
-        deleteBtn.onclick = function() {
-          if (!confirm('Delete this task?')) return;
+      // Archive
+      var archiveBtn = panel.querySelector('#decidr-so-btn-task-archive');
+      if (archiveBtn) {
+        archiveBtn.onclick = function() {
+          if (!confirm('Archive this task?')) return;
           if (API) {
             if (UI.SlideOut._guardBusy()) return;
-            API.updateTask(id, { deletedAt: new Date().toISOString() }).then(function() {
+            API.archiveTask(id).then(function() {
               UI.SlideOut._busy = false;
               if (UI.SlideOut._onMutateCallback) {
                 try { UI.SlideOut._onMutateCallback('task', id); } catch(e) { console.error('[decidr] onMutate callback error:', e); }
               }
               UI.SlideOut.back();
-            }).catch(function(err) { UI.SlideOut._busy = false; console.error('[decidr] Delete task failed:', err); });
+            }).catch(function(err) { UI.SlideOut._busy = false; console.error('[decidr] Archive task failed:', err); });
           }
         };
       }
@@ -2194,6 +2446,24 @@
         };
       }
 
+      // Archive
+      var archiveBtn = panel.querySelector('#decidr-so-btn-project-archive');
+      if (archiveBtn) {
+        archiveBtn.onclick = function() {
+          if (!confirm('Archive this project?')) return;
+          if (API) {
+            if (UI.SlideOut._guardBusy()) return;
+            API.archiveProject(id).then(function() {
+              UI.SlideOut._busy = false;
+              if (UI.SlideOut._onMutateCallback) {
+                try { UI.SlideOut._onMutateCallback('project', id); } catch(e) { console.error('[decidr] onMutate callback error:', e); }
+              }
+              UI.SlideOut.back();
+            }).catch(function(err) { UI.SlideOut._busy = false; console.error('[decidr] Archive project failed:', err); });
+          }
+        };
+      }
+
       // Document linking (shared helper)
       UI.SlideOut._wireDocumentEvents(panel, 'PROJECT', id, state);
     },
@@ -2229,12 +2499,49 @@
         })(statusOptions[s]);
       }
 
+      // Archive
+      var archiveBridgeBtn = panel.querySelector('#decidr-so-btn-bridge-archive');
+      if (archiveBridgeBtn) {
+        archiveBridgeBtn.onclick = function() {
+          if (!confirm('Archive this bridge?')) return;
+          if (API) {
+            if (UI.SlideOut._guardBusy()) return;
+            API.archiveBridge(id).then(function() {
+              UI.SlideOut._busy = false;
+              if (UI.SlideOut._onMutateCallback) {
+                try { UI.SlideOut._onMutateCallback('bridge', id); } catch(e) { console.error('[decidr] onMutate callback error:', e); }
+              }
+              UI.SlideOut.back();
+            }).catch(function(err) { UI.SlideOut._busy = false; console.error('[decidr] Archive bridge failed:', err); });
+          }
+        };
+      }
+
       // Document linking (shared helper)
       UI.SlideOut._wireDocumentEvents(panel, 'BRIDGE', id, state);
     },
 
     _wireInitiativeEvents: function(panel, id, data) {
       var state = UI.SlideOut._initiativePanelState;
+      var API = window.__decidrAPI;
+
+      // Archive
+      var archiveInitBtn = panel.querySelector('#decidr-so-btn-initiative-archive');
+      if (archiveInitBtn) {
+        archiveInitBtn.onclick = function() {
+          if (!confirm('Archive this initiative?')) return;
+          if (API) {
+            if (UI.SlideOut._guardBusy()) return;
+            API.archiveInitiative(id).then(function() {
+              UI.SlideOut._busy = false;
+              if (UI.SlideOut._onMutateCallback) {
+                try { UI.SlideOut._onMutateCallback('initiative', id); } catch(e) { console.error('[decidr] onMutate callback error:', e); }
+              }
+              UI.SlideOut.back();
+            }).catch(function(err) { UI.SlideOut._busy = false; console.error('[decidr] Archive initiative failed:', err); });
+          }
+        };
+      }
 
       // Document linking (shared helper)
       UI.SlideOut._wireDocumentEvents(panel, 'INITIATIVE', id, state);
@@ -2542,6 +2849,24 @@
   // Registered on UI so renderers can call them directly.
   // ═══════════════════════════════════════════════════════════════════
 
+  function _renderGithubSection(summary) {
+    if (!summary) return '';
+    var html = '';
+    if (summary.issues && summary.issues.length) {
+      html += '<div class="decidr-so-section">';
+      html += UI.SlideOut._renderSectionHeader('Issues', summary.issues.length);
+      html += UI.githubIssuesList(summary.issues);
+      html += '</div>';
+    }
+    if (summary.prs && summary.prs.length) {
+      html += '<div class="decidr-so-section">';
+      html += UI.SlideOut._renderSectionHeader('Pull Requests', summary.prs.length);
+      html += UI.githubPRsList(summary.prs);
+      html += '</div>';
+    }
+    return html;
+  }
+
   /**
    * Render project slide-out detail panel.
    * @param {Object} project - Project data with _enriched sub-objects
@@ -2551,6 +2876,12 @@
     var state = UI.SlideOut._projectPanelState;
     var enriched = project._enriched || {};
     var html = '<div class="decidr-so-detail">';
+
+    // Action bar
+    html += '<div class="decidr-so-action-bar">';
+    html += '<span class="decidr-so-spacer"></span>';
+    html += '<button class="decidr-so-btn decidr-so-btn-danger decidr-so-btn-sm" id="decidr-so-btn-project-archive">' + ICON_TRASH + ' Archive</button>';
+    html += '</div>';
 
     // Title row
     html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:var(--space-2);">';
@@ -2741,6 +3072,14 @@
     // Documents section (shared helper)
     html += UI.SlideOut._renderDocumentSection('PROJECT', project.id, project.documents || [], state);
 
+    // GitHub Issues & PRs
+    var ghSummary = enriched.githubSummary;
+    if (ghSummary) {
+      html += _renderGithubSection(ghSummary);
+    } else if (!project._enrichmentDone) {
+      html += '<div class="decidr-so-loading-section"><div class="decidr-spinner"></div> Loading issues & PRs...</div>';
+    }
+
     // Timeline
     html += UI.SlideOut._renderTimeline(enriched.timeline, state.timelineFilter, { filterPrefix: 'project-timeline', parentType: 'project', parentId: project.id });
     if (enriched.timeline) {
@@ -2809,7 +3148,7 @@
       html += '<button class="decidr-so-btn" id="decidr-so-btn-supersede">Supersede</button>';
     }
     html += '<span class="decidr-so-spacer"></span>';
-    html += '<button class="decidr-so-btn decidr-so-btn-danger" id="decidr-so-btn-delete">' + ICON_TRASH + '</button>';
+    html += '<button class="decidr-so-btn decidr-so-btn-danger" id="decidr-so-btn-archive">' + ICON_TRASH + ' Archive</button>';
     html += '</div>';
 
     // Reviewers & Approval Progress
@@ -2965,6 +3304,14 @@
     // Documents section (shared helper)
     html += UI.SlideOut._renderDocumentSection('DECISION', decision.id, decision.documents || [], state);
 
+    // GitHub Issues & PRs
+    var ghSummaryDec = enriched.githubSummary;
+    if (ghSummaryDec) {
+      html += _renderGithubSection(ghSummaryDec);
+    } else if (!decision._enrichmentDone) {
+      html += '<div class="decidr-so-loading-section"><div class="decidr-spinner"></div> Loading issues & PRs...</div>';
+    }
+
     // Sub-decisions
     var children = decision.children || [];
     if (children.length > 0) {
@@ -3028,7 +3375,7 @@
       }
       html += '</div></div>';
     }
-    html += '<button class="decidr-so-btn decidr-so-btn-danger decidr-so-btn-sm" id="decidr-so-btn-task-delete">Delete</button>';
+    html += '<button class="decidr-so-btn decidr-so-btn-danger decidr-so-btn-sm" id="decidr-so-btn-task-archive">' + ICON_TRASH + ' Archive</button>';
     html += '</div>';
 
     // Meta row
@@ -3112,6 +3459,14 @@
     // Documents section (shared helper)
     html += UI.SlideOut._renderDocumentSection('TASK', task.id, task.documents || [], state);
 
+    // GitHub Issues & PRs
+    var ghSummaryTask = enriched.githubSummary;
+    if (ghSummaryTask) {
+      html += _renderGithubSection(ghSummaryTask);
+    } else if (!task._enrichmentDone) {
+      html += '<div class="decidr-so-loading-section"><div class="decidr-spinner"></div> Loading issues & PRs...</div>';
+    }
+
     html += '</div>';
     return html;
   };
@@ -3142,8 +3497,8 @@
 
     // Action bar
     var bridgeTransitions = bridge.allowedTransitions || [];
+    html += '<div class="decidr-so-action-bar">';
     if (bridgeTransitions.length > 0) {
-      html += '<div class="decidr-so-action-bar">';
       html += '<div class="decidr-so-status-dropdown">';
       html += '<button class="decidr-so-btn" id="decidr-so-btn-bridge-status">Status \u25BE</button>';
       html += '<div class="decidr-so-status-menu" id="decidr-so-bridge-status-menu">';
@@ -3152,8 +3507,10 @@
           + UI.escapeHtml(STATUS_LABELS[bridgeTransitions[bsi]] || bridgeTransitions[bsi]) + '</button>';
       }
       html += '</div></div>';
-      html += '</div>';
     }
+    html += '<span class="decidr-so-spacer"></span>';
+    html += '<button class="decidr-so-btn decidr-so-btn-danger decidr-so-btn-sm" id="decidr-so-btn-bridge-archive">' + ICON_TRASH + ' Archive</button>';
+    html += '</div>';
 
     // Description
     if (bridge.description) {
@@ -3228,6 +3585,12 @@
       metaItems.push({ html: counts.decisions + ' Decision' + (counts.decisions !== 1 ? 's' : '') });
     }
     if (metaItems.length > 0) html += UI.SlideOut._renderMeta(metaItems);
+
+    // Action bar
+    html += '<div class="decidr-so-action-bar">';
+    html += '<span class="decidr-so-spacer"></span>';
+    html += '<button class="decidr-so-btn decidr-so-btn-danger decidr-so-btn-sm" id="decidr-so-btn-initiative-archive">' + ICON_TRASH + ' Archive</button>';
+    html += '</div>';
 
     // Description
     if (initiative.description) {
