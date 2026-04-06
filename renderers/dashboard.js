@@ -148,18 +148,22 @@
     });
 
     function refreshDashboard() {
+      var rf = {
+        initiatives: null, projects: null, decisions: null, tasks: null,
+        bridges: null, issues: null, prs: null, actionItems: null, timeline: null
+      };
       Promise.all([
-        API.listInitiatives({ take: 200 }).then(function(resp) { return unwrapList(resp); }),
-        API.listProjects({ take: 200 }).then(function(resp) { return unwrapList(resp); }),
-        API.listDecisions({ take: 200 }).then(function(resp) { return unwrapList(resp); }),
-        API.listTasks({ take: 200 }).then(function(resp) { return unwrapList(resp); }),
-        API.listBridges({ take: 200 }).then(function(resp) { return unwrapList(resp); }),
-        API.listIssues({ take: 200 }).then(function(resp) { return unwrapList(resp); }).catch(function() { return []; }),
-        API.listPRs({ take: 200 }).then(function(resp) { return unwrapList(resp); }).catch(function() { return []; }),
-        API.getActionItems({ take: 200 }).then(function(resp) { return unwrapList(resp); }),
-        API.getTimeline({ take: 200 }).then(function(resp) { return unwrapList(resp); }).catch(function() { return []; })
-      ]).then(function(results) {
-        var projects = results[1] || [];
+        API.listInitiatives({ take: 200 }).then(function(resp) { rf.initiatives = unwrapList(resp); }),
+        API.listProjects({ take: 200 }).then(function(resp) { rf.projects = unwrapList(resp); }),
+        API.listDecisions({ take: 200 }).then(function(resp) { rf.decisions = unwrapList(resp); }),
+        API.listTasks({ take: 200 }).then(function(resp) { rf.tasks = unwrapList(resp); }),
+        API.listBridges({ take: 200 }).then(function(resp) { rf.bridges = unwrapList(resp); }),
+        API.listIssues({ take: 200 }).then(function(resp) { rf.issues = unwrapList(resp); }).catch(function() { rf.issues = []; }),
+        API.listPRs({ take: 200 }).then(function(resp) { rf.prs = unwrapList(resp); }).catch(function() { rf.prs = []; }),
+        API.getActionItems({ take: 200 }).then(function(resp) { rf.actionItems = unwrapList(resp); }),
+        API.getTimeline({ take: 200 }).then(function(resp) { rf.timeline = unwrapList(resp); }).catch(function() { rf.timeline = []; })
+      ]).then(function() {
+        var projects = rf.projects || [];
         var projectToInit = {};
         for (var p = 0; p < projects.length; p++) {
           var proj = projects[p];
@@ -173,16 +177,16 @@
           if (!projectMap[initId]) projectMap[initId] = [];
           projectMap[initId].push(proj);
         }
-        dashState.initiatives = results[0];
+        dashState.initiatives = rf.initiatives;
         dashState.projectsByInitiative = projectMap;
-        dashState.allDecisions = results[2];
-        dashState.allTasks = results[3];
-        dashState.allBridges = results[4];
-        dashState.allIssues = results[5] || [];
-        dashState.allPRs = results[6] || [];
-        dashState.actionItems = results[7];
+        dashState.allDecisions = rf.decisions;
+        dashState.allTasks = rf.tasks;
+        dashState.allBridges = rf.bridges;
+        dashState.allIssues = rf.issues || [];
+        dashState.allPRs = rf.prs || [];
+        dashState.actionItems = rf.actionItems;
 
-        dashState.lastActivityByEntity = buildActivityMap(results[8] || []);
+        dashState.lastActivityByEntity = buildActivityMap(rf.timeline || []);
 
         renderDashboard();
       }).catch(function(err) {

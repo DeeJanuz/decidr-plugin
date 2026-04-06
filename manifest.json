@@ -383,7 +383,7 @@
     }
   ],
   "mcp": {
-    "url": "http://localhost:3001/api/mcp",
+    "url": "https://app.decidrmcp.com/api/mcp",
     "auth": {
       "type": "oauth",
       "client_id": "fc99d041-1923-416c-8173-a4c02ae9b3a7",
