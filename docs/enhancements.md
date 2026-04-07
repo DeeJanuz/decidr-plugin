@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-04-06
 **Total Active Issues:** 1
-**Resolved This Month:** 10
+**Resolved This Month:** 11
 
 ---
 
@@ -53,6 +53,10 @@
 - **Resolved:** 2026-04-06
 - **Description:** Extracted as `UI.labelBadge(label)` helper handling color normalization, hex prefix, and translucent background styling. Issue slideout updated to use it.
 
+#### [RESOLVED MED-005] Hand-rolled entity-link markup duplicated in issue/PR slideouts
+- **Resolved:** 2026-04-06 (commit 304867c)
+- **Description:** Issue and PR slideouts each hand-rolled `decidr-so-decision-item` markup for heterogeneous linked-entity lists, duplicating ~10 lines of markup and risking divergence from the canonical `decidr-so-list-item` card. Resolved by extending `UI.SlideOut._renderEntityList` with `opts.showTypeBadge` (OCP-friendly additive extension) so both slideouts can route through the shared helper. Also fixed PR status badge to always render with a `pr.status -> pr.githubState -> OPEN` fallback chain matching `githubPRsList` behavior.
+
 #### [RESOLVED] Pre-existing meta rendering bug in issue/PR/repo slideouts
 - **Resolved:** 2026-04-06 (commit b0f127a)
 - **Description:** Issue, PR, and repo slideout meta sections were using `{ label, value }` format that did not render correctly. Fixed by switching to `{ html }` format with proper escaping and formatting.
@@ -67,3 +71,4 @@
 | 2026-04-06 | b0f127a | 68/100 | Acceptable |
 | 2026-04-06 | 05ad0fa | 72/100 | Good |
 | 2026-04-06 | 8c7428a | 88/100 | Good |
+| 2026-04-06 | 304867c | 90/100 | Excellent |
