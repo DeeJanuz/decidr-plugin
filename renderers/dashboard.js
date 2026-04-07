@@ -354,7 +354,8 @@
       'Decision in progress':           { badge: 'Follow Up', cls: 'decidr-action-followup' },
       'Task is blocked':                { badge: 'Blocked',   cls: 'decidr-action-blocked' },
       'TODO task':                       { badge: 'Tasks',     cls: 'decidr-action-tasks' },
-      'Deferred decision':              { badge: 'Deferred',  cls: 'decidr-action-deferred' }
+      'Deferred decision':              { badge: 'Deferred',  cls: 'decidr-action-deferred' },
+      'Open issue on an entity you own':{ badge: 'Issue',     cls: 'decidr-action-issue' }
     };
 
     function getActionConfig(reason) {
@@ -399,36 +400,11 @@
         pull_request: 'Pull Requests'
       };
 
-      // Inject open issues (skip closed issues + issues whose PRs are all merged)
+      // Issues are surfaced via my_action_items (entityType 'issue') with strict
+      // per-entity ownership. The renderer no longer injects from dashState.allIssues
+      // to avoid duplicate rows and to respect ownership semantics.
       var CLOSED_PR_STATUSES = { MERGED: true, CLOSED: true };
-      var issues = dashState.allIssues || [];
       var prs = dashState.allPRs || [];
-      // Build a map of issueRefId -> array of PR statuses
-      var prStatusByIssue = {};
-      for (var pm = 0; pm < prs.length; pm++) {
-        var pid = prs[pm].issueRefId;
-        if (pid) {
-          if (!prStatusByIssue[pid]) prStatusByIssue[pid] = [];
-          prStatusByIssue[pid].push(prs[pm].status || 'OPEN');
-        }
-      }
-      for (var ii = 0; ii < issues.length; ii++) {
-        var iss = issues[ii];
-        // Skip closed issues directly
-        if (iss.githubState === 'closed') continue;
-        // Fallback: skip if all linked PRs are merged/closed
-        var issuePrStatuses = prStatusByIssue[iss.id] || [];
-        if (issuePrStatuses.length > 0 && issuePrStatuses.every(function(s) { return CLOSED_PR_STATUSES[s]; })) continue;
-        if (!groups['issue']) { groups['issue'] = []; groupOrder.push('issue'); }
-        groups['issue'].push({
-          entityType: 'issue',
-          entityId: iss.id,
-          id: iss.id,
-          title: '#' + (iss.githubIssueNumber || '') + ' ' + (iss.githubIssueTitle || 'Untitled'),
-          status: iss.githubState ? iss.githubState.toUpperCase() : (iss.source || 'EXTERNAL'),
-          createdAt: iss.createdAt
-        });
-      }
 
       // Inject open PRs (skip merged/closed)
       for (var pi = 0; pi < prs.length; pi++) {

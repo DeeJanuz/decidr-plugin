@@ -1,6 +1,6 @@
 {
   "name": "decidr",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "prompt_definitions": [
     {
       "name": "initiative_planning",
@@ -50,7 +50,7 @@
     "When showing entity details (get_initiative, get_project, get_decision, get_task, get_bridge): always push to decidr_list. Only open decidr_dashboard or decidr_graph when the user explicitly asks for a 'dashboard', 'overview', 'graph', or 'map'.",
     "Before taking any action on a GitHub issue or PR linked to DecidR (fix, create_pr, review_pr, merge_pr, or any reconciliation), fetch the github_pr_lifecycle prompt and follow its coder or reviewer path. DecidR does not yet receive webhooks from GitHub, so you must reconcile DecidR state to match GitHub before and after every lifecycle step. Never add DecidR-side enforcement for review or merge policy \u2014 that lives in GitHub."
   ],
-  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.6/decidr.zip",
+  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.7/decidr.zip",
   "registry_index": {
     "summary": "Decision governance \u2014 initiatives, projects, decisions, tasks, and bridges with approval workflows",
     "tags": [
