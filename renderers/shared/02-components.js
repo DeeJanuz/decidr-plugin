@@ -1638,9 +1638,13 @@
       for (var i = 0; i < items.length; i++) {
         var item = items[i];
         var title = item.title || item.name || item.id;
-        html += '<div class="decidr-so-list-item" data-entity-type="' + UI.escapeHtml(entityType) + '" '
-          + 'data-entity-id="' + UI.escapeHtml(item.id) + '" style="cursor:pointer;">'
-          + '<span class="decidr-so-list-title">' + UI.escapeHtml(title) + '</span>'
+        var rowType = o.showTypeBadge && item.entityType ? item.entityType : entityType;
+        html += '<div class="decidr-so-list-item" data-entity-type="' + UI.escapeHtml((rowType || '').toLowerCase()) + '" '
+          + 'data-entity-id="' + UI.escapeHtml(item.id) + '" style="cursor:pointer;">';
+        if (o.showTypeBadge && item.entityType) {
+          html += UI.entityTypeBadge(item.entityType);
+        }
+        html += '<span class="decidr-so-list-title">' + UI.escapeHtml(title) + '</span>'
           + UI.statusBadge(item.status)
           + '</div>';
       }

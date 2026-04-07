@@ -89,19 +89,21 @@
       html += '</div>';
     }
 
-    // Linked Entities (using decidr-so-decision-item pattern with entityName)
+    // Linked Entities — shared entity list with per-row type badge
     if (issue.entityLinks && issue.entityLinks.length > 0) {
-      html += '<div class="decidr-so-section">';
-      html += UI.SlideOut._renderSectionHeader('Linked Entities', issue.entityLinks.length);
+      var issueLinkItems = [];
       for (var i = 0; i < issue.entityLinks.length; i++) {
         var link = issue.entityLinks[i];
-        var elType = (link.entityType || '').toLowerCase();
-        html += '<div class="decidr-so-decision-item" data-entity-type="' + UI.escapeHtml(elType) + '" data-entity-id="' + UI.escapeHtml(link.entityId) + '">';
-        html += UI.entityTypeBadge(link.entityType);
-        html += '<span class="decidr-so-decision-title">' + UI.escapeHtml(link.entityName || link.entityId) + '</span>';
-        html += '<span class="decidr-so-decision-chevron">\u203a</span>';
-        html += '</div>';
+        issueLinkItems.push({
+          id: link.entityId,
+          title: link.entityName || link.entityId,
+          entityType: link.entityType,
+          status: link.status
+        });
       }
+      html += '<div class="decidr-so-section">';
+      html += UI.SlideOut._renderSectionHeader('Linked Entities', issueLinkItems.length);
+      html += UI.SlideOut._renderEntityList(issueLinkItems, null, { showTypeBadge: true });
       html += '</div>';
     }
 
@@ -134,7 +136,7 @@
     html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:var(--space-2);">';
     html += '<span class="decidr-entity-icon">' + (ENTITY_ICONS.pull_request || '') + '</span>';
     html += '<h2 style="margin:0;font-size:var(--text-h2);">PR #' + (pr.githubPrNumber || '') + '</h2>';
-    if (pr.status) html += UI.statusBadge(pr.status);
+    html += UI.statusBadge(pr.status || pr.githubState || 'OPEN');
     html += '</div>';
     var metaItems = [];
     if (pr.branchName) metaItems.push({ html: '<strong>Branch:</strong> ' + UI.escapeHtml(pr.branchName) });
@@ -159,20 +161,22 @@
       html += '</div>';
       html += '</div>';
 
-      // Linked DecidR entities (from the issue's entity links)
+      // Linked DecidR entities (from the issue's entity links) — shared helper
       var entityLinks = pr.issueRef.entityLinks || [];
       if (entityLinks.length > 0) {
-        html += '<div class="decidr-so-section">';
-        html += UI.SlideOut._renderSectionHeader('Linked Entities', entityLinks.length);
+        var prLinkItems = [];
         for (var eli = 0; eli < entityLinks.length; eli++) {
           var elink = entityLinks[eli];
-          var elType = (elink.entityType || '').toLowerCase();
-          html += '<div class="decidr-so-decision-item" data-entity-type="' + UI.escapeHtml(elType) + '" data-entity-id="' + UI.escapeHtml(elink.entityId) + '">';
-          html += UI.entityTypeBadge(elink.entityType);
-          html += '<span class="decidr-so-decision-title">' + UI.escapeHtml(elink.entityName || elink.entityId) + '</span>';
-          html += '<span class="decidr-so-decision-chevron">\u203a</span>';
-          html += '</div>';
+          prLinkItems.push({
+            id: elink.entityId,
+            title: elink.entityName || elink.entityId,
+            entityType: elink.entityType,
+            status: elink.status
+          });
         }
+        html += '<div class="decidr-so-section">';
+        html += UI.SlideOut._renderSectionHeader('Linked Entities', prLinkItems.length);
+        html += UI.SlideOut._renderEntityList(prLinkItems, null, { showTypeBadge: true });
         html += '</div>';
       }
     }

@@ -1,14 +1,21 @@
 # DecidR Plugin - Technical Debt & Enhancements Log
 
 **Last Updated:** 2026-04-06
-**Total Active Issues:** 0
+**Total Active Issues:** 1
 **Resolved This Month:** 10
 
 ---
 
 ## Active Issues
 
-None. All identified issues have been resolved.
+### [LOW-004] Cross-file private var leakage via UI._* aliases
+- **Severity:** Low
+- **Introduced:** 2026-04-06 (commit 8c7428a)
+- **File:** `renderers/shared/02-components.js` (lines ~2707-2713), `renderers/shared/03-slideouts.js` (lines ~13-20)
+- **Description:** To split slideout renderers into `03-slideouts.js`, module-private vars (`ENTITY_ICONS`, `ICON_TRASH`, `ICON_EDIT`, `ICON_CHEVRON_DOWN`, `ICON_CALENDAR`, `STATUS_LABELS`, `statusLabel`) are re-exposed as `UI._ENTITY_ICONS`, `UI._ICON_TRASH`, etc. This is a pragmatic workaround for the no-`import`/IIFE convention, but it leaks implementation details onto the shared `__decidrUI` global and creates load-order coupling (03 must run after 02, enforced only by filename ordering in `build.sh`).
+- **SOLID Impact:** Mild DIP violation — 03-slideouts depends on concrete private state of 02-components rather than a stable abstraction. Encapsulation weakened.
+- **Suggested Fix:** Promote truly shared constants (`ENTITY_ICONS`, `STATUS_LABELS`, icon SVGs, `statusLabel`) to a dedicated `renderers/shared/00b-constants.js` or similar, and reference them as public `UI.ENTITY_ICONS` etc. from both files. This removes the underscore-prefixed "private-but-public" pattern and makes the load-order contract explicit.
+- **Priority:** Low — functional and acceptable given the IIFE constraint; revisit if a third file needs the same aliases.
 
 ---
 
@@ -59,3 +66,4 @@ None. All identified issues have been resolved.
 | 2026-04-06 | PR #2 (feature/github-integration) | 62/100 | Acceptable |
 | 2026-04-06 | b0f127a | 68/100 | Acceptable |
 | 2026-04-06 | 05ad0fa | 72/100 | Good |
+| 2026-04-06 | 8c7428a | 88/100 | Good |

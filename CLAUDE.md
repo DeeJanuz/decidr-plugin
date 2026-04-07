@@ -16,7 +16,8 @@ renderers/
   shared/
     00-api-client.js   → REST fetch wrapper + autoInit bootstrap
     01-theme.js        → CSS token injection
-    02-components.js   → Shared component library
+    02-components.js   → Shared component library (list/card/meta/SlideOut core)
+    03-slideouts.js    → Entity slideout renderers (project/decision/task/issue/PR/repo/etc.)
 ```
 
 ## Key Commands
@@ -25,6 +26,7 @@ renderers/
 bash build.sh                              # Build decidr-plugin.zip
 node -c renderers/list.js                  # Syntax check a renderer
 node -c renderers/shared/02-components.js  # Syntax check shared code
+node -c renderers/shared/03-slideouts.js   # Syntax check slideout renderers
 ```
 
 ## JavaScript Conventions
@@ -67,8 +69,10 @@ node -c renderers/shared/02-components.js  # Syntax check shared code
 
 1. Check if an existing `__decidrUI.*` function can be extended via `opts`.
 2. Add new functions to `renderers/shared/02-components.js` on the `UI` alias.
-3. Add CSS tokens to `renderers/shared/01-theme.js` if new design tokens are needed.
-4. Never add reusable markup directly in a renderer file.
+3. Entity slideout renderers (`UI.slideOut<Entity>`) go in `renderers/shared/03-slideouts.js`.
+4. Add CSS tokens to `renderers/shared/01-theme.js` if new design tokens are needed.
+5. Never add reusable markup directly in a renderer file.
+6. When adding a new shared file under `renderers/shared/`, append it to the `SHARED_BUNDLE` cat in `build.sh`.
 
 ## Build & Verification
 

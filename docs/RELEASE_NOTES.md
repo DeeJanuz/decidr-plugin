@@ -1,5 +1,8 @@
 # Unreleased
 
+- **fix**: Issue and PR slideouts now render linked-entity cards through the canonical `UI.SlideOut._renderEntityList` helper (with new `opts.showTypeBadge` for heterogeneous lists) instead of hand-rolling `decidr-so-decision-item` markup — matches the design pattern used by decision/bridge/initiative slideouts
+- **fix**: PR slideout title row now always renders a status badge, falling back to `githubState` then `OPEN` so the status is visible even when DecidR hasn't tracked a review state yet
+- **refactor**: Resolve tech debt in shared components and graph — extract `UI.labelBadge`, `UI.githubSection`, `UI.SlideOut._wireArchiveEvent`, and standalone `UI.slideOutIssue`/`slideOutPR`/`slideOutRepo`; move all slideout renderers to new `renderers/shared/03-slideouts.js` (02-components.js: 3735 → 2753 lines); trigger graph re-render when GitHub counts arrive so badges appear immediately
 - **feat**: Rich issue slideout with description, labels, linked entity names, and state badge; githubState badge on issue list rows; closed issues and merged PRs filtered from dashboard Next Steps
 - **feat**: Surface GitHub issues and PRs across all views — issue/PR sections in project, decision, and task slideouts via enrichment; issues and pull requests groups in dashboard Next Steps; GitHub count badges on dashboard project cards and graph nodes; fix pre-existing meta rendering bug in issue/PR/repo slideouts
 - **fix**: Pass organization_id through withReady so non-default orgs load correctly — dashboard and graph renderers now sync _activeOrgId before token fetch, fixing org-specific data not loading
