@@ -62,8 +62,18 @@ node -c renderers/shared/03-slideouts.js   # Syntax check slideout renderers
 - Every MCP tool must map to a renderer in the `renderers` object.
 - `renderer_definitions` must include `data_hint` describing the expected data shape.
 - `tool_prefix` must be `"decidr_"`.
-- `plugin_rules` is an array of plain-English behavioral rules injected into agent sessions. Use for renderer routing guidance (e.g., which renderer to use for action items vs dashboards). Keep rules short and unambiguous.
+- `plugin_rules` is an array of plain-English behavioral rules injected into agent sessions. Use for renderer routing guidance (e.g., which renderer to use for action items vs dashboards) AND for short always-on guardrail pointers at behavioral runbooks. Keep rules short and unambiguous.
 - `tool_rules` provide per-tool routing hints. Must be consistent with `plugin_rules` — if a plugin rule says "always use decidr_list for X", the corresponding tool_rule must not suggest an alternative.
+- `prompt_definitions` hosts two flavors of prompt:
+  1. **Task prompts** (e.g. `initiative_planning`, `fix_generation`, `review_generation`) — take arguments and walk the agent through one specific task. The prompt file is written as imperative instructions to the agent.
+  2. **Behavioral runbooks** (e.g. `github_pr_lifecycle`) — argument-less reference contracts that an agent fetches and follows before acting on a governed lifecycle. The prompt file is written as a runbook with role detection, sequence diagrams, a reconciliation/safety protocol, and explicit non-goals. Always paired with a short `plugin_rules` line telling agents when to fetch the runbook.
+
+## Adding a Behavioral Runbook Prompt
+
+1. Write the runbook at `prompts/<lifecycle-name>.md`. Start with prime directives, then role detection, then per-role sequence (mermaid diagrams use `<br/>` for line breaks in nodes, never `\n`), then any cross-cutting protocol (reconciliation, rollback), then failure modes, then explicit non-goals.
+2. Register it in `manifest.json` `prompt_definitions` with `arguments: []` and a description that explains what lifecycle it governs.
+3. Add a single short line to `plugin_rules` telling agents when to fetch and follow it. Do not restate the runbook content in `plugin_rules` — the rule is a pointer, not a summary.
+4. Bump `version` and `download_url`, add a release note, rebuild.
 
 ## Adding New Components
 

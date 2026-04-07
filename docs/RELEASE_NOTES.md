@@ -1,5 +1,12 @@
 # Unreleased
 
+# 0.1.5
+
+- **feat**: `github_pr_lifecycle` behavioral runbook — new plugin prompt (`prompts/github-pr-lifecycle.md`) that teaches agents how to participate in the GitHub PR lifecycle governed by DecidR. Covers two role-keyed playbooks (coder and reviewer) meeting at GitHub's PR state via async PR review assignment, a reconciliation protocol as a no-webhook workaround (diff GitHub vs DecidR before/after every step, update DecidR to match GitHub, never the reverse), and explicit failure modes (branch protection, CI red, review rejected, merge conflict, stale branch, truncated-context resume). Explicitly out of scope: fix code generation, review heuristics, DecidR-side enforcement. Resolves decision `cmno0e9kw0003lb04rdc3105k`.
+- **feat**: `plugin_rules` — added an always-on guardrail directing agents to fetch and follow the `github_pr_lifecycle` runbook before taking any action on a GitHub issue or PR linked to DecidR, and to reconcile DecidR state to match GitHub before and after every lifecycle step.
+
+# 0.1.4-unreleased
+
 - **fix**: Issue and PR slideouts now render linked-entity cards through the canonical `UI.SlideOut._renderEntityList` helper (with new `opts.showTypeBadge` for heterogeneous lists) instead of hand-rolling `decidr-so-decision-item` markup — matches the design pattern used by decision/bridge/initiative slideouts
 - **fix**: PR slideout title row now always renders a status badge, falling back to `githubState` then `OPEN` so the status is visible even when DecidR hasn't tracked a review state yet
 - **refactor**: Resolve tech debt in shared components and graph — extract `UI.labelBadge`, `UI.githubSection`, `UI.SlideOut._wireArchiveEvent`, and standalone `UI.slideOutIssue`/`slideOutPR`/`slideOutRepo`; move all slideout renderers to new `renderers/shared/03-slideouts.js` (02-components.js: 3735 → 2753 lines); trigger graph re-render when GitHub counts arrive so badges appear immediately
