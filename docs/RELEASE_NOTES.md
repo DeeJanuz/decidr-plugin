@@ -1,5 +1,9 @@
 # Unreleased
 
+# 0.1.6
+
+- **fix**: GitHub auth renderer filename now matches the companion's renderer-name → filename resolution rule. The companion converts ALL underscores in a renderer name to hyphens (e.g. `decidr_github_auth` → `decidr-github-auth.js`), but `build.sh` was producing `decidr-github_auth.js`, leaving the second underscore intact. The companion could not locate the renderer, so the `decidr_github_auth` content type appeared as "no renderer for content type" on stricter platforms (Windows in particular). All other renderers were unaffected because their names had no internal underscores.
+
 # 0.1.5
 
 - **feat**: `github_pr_lifecycle` behavioral runbook — new plugin prompt (`prompts/github-pr-lifecycle.md`) that teaches agents how to participate in the GitHub PR lifecycle governed by DecidR. Covers two role-keyed playbooks (coder and reviewer) meeting at GitHub's PR state via async PR review assignment, a reconciliation protocol as a no-webhook workaround (diff GitHub vs DecidR before/after every step, update DecidR to match GitHub, never the reverse), and explicit failure modes (branch protection, CI red, review rejected, merge conflict, stale branch, truncated-context resume). Explicitly out of scope: fix code generation, review heuristics, DecidR-side enforcement. Resolves decision `cmno0e9kw0003lb04rdc3105k`.

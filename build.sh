@@ -57,7 +57,7 @@ bundle_renderer() {
 bundle_renderer renderers/list.js        decidr-list.js
 bundle_renderer renderers/dashboard.js  decidr-dashboard.js
 bundle_renderer renderers/graph.js      decidr-graph.js
-bundle_renderer renderers/github-auth.js decidr-github_auth.js
+bundle_renderer renderers/github-auth.js decidr-github-auth.js
 
 # Copy prompts directory
 cp -r prompts "${BUILD_DIR}/prompts"
