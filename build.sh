@@ -38,7 +38,8 @@ echo "  Download URL: ${DOWNLOAD_URL}"
 SHARED_BUNDLE=$(cat \
   renderers/shared/00-api-client.js \
   renderers/shared/01-theme.js \
-  renderers/shared/02-components.js)
+  renderers/shared/02-components.js \
+  renderers/shared/03-slideouts.js)
 
 # Companion resolves renderer name (underscores) to filename (hyphens)
 # e.g. decidr_list -> decidr-list.js

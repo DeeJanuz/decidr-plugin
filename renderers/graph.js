@@ -161,6 +161,7 @@
         if (ghProjectIds.length) {
           API.getEntityGithubCounts('PROJECT', ghProjectIds).then(function(result) {
             graphState.githubCounts = result || {};
+            if (graphData) renderGraphWithData(graphData);
           }).catch(function() { graphState.githubCounts = {}; });
         }
 
