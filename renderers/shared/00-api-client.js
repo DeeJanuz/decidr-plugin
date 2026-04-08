@@ -44,9 +44,37 @@
     return h;
   }
 
+  function _buildApiError(response, bodyText) {
+    var bodyMessage = '';
+    var parsedBody = null;
+    if (bodyText) {
+      try {
+        parsedBody = JSON.parse(bodyText);
+        if (parsedBody && typeof parsedBody === 'object') {
+          bodyMessage = parsedBody.error || parsedBody.message || '';
+        }
+      } catch (e) {
+        // Not JSON — use the raw text if it looks like a message
+        if (bodyText.length < 500) bodyMessage = bodyText;
+      }
+    }
+    var err = new Error('API error: ' + response.status + ' ' + response.statusText
+      + (bodyMessage ? ' — ' + bodyMessage : ''));
+    err.status = response.status;
+    err.statusText = response.statusText;
+    err.body = parsedBody;
+    err.bodyText = bodyText || '';
+    err.bodyMessage = bodyMessage;
+    return err;
+  }
+
   function _handleResponse(response) {
     if (!response.ok) {
-      throw new Error('API error: ' + response.status + ' ' + response.statusText);
+      return response.text().then(function(text) {
+        throw _buildApiError(response, text);
+      }, function() {
+        throw _buildApiError(response, '');
+      });
     }
     return response.json();
   }
@@ -94,6 +122,10 @@
 
     setToken: function(t) {
       _token = t || '';
+    },
+
+    hasToken: function() {
+      return !!_token;
     },
 
     setActiveOrg: function(orgId) {

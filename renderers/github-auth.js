@@ -44,7 +44,8 @@
       html += '" />';
       html += '<p style="margin:var(--space-1) 0 0;font-size:var(--text-xs);color:var(--text-tertiary);">';
       html += 'Create at GitHub &rarr; Settings &rarr; Developer settings &rarr; Personal access tokens. ';
-      html += 'Your token is sent directly to the server and encrypted &mdash; it never passes through the AI agent.</p>';
+      html += 'Your PAT is sent directly to DecidR and encrypted &mdash; it never passes through the AI agent. ';
+      html += 'Note: you must be signed in to DecidR in this companion first for the PAT to be saved.</p>';
       html += '</div>';
 
       // Status message area
@@ -70,29 +71,97 @@
       var usernameInput = container.querySelector('#decidr-gh-username');
       var tokenInput = container.querySelector('#decidr-gh-token');
 
-      function showStatus(message, isError) {
+      function showStatus(message, variant) {
         statusEl.style.display = 'block';
         statusEl.style.padding = 'var(--space-3)';
         statusEl.style.borderRadius = 'var(--border-radius-md)';
         statusEl.style.fontSize = 'var(--text-small)';
-        if (isError) {
+        statusEl.style.lineHeight = '1.4';
+        if (variant === 'error') {
           statusEl.style.background = 'rgba(239,68,68,0.1)';
           statusEl.style.border = '1px solid rgba(239,68,68,0.3)';
           statusEl.style.color = '#f87171';
+        } else if (variant === 'warning') {
+          statusEl.style.background = 'rgba(245,158,11,0.1)';
+          statusEl.style.border = '1px solid rgba(245,158,11,0.3)';
+          statusEl.style.color = '#fbbf24';
         } else {
           statusEl.style.background = 'rgba(34,197,94,0.1)';
           statusEl.style.border = '1px solid rgba(34,197,94,0.3)';
           statusEl.style.color = '#4ade80';
         }
-        statusEl.textContent = message;
+        // Allow simple HTML (for line breaks / emphasis) in status messages
+        statusEl.innerHTML = message;
+      }
+
+      function resetSubmitButton() {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Connect GitHub Account';
+        submitBtn.style.opacity = '1';
+      }
+
+      function describeError(err) {
+        var status = err && err.status;
+        var detail = (err && (err.bodyMessage || err.message)) || 'Unknown error';
+        if (status === 401) {
+          return {
+            variant: 'warning',
+            html: '<strong>Not signed in to DecidR.</strong><br>'
+              + 'Your PAT was not rejected &mdash; the companion could not authenticate to DecidR at all. '
+              + 'Complete the DecidR plugin sign-in (Ludflow OAuth) in MCPViews, then try again.'
+          };
+        }
+        if (status === 403) {
+          return {
+            variant: 'warning',
+            html: '<strong>No access to this DecidR organization.</strong><br>'
+              + 'You are signed in, but the active organization does not list you as a member. '
+              + 'Switch orgs in the companion or ask an admin to add you, then try again.'
+          };
+        }
+        if (status === 400 || status === 422) {
+          return {
+            variant: 'error',
+            html: '<strong>Invalid request.</strong><br>' + detail
+          };
+        }
+        if (status >= 500) {
+          return {
+            variant: 'error',
+            html: '<strong>DecidR server error (' + status + ').</strong><br>' + detail
+          };
+        }
+        if (!status) {
+          return {
+            variant: 'error',
+            html: '<strong>Could not reach DecidR.</strong><br>'
+              + 'Check your connection, then try again. (' + detail + ')'
+          };
+        }
+        return {
+          variant: 'error',
+          html: '<strong>Failed to connect (' + status + ').</strong><br>' + detail
+        };
       }
 
       submitBtn.addEventListener('click', function() {
         var username = usernameInput.value.trim();
         var token = tokenInput.value.trim();
 
-        if (!username) { showStatus('Please enter your GitHub username.', true); return; }
-        if (!token) { showStatus('Please enter your Personal Access Token.', true); return; }
+        if (!username) { showStatus('Please enter your GitHub username.', 'error'); return; }
+        if (!token) { showStatus('Please enter your Personal Access Token.', 'error'); return; }
+
+        // Preflight: if we have no DecidR session token, the POST will 401 and
+        // look like a bad PAT. Tell the user the real problem instead.
+        if (typeof API.hasToken === 'function' ? !API.hasToken() : !API._hasToken) {
+          showStatus(
+            '<strong>Not signed in to DecidR yet.</strong><br>'
+              + 'The companion has no DecidR session, so your PAT cannot be saved. '
+              + 'Complete the DecidR plugin sign-in (Ludflow OAuth) in MCPViews, then reopen this form.',
+            'warning'
+          );
+          return;
+        }
 
         submitBtn.disabled = true;
         submitBtn.textContent = 'Connecting...';
@@ -103,15 +172,15 @@
           githubUsername: username,
           accessToken: token
         }).then(function() {
-          showStatus('GitHub account connected successfully! You can close this panel.', false);
+          showStatus('GitHub account connected successfully! You can close this panel.', 'success');
           submitBtn.textContent = 'Connected';
           submitBtn.style.background = 'rgba(34,197,94,0.8)';
           tokenInput.value = '';
         }).catch(function(err) {
-          showStatus('Failed to connect: ' + (err.message || 'Unknown error'), true);
-          submitBtn.disabled = false;
-          submitBtn.textContent = 'Connect GitHub Account';
-          submitBtn.style.opacity = '1';
+          console.error('[decidr] github-auth submit failed', err);
+          var desc = describeError(err);
+          showStatus(desc.html, desc.variant);
+          resetSubmitButton();
         });
       });
 
