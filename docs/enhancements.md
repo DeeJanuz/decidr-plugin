@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-04-08
 **Total Active Issues:** 3
-**Resolved This Month:** 12
+**Resolved This Month:** 15
 
 ---
 
@@ -38,6 +38,18 @@
 ---
 
 ## Resolved Issues
+
+#### [RESOLVED MED-006] Preflight org-resolution logic duplicated across dashboard and graph renderers
+- **Resolved:** 2026-04-08
+- **Description:** Hoisted the shared preflight policy (fetch orgs/pluginOrgs/prefs, build pluginOrgSet, annotate tokenStatus, resolve pushed > default-with-token, switchOrg if needed) into `API.resolveAndBindTargetOrg({ pushedOrgId })` on `00-api-client.js`. Routing logic now only runs when `_activeOrgId` is null — once anything is bound (initial resolution, user click, or earlier refetch), the helper is a pure data refresher. Dashboard's phase-1 block and graph's separate preflight both collapsed to one call. Graph's `_fetchGraphData` also stopped making the duplicate `getUserPreferences`/`listOrganizations`/`listPluginOrgs` calls that were issuing a second preference lookup on initial mount.
+
+#### [RESOLVED LOW-007-inline] Star and check SVGs inlined in `UI.orgPicker`
+- **Resolved:** 2026-04-08
+- **Description:** Promoted the three new icons to module-level constants `ICON_BUILDING`, `ICON_CHEVRON_SMALL`, `ICON_STAR_FILLED`, `ICON_STAR_OUTLINE`, `ICON_CHECK_BOLD` alongside the existing `ICON_EDIT`/`ICON_TRASH`/etc. in 02-components.js. `UI.orgPicker` references them by name. (Note: this shares a LOW-007 number with the stray-`;` theme.js resolution above — both were filed under the same ID by different reviewers; the two issues are unrelated.)
+
+#### [RESOLVED LOW-008] Component layer emits unescaped org name into title/aria-label attributes
+- **Resolved:** 2026-04-08
+- **Description:** `UI.orgPicker` now wraps `orgName`, `starTitle`, `displayLabel`, and the org `id` in the existing `UI.escapeHtml` helper before interpolating into `title`, `aria-label`, visible text, and `data-org-id` attributes. Backend org names stay trusted, but the component boundary now escapes by default so a name containing a literal quote/angle bracket can't break the row markup.
 
 #### [RESOLVED HIGH-003] Silent autoInit token-mismatch masked default-org on fresh mount
 - **Resolved:** 2026-04-08 (commit 4f53a8c)
@@ -99,4 +111,4 @@
 | 2026-04-06 | 8c7428a | 88/100 | Good |
 | 2026-04-06 | 304867c | 90/100 | Excellent |
 | 2026-04-07 | 8abb974 | 84/100 | Good |
-| 2026-04-08 | 4f53a8c | pending | Pending solid-reviewer |
+| 2026-04-08 | 4f53a8c | 77/100 | Good |

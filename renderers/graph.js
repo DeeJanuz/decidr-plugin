@@ -64,35 +64,11 @@
       + UI.loadingSpinner('Loading graph...')
       + '</div>';
 
-    // ── Preflight: resolve the user's target org BEFORE fetching graph data.
-    // If we jump straight to _fetchGraphData the main data calls use whatever
-    // token withReady picked first (usually the currently-connected org), and
-    // the user's default-org preference is effectively ignored until they click
-    // the picker manually. This preflight only runs on initial mount — refetches
-    // triggered by explicit user switches reuse the already-bound token.
-    Promise.all([
-      API.listOrganizations().catch(function() { return []; }),
-      API.listPluginOrgs().catch(function() { return []; }),
-      API.getUserPreferences().catch(function() { return null; })
-    ]).then(function(results) {
-      var prePluginOrgs = results[1] || [];
-      var prePrefs = results[2] || null;
-      var prePluginOrgSet = {};
-      for (var ppo = 0; ppo < prePluginOrgs.length; ppo++) {
-        prePluginOrgSet[prePluginOrgs[ppo]] = true;
-      }
-      var pushedOrgId = (data && data.organization_id) ? data.organization_id : null;
-      var preDefaultOrgId = (prePrefs && prePrefs.defaultOrganizationId) || null;
-      var targetOrgId = pushedOrgId;
-      if (!targetOrgId && preDefaultOrgId && prePluginOrgSet[preDefaultOrgId]) {
-        targetOrgId = preDefaultOrgId;
-      }
-      if (targetOrgId && targetOrgId !== API.getActiveOrgId()) {
-        return API.switchOrg(targetOrgId).catch(function() {});
-      }
-    }).then(function() {
-      return _fetchGraphData();
-    }).then(function(gd) {
+    // ── Fetch all data (single batch — no N+1) ───────────────
+    // _fetchGraphData internally calls API.resolveAndBindTargetOrg, which
+    // resolves + switches to the user's default org on initial mount and is
+    // a no-op on refetches (so user-triggered switches don't loop back).
+    _fetchGraphData().then(function(gd) {
       graphData = gd;
       renderGraphWithData(gd);
     }).catch(function(err) {
@@ -113,44 +89,31 @@
 
     // ── Fetch + derive graph data (single source of truth) ────
     function _fetchGraphData() {
-      return Promise.all([
-        API.listInitiatives(),
-        API.listBridges(),
-        API.listDecisions(),
-        API.listProjects(),
-        API.listOrgMembers(),
-        API.listOrganizations().catch(function() { return []; }),
-        API.listPluginOrgs().catch(function() { return []; }),
-        API.getUserPreferences().catch(function() { return null; })
-      ]).then(function(results) {
+      // Resolve target org + refresh org metadata first. On initial mount
+      // this switches to the user's default org (if bound). On refetches
+      // triggered by explicit user switches, it's a no-op for routing and
+      // just returns fresh org/token data for the picker.
+      return API.resolveAndBindTargetOrg({
+        pushedOrgId: (data && data.organization_id) ? data.organization_id : null
+      }).then(function(preflight) {
+        graphState.organizations = preflight.organizations;
+        graphState.defaultOrgId = preflight.defaultOrgId;
+        if (!graphState.activeOrgId && preflight.organizations.length > 0) {
+          graphState.activeOrgId = preflight.activeOrgId || preflight.organizations[0].id;
+        }
+        return Promise.all([
+          API.listInitiatives(),
+          API.listBridges(),
+          API.listDecisions(),
+          API.listProjects(),
+          API.listOrgMembers()
+        ]);
+      }).then(function(results) {
         var initiatives = _extractArray(results[0]);
         var allBridges = _extractArray(results[1]);
         var allDecisions = _extractArray(results[2]);
         var allProjects = _extractArray(results[3]);
         var allMembers = _extractArray(results[4]);
-
-        // Merge org token status
-        var orgs = results[5] || [];
-        var pluginOrgs = results[6] || [];
-        var prefs = results[7] || null;
-        var pluginOrgSet = {};
-        for (var po = 0; po < pluginOrgs.length; po++) {
-          pluginOrgSet[pluginOrgs[po]] = true;
-        }
-        for (var o = 0; o < orgs.length; o++) {
-          orgs[o].tokenStatus = pluginOrgSet[orgs[o].id] ? 'valid' : 'no-token';
-        }
-        graphState.organizations = orgs;
-        graphState.defaultOrgId = (prefs && prefs.defaultOrganizationId) || null;
-        if (!graphState.activeOrgId && orgs.length > 0) {
-          if (data && data.organization_id) {
-            graphState.activeOrgId = data.organization_id;
-          } else if (graphState.defaultOrgId) {
-            graphState.activeOrgId = graphState.defaultOrgId;
-          } else {
-            graphState.activeOrgId = orgs[0].id;
-          }
-        }
 
         // Build user lookup map
         var userMap = {};

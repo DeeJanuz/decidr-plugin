@@ -535,6 +535,77 @@
       return api.patch('/me/preferences', { defaultOrganizationId: null });
     },
 
+    /**
+     * Fetches organizations, plugin-org tokens, and user preferences in
+     * parallel, annotates each org with `tokenStatus`, and — if no org is
+     * currently bound to the client — resolves a target org and calls
+     * switchOrg. Returns `{ organizations, defaultOrgId, activeOrgId }`.
+     *
+     * Routing is a no-op when `_activeOrgId` is already set, so this is safe
+     * to call on every fetch pass (initial mount and subsequent refetches).
+     * That invariant is what prevents refetches after a user click from
+     * looping back to the default org.
+     *
+     * Target precedence when nothing is bound:
+     *   1. `opts.pushedOrgId` (from MCP push data)
+     *   2. `preferences.defaultOrganizationId` (if the user has a stored
+     *      plugin token for it)
+     *   3. none — the Tauri autoInit fallback token stays in place
+     */
+    resolveAndBindTargetOrg: function(opts) {
+      opts = opts || {};
+      var pushedOrgId = opts.pushedOrgId || null;
+      return Promise.all([
+        api.listOrganizations().catch(function() { return []; }),
+        api.listPluginOrgs().catch(function() { return []; }),
+        api.getUserPreferences().catch(function() { return null; })
+      ]).then(function(results) {
+        var orgs = results[0] || [];
+        var pluginOrgs = results[1] || [];
+        var prefs = results[2] || null;
+
+        var pluginOrgSet = {};
+        for (var i = 0; i < pluginOrgs.length; i++) {
+          pluginOrgSet[pluginOrgs[i]] = true;
+        }
+        for (var o = 0; o < orgs.length; o++) {
+          orgs[o].tokenStatus = pluginOrgSet[orgs[o].id] ? 'valid' : 'no-token';
+        }
+
+        var defaultOrgId = (prefs && prefs.defaultOrganizationId) || null;
+        var currentlyBound = api.getActiveOrgId();
+
+        // Routing only applies when nothing is currently bound. Once an org
+        // is active (initial resolution, user click, or earlier refetch),
+        // leave it alone and just return fresh org data.
+        var targetOrgId = null;
+        if (!currentlyBound) {
+          if (pushedOrgId) {
+            targetOrgId = pushedOrgId;
+          } else if (defaultOrgId && pluginOrgSet[defaultOrgId]) {
+            targetOrgId = defaultOrgId;
+          }
+        }
+
+        var switchPromise = Promise.resolve();
+        if (targetOrgId) {
+          switchPromise = api.switchOrg(targetOrgId).catch(function() {
+            // Fall through to whatever token autoInit last bound. The
+            // backend resolver fallback can still route MCP calls to the
+            // user's default via their session preference.
+          });
+        }
+
+        return switchPromise.then(function() {
+          return {
+            organizations: orgs,
+            defaultOrgId: defaultOrgId,
+            activeOrgId: api.getActiveOrgId()
+          };
+        });
+      });
+    },
+
     // --- GitHub endpoints ---
 
     listRepos: function(params) {

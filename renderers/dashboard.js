@@ -58,35 +58,15 @@
       return [];
     }
 
-    // Phase 1: lightweight fetches that don't depend on the active org token.
-    // We must resolve the user's preferred default org BEFORE firing the main
-    // data fetches, otherwise they run against whatever token withReady picked
-    // first (usually the currently-connected org, not the user's default).
-    Promise.all([
-      API.listOrganizations().then(function(orgs) { fetches.organizations = orgs; }).catch(function() { fetches.organizations = []; }),
-      API.listPluginOrgs().then(function(orgIds) { fetches.pluginOrgs = orgIds; }).catch(function() { fetches.pluginOrgs = []; }),
-      API.getUserPreferences().then(function(p) { fetches.prefs = p; }).catch(function() { fetches.prefs = null; })
-    ]).then(function() {
-      // Resolve the target org up front so Phase 2 fetches use the right token.
-      var pluginOrgs = fetches.pluginOrgs || [];
-      var pluginOrgSet = {};
-      for (var po = 0; po < pluginOrgs.length; po++) {
-        pluginOrgSet[pluginOrgs[po]] = true;
-      }
-      var pushedOrgId = (data && data.organization_id) ? data.organization_id : null;
-      var defaultOrgId = (fetches.prefs && fetches.prefs.defaultOrganizationId) || null;
-      var targetOrgId = pushedOrgId;
-      if (!targetOrgId && defaultOrgId && pluginOrgSet[defaultOrgId]) {
-        targetOrgId = defaultOrgId;
-      }
-      // Only switch if we have a target that differs from the currently-bound token.
-      if (targetOrgId && targetOrgId !== API.getActiveOrgId()) {
-        return API.switchOrg(targetOrgId).catch(function() {
-          // Fall through to the stored token — resolver fallback on the
-          // backend may still route to the default org.
-        });
-      }
-    }).then(function() {
+    // Preflight: resolve the user's target org BEFORE firing the main data
+    // fetches. Without this, data fetches run against whatever token withReady
+    // picked first (usually the currently-connected org), and the user's
+    // default-org preference is ignored on fresh mount.
+    API.resolveAndBindTargetOrg({
+      pushedOrgId: (data && data.organization_id) ? data.organization_id : null
+    }).then(function(preflight) {
+      fetches.organizations = preflight.organizations;
+      fetches.defaultOrgId = preflight.defaultOrgId;
       // Phase 2: actual data fetches now run against the correct org token.
       return Promise.all([
         API.listInitiatives({ take: 200 }).then(function(resp) { fetches.initiatives = unwrapList(resp); }),
@@ -120,23 +100,18 @@
       }
       return projectMap;
     }).then(function(projectMap) {
-      // Merge token status into organizations
-      var pluginOrgs = fetches.pluginOrgs || [];
-      var pluginOrgSet = {};
-      for (var po = 0; po < pluginOrgs.length; po++) {
-        pluginOrgSet[pluginOrgs[po]] = true;
-      }
+      // Org list + tokenStatus + defaultOrgId come pre-annotated from the
+      // API.resolveAndBindTargetOrg preflight — no local recomputation.
       var orgs = fetches.organizations || [];
-      for (var o = 0; o < orgs.length; o++) {
-        orgs[o].tokenStatus = pluginOrgSet[orgs[o].id] ? 'valid' : 'no-token';
-      }
       dashState.organizations = orgs;
-      dashState.defaultOrgId = (fetches.prefs && fetches.prefs.defaultOrganizationId) || null;
-      // Use data.organization_id from push data if available, else default org, else first org
-      if (data && data.organization_id) {
-        dashState.activeOrgId = data.organization_id;
-      } else if (dashState.defaultOrgId) {
-        dashState.activeOrgId = dashState.defaultOrgId;
+      dashState.defaultOrgId = fetches.defaultOrgId || null;
+      // Mirror the bound token's org onto local state. On fresh mount the
+      // preflight already switched (if needed) to default or pushed; here we
+      // just reflect that choice, falling back to the first org if nothing
+      // resolved.
+      var boundOrgId = API.getActiveOrgId();
+      if (boundOrgId) {
+        dashState.activeOrgId = boundOrgId;
       } else if (orgs.length > 0) {
         dashState.activeOrgId = orgs[0].id;
       }
