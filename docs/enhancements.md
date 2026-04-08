@@ -1,8 +1,8 @@
 # DecidR Plugin - Technical Debt & Enhancements Log
 
-**Last Updated:** 2026-04-07
+**Last Updated:** 2026-04-08
 **Total Active Issues:** 3
-**Resolved This Month:** 11
+**Resolved This Month:** 12
 
 ---
 
@@ -38,6 +38,14 @@
 ---
 
 ## Resolved Issues
+
+#### [RESOLVED HIGH-003] Silent autoInit token-mismatch masked default-org on fresh mount
+- **Resolved:** 2026-04-08 (commit 4f53a8c)
+- **Description:** `API.autoInit` caught Tauri "No stored token" rejections and silently resolved with an empty token, even when the caller had explicitly passed a target `orgId`. This made the downstream 401 cascade look like a generic auth failure and made the new default-org preference impossible to honor on fresh mount — data fetches completed against the wrong org's token before the renderer could switch. Fixed by propagating the rejection when `targetedOrgId` is set, and adding a two-phase initial fetch in dashboard + graph renderers (phase 1: orgs/tokens/preferences + `switchOrg` if needed; phase 2: bulk data `Promise.all`). Legacy `window.__decidrToken` fallback preserved for non-targeted boots.
+
+#### [RESOLVED LOW-007] Stray `;` in theme.js killed picker CSS mid-assignment
+- **Resolved:** 2026-04-08 (commit 4f53a8c)
+- **Description:** A stray semicolon inside the `CSS += '...';` chain in `01-theme.js` terminated the assignment mid-block, turning the remainder of the picker CSS into dead expression statements. Prior builds were shipping the picker with roughly the lower half of its styles missing — the bug was latent because the affected rules overlapped with fallback defaults. Fixed during the picker redesign.
 
 #### [RESOLVED HIGH-001] MCP URL hardcoded to localhost in manifest.json
 - **Resolved:** 2026-04-06 (already at production URL)
@@ -91,3 +99,4 @@
 | 2026-04-06 | 8c7428a | 88/100 | Good |
 | 2026-04-06 | 304867c | 90/100 | Excellent |
 | 2026-04-07 | 8abb974 | 84/100 | Good |
+| 2026-04-08 | 4f53a8c | pending | Pending solid-reviewer |

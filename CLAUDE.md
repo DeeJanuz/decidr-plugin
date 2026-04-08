@@ -57,6 +57,31 @@ node -c renderers/shared/03-slideouts.js   # Syntax check slideout renderers
 - **DIP**: Renderers depend on `__decidrUI` and `__decidrAPI`. Components never depend on renderers.
 - **Navigation**: All clickable entities use `data-entity-type` and `data-entity-id` attributes.
 
+## Org Picker & Default-Org Contract
+
+- `UI.orgPicker(orgs, activeOrgId, opts)` renders a glassmorphism pill trigger + dropdown. `opts.defaultOrgId` drives the star-button state and "Default" badge.
+- Star = persistent user-level default (backend pref via `/api/me/preferences`). Row click = switch active org for the current session. The two concerns are independent: a user can star an org whose plugin token is not yet connected (shows a "Connect" badge).
+- Renderers must wire two handlers: the row-click option button calls `api.switchOrg`, the star button calls `API.setDefaultOrg(id)` / `API.clearDefaultOrg()` and re-renders with the updated `defaultOrgId`.
+- Row markup is sibling buttons (option + star), not nested buttons. Do not wrap the star inside the option button.
+- Dropdown is right-anchored (`right: 0; left: auto`) because header uses `justify-content: space-between`.
+
+## API Client — Auth & Preferences
+
+- `API.autoInit({ orgId })` bootstraps the token for a specific plugin org. If Tauri has no stored token for that targeted `orgId`, the promise REJECTS — do not swallow it. The caller is expected to surface an auth prompt.
+- Non-targeted `autoInit` (no `orgId`) still falls back to `window.__decidrToken` for test harnesses / initial boots.
+- `API.getUserPreferences()` → `GET /me/preferences` (returns `{ defaultOrganizationId }`).
+- `API.setDefaultOrg(orgId)` → `PATCH /me/preferences` with `{ defaultOrganizationId: orgId }`.
+- `API.clearDefaultOrg()` → `PATCH /me/preferences` with `{ defaultOrganizationId: null }`.
+
+## Dashboard / Graph Two-Phase Init
+
+Renderers that boot with a default-org preference MUST use two-phase initial fetch:
+
+1. **Phase 1 (preflight)**: `Promise.all` of `listOrganizations`, plugin-org tokens, and `getUserPreferences`. Resolve target org with precedence `pushed organization_id > default-with-token > current`. If target differs from currently-bound token, call `api.switchOrg(targetId)` and await it.
+2. **Phase 2 (data)**: Run the big data `Promise.all` against the correct token.
+
+For graph, preflight lives OUTSIDE `_fetchGraphData` so refetches triggered by explicit user switches don't loop back to the default.
+
 ## Manifest Rules
 
 - Every MCP tool must map to a renderer in the `renderers` object.
