@@ -1133,7 +1133,7 @@
 
     // ── Re-fetch and re-render helper ──────────────────────────
     function _refetchAndRerender() {
-      _fetchGraphData().then(function(gd) {
+      return _fetchGraphData().then(function(gd) {
         graphData = gd;
         renderGraphWithData(gd);
       });
@@ -1555,6 +1555,30 @@
       var orgToggle = container.querySelector('#decidr-org-picker-toggle');
       var orgMenu = container.querySelector('#decidr-org-picker-menu');
       if (orgToggle && orgMenu) {
+        function openOrgSettings(orgId) {
+          UI.SlideOut.open('organization-settings', orgId, {
+            onMutate: function() { _refetchAndRerender(); }
+          });
+        }
+
+        function showOrgAuthPrompt(orgId) {
+          container.innerHTML = '<div style="padding: var(--space-6); text-align: center;">'
+            + '<p style="color: var(--text-secondary); margin-bottom: var(--space-4);">'
+            + 'No authentication for this organization.</p>'
+            + '<button id="decidr-org-auth-btn" style="padding: 8px 16px; border: 1px solid var(--accent-primary);'
+            + ' border-radius: var(--border-radius-md); background: var(--accent-primary); color: white;'
+            + ' cursor: pointer; font-family: var(--font-sans);">Authenticate</button>'
+            + '</div>';
+          var authBtn = container.querySelector('#decidr-org-auth-btn');
+          if (authBtn) {
+            authBtn.addEventListener('click', function() {
+              if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
+                window.__TAURI__.core.invoke('start_plugin_auth', { pluginName: 'decidr', orgId: orgId });
+              }
+            });
+          }
+        }
+
         orgToggle.addEventListener('click', function(e) {
           e.stopPropagation();
           orgMenu.classList.toggle('open');
@@ -1578,6 +1602,31 @@
             });
             return;
           }
+          var settingsBtn = e.target.closest('[data-action="open-settings"]');
+          if (settingsBtn) {
+            e.stopPropagation();
+            e.preventDefault();
+            var settingsOrgId = settingsBtn.getAttribute('data-org-id');
+            orgMenu.classList.remove('open');
+            if (settingsOrgId === graphState.activeOrgId) {
+              openOrgSettings(settingsOrgId);
+              return;
+            }
+            graphState.activeOrgId = settingsOrgId;
+            container.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;'
+              + 'height:100%;min-height:400px;">'
+              + UI.loadingSpinner('Switching organization...')
+              + '</div>';
+            API.switchOrg(settingsOrgId).then(function() {
+              return _refetchAndRerender();
+            }).then(function() {
+              openOrgSettings(settingsOrgId);
+            }).catch(function(err) {
+              console.error('[decidr] Graph org switch failed:', err);
+              showOrgAuthPrompt(settingsOrgId);
+            });
+            return;
+          }
           var btn = e.target.closest('[data-org-id]');
           if (!btn) return;
           var orgId = btn.getAttribute('data-org-id');
@@ -1595,21 +1644,7 @@
             _refetchAndRerender();
           }).catch(function(err) {
             console.error('[decidr] Graph org switch failed:', err);
-            container.innerHTML = '<div style="padding: var(--space-6); text-align: center;">'
-              + '<p style="color: var(--text-secondary); margin-bottom: var(--space-4);">'
-              + 'No authentication for this organization.</p>'
-              + '<button id="decidr-org-auth-btn" style="padding: 8px 16px; border: 1px solid var(--accent-primary);'
-              + ' border-radius: var(--border-radius-md); background: var(--accent-primary); color: white;'
-              + ' cursor: pointer; font-family: var(--font-sans);">Authenticate</button>'
-              + '</div>';
-            var authBtn = container.querySelector('#decidr-org-auth-btn');
-            if (authBtn) {
-              authBtn.addEventListener('click', function() {
-                if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
-                  window.__TAURI__.core.invoke('start_plugin_auth', { pluginName: 'decidr', orgId: orgId });
-                }
-              });
-            }
+            showOrgAuthPrompt(orgId);
           });
         });
       }

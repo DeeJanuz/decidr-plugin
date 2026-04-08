@@ -503,6 +503,34 @@
       return api.get('/auth/members');
     },
 
+    getOrganizationMemberSettings: function(orgId) {
+      return api.get('/organizations/' + orgId + '/members');
+    },
+
+    inviteOrgMember: function(orgId, data) {
+      var payload = {
+        email: data.email,
+        role: data.role || 'MEMBER',
+        targetProduct: data.targetProduct || 'DECIDR'
+      };
+      return api.post('/organizations/' + orgId + '/members', payload);
+    },
+
+    updateOrgMemberRole: function(orgId, userId, role) {
+      return api.patch('/organizations/' + orgId + '/members', {
+        userId: userId,
+        role: role
+      });
+    },
+
+    removeOrgMember: function(orgId, userId) {
+      return api.delete('/organizations/' + orgId + '/members?userId=' + encodeURIComponent(userId));
+    },
+
+    cancelOrgInvitation: function(orgId, invitationId) {
+      return api.delete('/organizations/' + orgId + '/members?invitationId=' + encodeURIComponent(invitationId));
+    },
+
     listOrganizations: function() {
       return api.get('/organizations').then(function(resp) {
         if (resp && Array.isArray(resp.data)) return resp.data;
@@ -657,6 +685,7 @@
         decision: api.getDecision,
         task: api.getTask,
         bridge: api.getBridge,
+        'organization-settings': api.getOrganizationMemberSettings,
         issue: function(id) { return api.getIssue(id); },
         pull_request: function(id) { return api.getPR(id); },
         repo: function(id) { return api.getRepo(id); }

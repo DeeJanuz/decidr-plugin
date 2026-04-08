@@ -252,6 +252,7 @@
   var ICON_CALENDAR = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="11" rx="1.5"/><line x1="2" y1="7" x2="14" y2="7"/><line x1="5" y1="1.5" x2="5" y2="4.5"/><line x1="11" y1="1.5" x2="11" y2="4.5"/></svg>';
   var ICON_BUILDING = '<svg class="decidr-org-picker-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21V7l9-4 9 4v14"/><path d="M9 21V12h6v9"/></svg>';
   var ICON_CHEVRON_SMALL = '<svg class="decidr-org-picker-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5L6 7.5L9 4.5"/></svg>';
+  var ICON_SETTINGS = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"></circle><path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a1 1 0 0 1 0 1.4l-1.2 1.2a1 1 0 0 1-1.4 0l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a1 1 0 0 1-1 1h-1.7a1 1 0 0 1-1-1v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a1 1 0 0 1-1.4 0l-1.2-1.2a1 1 0 0 1 0-1.4l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a1 1 0 0 1-1-1v-1.7a1 1 0 0 1 1-1h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a1 1 0 0 1 0-1.4l1.2-1.2a1 1 0 0 1 1.4 0l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9V4a1 1 0 0 1 1-1h1.7a1 1 0 0 1 1 1v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a1 1 0 0 1 1.4 0l1.2 1.2a1 1 0 0 1 0 1.4l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6h.2a1 1 0 0 1 1 1v1.7a1 1 0 0 1-1 1h-.2a1 1 0 0 0-.9.6z"></path></svg>';
   var ICON_STAR_FILLED = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>';
   var ICON_STAR_OUTLINE = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>';
   var ICON_CHECK_BOLD = '<svg class="decidr-org-picker-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>';
@@ -1157,6 +1158,7 @@
       else if (type === 'task') fetchFn = API.getTask;
       else if (type === 'bridge') fetchFn = API.getBridge;
       else if (type === 'initiative') fetchFn = API.getInitiative;
+      else if (type === 'organization-settings') fetchFn = API.getOrganizationMemberSettings;
       else if (type === 'issue') fetchFn = function(id) { return API.getIssue(id); };
       else if (type === 'pull_request') fetchFn = function(id) { return API.getPR(id); };
       else if (type === 'repo') fetchFn = function(id) { return API.getRepo(id); };
@@ -1200,7 +1202,8 @@
       var typeLabels = {
         project: 'Project', decision: 'Decision',
         task: 'Task', bridge: 'Bridge', initiative: 'Initiative',
-        'project-timeline': 'Timeline', 'decision-timeline': 'Timeline'
+        'project-timeline': 'Timeline', 'decision-timeline': 'Timeline',
+        'organization-settings': 'Organization'
       };
 
       var headerHtml = '<div class="decidr-so-header-row">'
@@ -1246,6 +1249,9 @@
       if (entry.data._error) return 'Error';
       if (entry.type === 'project-timeline') return 'Project Timeline';
       if (entry.type === 'decision-timeline') return 'Decision Timeline';
+      if (entry.type === 'organization-settings' && entry.data.organization) {
+        return entry.data.organization.name || entry.id || '';
+      }
       var d = entry.data;
       return d.name || d.title || d.id || '';
     },
@@ -1256,6 +1262,7 @@
       task: function(data) { return UI.slideOutTask(data); },
       bridge: function(data) { return UI.slideOutBridge(data); },
       initiative: function(data) { return UI.slideOutInitiative(data); },
+      'organization-settings': function(data) { return UI.slideOutOrganizationSettings(data); },
       'project-timeline': function(data) { return UI.slideOutTimeline(data, 'project'); },
       'decision-timeline': function(data) { return UI.slideOutTimeline(data, 'decision'); },
       issue: function(data) { return UI.slideOutIssue(data); },
@@ -1693,6 +1700,8 @@
       docFormTab: 'search'
     },
 
+    _organizationSettingsPanelState: {},
+
     // ─── Detail Renderers (delegated to UI.slideOutX functions) ─────
 
     back: function() {
@@ -1845,6 +1854,11 @@
       // --- Initiative events ---
       if (top.type === 'initiative') {
         UI.SlideOut._wireInitiativeEvents(panel, top.id, top.data);
+      }
+
+      // --- Organization settings events ---
+      if (top.type === 'organization-settings') {
+        UI.SlideOut._wireOrganizationSettingsEvents(panel, top.id, top.data);
       }
 
       // --- Timeline filter chips (generic, all entity types) ---
@@ -2416,6 +2430,97 @@
       UI.SlideOut._wireDocumentEvents(panel, 'INITIATIVE', id, state);
     },
 
+    _wireOrganizationSettingsEvents: function(panel, id, data) {
+      var API = window.__decidrAPI;
+      if (!API) return;
+
+      var inviteBtn = panel.querySelector('#decidr-so-btn-send-org-invite');
+      if (inviteBtn) {
+        inviteBtn.onclick = function() {
+          var emailInput = panel.querySelector('#decidr-so-input-org-invite-email');
+          var roleInput = panel.querySelector('#decidr-so-input-org-invite-role');
+          var email = emailInput ? emailInput.value.trim() : '';
+          var role = roleInput ? roleInput.value : 'MEMBER';
+          if (!email) return;
+          if (UI.SlideOut._guardBusy()) return;
+          API.inviteOrgMember(id, {
+            email: email,
+            role: role,
+            targetProduct: 'DECIDR'
+          }).then(function() {
+            if (emailInput) emailInput.value = '';
+            if (roleInput) roleInput.value = 'MEMBER';
+            UI.SlideOut._refetchAndRender();
+          }).catch(function(err) {
+            UI.SlideOut._busy = false;
+            console.error('[decidr] Invite member failed:', err);
+          });
+        };
+      }
+
+      var roleSelects = panel.querySelectorAll('[data-member-role-user-id]');
+      for (var i = 0; i < roleSelects.length; i++) {
+        (function(select) {
+          select.onchange = function() {
+            if (select.disabled) return;
+            var userId = select.getAttribute('data-member-role-user-id');
+            var currentRole = select.getAttribute('data-current-role') || '';
+            var nextRole = select.value;
+            if (!userId || !nextRole || nextRole === currentRole) return;
+            if (UI.SlideOut._guardBusy()) {
+              select.value = currentRole;
+              return;
+            }
+            API.updateOrgMemberRole(id, userId, nextRole).then(function() {
+              UI.SlideOut._refetchAndRender();
+            }).catch(function(err) {
+              UI.SlideOut._busy = false;
+              select.value = currentRole;
+              console.error('[decidr] Update member role failed:', err);
+            });
+          };
+        })(roleSelects[i]);
+      }
+
+      var removeButtons = panel.querySelectorAll('[data-remove-member-user-id]');
+      for (var r = 0; r < removeButtons.length; r++) {
+        (function(btn) {
+          btn.onclick = function() {
+            if (btn.disabled) return;
+            var userId = btn.getAttribute('data-remove-member-user-id');
+            if (!userId) return;
+            if (!confirm('Remove this member from the organization?')) return;
+            if (UI.SlideOut._guardBusy()) return;
+            API.removeOrgMember(id, userId).then(function() {
+              UI.SlideOut._refetchAndRender();
+            }).catch(function(err) {
+              UI.SlideOut._busy = false;
+              console.error('[decidr] Remove member failed:', err);
+            });
+          };
+        })(removeButtons[r]);
+      }
+
+      var cancelButtons = panel.querySelectorAll('[data-cancel-invitation-id]');
+      for (var c = 0; c < cancelButtons.length; c++) {
+        (function(btn) {
+          btn.onclick = function() {
+            if (btn.disabled) return;
+            var invitationId = btn.getAttribute('data-cancel-invitation-id');
+            if (!invitationId) return;
+            if (!confirm('Cancel this pending invitation?')) return;
+            if (UI.SlideOut._guardBusy()) return;
+            API.cancelOrgInvitation(id, invitationId).then(function() {
+              UI.SlideOut._refetchAndRender();
+            }).catch(function(err) {
+              UI.SlideOut._busy = false;
+              console.error('[decidr] Cancel invitation failed:', err);
+            });
+          };
+        })(cancelButtons[c]);
+      }
+    },
+
     // ─── Shared Document Linking Section ─────────────────────────────
 
     _renderDocumentSection: function(entityType, entityId, documents, state) {
@@ -2751,6 +2856,7 @@
       var org = orgs[j];
       var isActive = org.id === activeOrgId;
       var isDefault = org.id === defaultOrgId;
+      var canManageOrg = org.role && String(org.role).toUpperCase() !== 'MEMBER';
       var tokenStatus = org.tokenStatus || 'no-token';
       var safeName = UI.escapeHtml(org.name || org.id);
       var safeId = UI.escapeHtml(org.id);
@@ -2761,6 +2867,11 @@
       var safeStarTitle = UI.escapeHtml(starTitle);
 
       html += '<div class="' + rowClasses + '" role="option" aria-selected="' + (isActive ? 'true' : 'false') + '">'
+        + (canManageOrg
+            ? '<button class="decidr-org-picker-settings" data-org-id="' + safeId + '" data-action="open-settings" aria-label="Open organization settings" title="Organization settings">'
+              + ICON_SETTINGS
+              + '</button>'
+            : '<span class="decidr-org-picker-settings-spacer" aria-hidden="true"></span>')
         + '<button class="decidr-org-picker-option" data-org-id="' + safeId + '" title="' + safeName + '">'
         + '<span class="decidr-org-picker-check-slot">' + (isActive ? ICON_CHECK_BOLD : '') + '</span>'
         + '<span class="decidr-org-picker-name">' + safeName + '</span>'

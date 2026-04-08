@@ -28,7 +28,7 @@
       loaded: false,
       error: null,
       // New section state
-      activeDecisionFilters: { PROPOSED: true, IN_PROGRESS: true, APPROVED: true },
+      activeDecisionFilters: { DRAFT: true, PROPOSED: true, IN_PROGRESS: true, APPROVED: true, REJECTED: true },
       nextStepsExpanded: false,
       nextStepsGroupExpanded: {},
       decisionsExpanded: false,
@@ -160,7 +160,7 @@
         initiatives: null, projects: null, decisions: null, tasks: null,
         bridges: null, issues: null, prs: null, actionItems: null, timeline: null
       };
-      Promise.all([
+      return Promise.all([
         API.listInitiatives({ take: 200 }).then(function(resp) { rf.initiatives = unwrapList(resp); }),
         API.listProjects({ take: 200 }).then(function(resp) { rf.projects = unwrapList(resp); }),
         API.listDecisions({ take: 200 }).then(function(resp) { rf.decisions = unwrapList(resp); }),
@@ -527,7 +527,7 @@
         if (s) statusSet[s] = true;
       }
 
-      var STATUS_ORDER = ['PROPOSED', 'IN_PROGRESS', 'APPROVED', 'IMPLEMENTED', 'REJECTED', 'ARCHIVED'];
+      var STATUS_ORDER = ['DRAFT', 'PROPOSED', 'IN_PROGRESS', 'APPROVED', 'IMPLEMENTED', 'REJECTED', 'ARCHIVED'];
       var statuses = [];
       for (var j = 0; j < STATUS_ORDER.length; j++) {
         if (statusSet[STATUS_ORDER[j]]) statuses.push(STATUS_ORDER[j]);
@@ -730,6 +730,30 @@
       var menu = container.querySelector('#decidr-org-picker-menu');
       if (!toggle || !menu) return;
 
+      function openOrgSettings(orgId) {
+        UI.SlideOut.open('organization-settings', orgId, {
+          onMutate: function() { refreshDashboard(); }
+        });
+      }
+
+      function showOrgAuthPrompt(orgId) {
+        container.innerHTML = '<div style="padding: var(--space-6); text-align: center;">'
+          + '<p style="color: var(--text-secondary); margin-bottom: var(--space-4);">'
+          + 'No authentication for this organization.</p>'
+          + '<button id="decidr-org-auth-btn" style="padding: 8px 16px; border: 1px solid var(--accent-primary);'
+          + ' border-radius: var(--border-radius-md); background: var(--accent-primary); color: white;'
+          + ' cursor: pointer; font-family: var(--font-sans);">Authenticate</button>'
+          + '</div>';
+        var authBtn = container.querySelector('#decidr-org-auth-btn');
+        if (authBtn) {
+          authBtn.addEventListener('click', function() {
+            if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
+              window.__TAURI__.core.invoke('start_plugin_auth', { pluginName: 'decidr', orgId: orgId });
+            }
+          });
+        }
+      }
+
       toggle.addEventListener('click', function(e) {
         e.stopPropagation();
         menu.classList.toggle('open');
@@ -753,6 +777,28 @@
           });
           return;
         }
+        var settingsBtn = e.target.closest('[data-action="open-settings"]');
+        if (settingsBtn) {
+          e.stopPropagation();
+          e.preventDefault();
+          var settingsOrgId = settingsBtn.getAttribute('data-org-id');
+          menu.classList.remove('open');
+          if (settingsOrgId === dashState.activeOrgId) {
+            openOrgSettings(settingsOrgId);
+            return;
+          }
+          dashState.activeOrgId = settingsOrgId;
+          container.innerHTML = UI.loadingSpinner('Switching organization...');
+          API.switchOrg(settingsOrgId).then(function() {
+            return refreshDashboard();
+          }).then(function() {
+            openOrgSettings(settingsOrgId);
+          }).catch(function(err) {
+            console.error('[decidr] Org switch failed:', err);
+            showOrgAuthPrompt(settingsOrgId);
+          });
+          return;
+        }
         var btn = e.target.closest('[data-org-id]');
         if (!btn) return;
         var orgId = btn.getAttribute('data-org-id');
@@ -767,21 +813,7 @@
           refreshDashboard();
         }).catch(function(err) {
           console.error('[decidr] Org switch failed:', err);
-          container.innerHTML = '<div style="padding: var(--space-6); text-align: center;">'
-            + '<p style="color: var(--text-secondary); margin-bottom: var(--space-4);">'
-            + 'No authentication for this organization.</p>'
-            + '<button id="decidr-org-auth-btn" style="padding: 8px 16px; border: 1px solid var(--accent-primary);'
-            + ' border-radius: var(--border-radius-md); background: var(--accent-primary); color: white;'
-            + ' cursor: pointer; font-family: var(--font-sans);">Authenticate</button>'
-            + '</div>';
-          var authBtn = container.querySelector('#decidr-org-auth-btn');
-          if (authBtn) {
-            authBtn.addEventListener('click', function() {
-              if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
-                window.__TAURI__.core.invoke('start_plugin_auth', { pluginName: 'decidr', orgId: orgId });
-              }
-            });
-          }
+          showOrgAuthPrompt(orgId);
         });
       });
     }

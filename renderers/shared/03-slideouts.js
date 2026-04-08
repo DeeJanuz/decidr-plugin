@@ -204,6 +204,117 @@
     return html;
   };
 
+  UI.slideOutOrganizationSettings = function(payload) {
+    var organization = payload.organization || {};
+    var permissions = payload.permissions || {};
+    var members = payload.members || [];
+    var invitations = payload.invitations || [];
+    var currentUserRole = permissions.currentUserRole || 'MEMBER';
+    var inviteRoleOptions = currentUserRole === 'OWNER'
+      ? ['OWNER', 'ADMIN', 'MEMBER']
+      : ['ADMIN', 'MEMBER'];
+    var html = '<div class="decidr-so-detail decidr-so-org-settings">';
+
+    var metaItems = [
+      { html: '<strong>' + members.length + '</strong> members' },
+      { html: '<strong>' + invitations.length + '</strong> pending invites' },
+      { html: '<strong>Your role:</strong> ' + UI.escapeHtml(currentUserRole) }
+    ];
+    if (organization.slug) {
+      metaItems.push({ html: '<strong>Slug:</strong> ' + UI.escapeHtml(organization.slug) });
+    }
+    html += UI.SlideOut._renderMeta(metaItems);
+
+    html += '<div class="decidr-so-section">';
+    html += UI.SlideOut._renderSectionHeader('Invite Member');
+    if (permissions.canInviteMembers) {
+      html += '<div class="decidr-so-org-invite-form">';
+      html += '<input class="decidr-so-org-input" type="email" id="decidr-so-input-org-invite-email" placeholder="name@company.com">';
+      html += '<select class="decidr-so-org-select" id="decidr-so-input-org-invite-role">';
+      for (var ir = 0; ir < inviteRoleOptions.length; ir++) {
+        var inviteRole = inviteRoleOptions[ir];
+        html += '<option value="' + inviteRole + '"' + (inviteRole === 'MEMBER' ? ' selected' : '') + '>'
+          + UI.escapeHtml(inviteRole) + '</option>';
+      }
+      html += '</select>';
+      html += '<button class="decidr-so-btn decidr-so-btn-primary" id="decidr-so-btn-send-org-invite">Send Invite</button>';
+      html += '</div>';
+      html += '<div class="decidr-so-muted-note">Invites route through shared Ludflow auth, then guide people into DecidR setup.</div>';
+    } else {
+      html += '<div class="decidr-so-empty-hint">Only organization admins can send invitations.</div>';
+    }
+    html += '</div>';
+
+    html += '<div class="decidr-so-section">';
+    html += UI.SlideOut._renderSectionHeader('Members', members.length);
+    if (!members.length) {
+      html += '<div class="decidr-so-empty-hint">No members found.</div>';
+    } else {
+      for (var m = 0; m < members.length; m++) {
+        var member = members[m];
+        var canEditRole = permissions.canChangeRoles && (currentUserRole === 'OWNER' || member.role !== 'OWNER');
+        var canRemoveMember = permissions.canRemoveMembers && (currentUserRole === 'OWNER' || member.role !== 'OWNER');
+        var memberRoleOptions = currentUserRole === 'OWNER'
+          ? ['OWNER', 'ADMIN', 'MEMBER']
+          : ['ADMIN', 'MEMBER'];
+        if (memberRoleOptions.indexOf(member.role) === -1) {
+          memberRoleOptions.unshift(member.role);
+        }
+
+        html += '<div class="decidr-so-org-row">';
+        html += '<div class="decidr-so-org-person">';
+        html += UI.avatar(member, 'sm');
+        html += '<div class="decidr-so-org-person-copy">';
+        html += '<div class="decidr-so-org-person-name">' + UI.escapeHtml(member.name || member.email || 'Unknown Member') + '</div>';
+        html += '<div class="decidr-so-org-person-meta">' + UI.escapeHtml(member.email || '') + '</div>';
+        html += '</div>';
+        html += '</div>';
+        html += '<div class="decidr-so-org-actions">';
+        html += '<select class="decidr-so-org-select" data-member-role-user-id="' + UI.escapeHtml(member.userId || member.id) + '" data-current-role="' + UI.escapeHtml(member.role) + '"' + (canEditRole ? '' : ' disabled') + '>';
+        for (var mr = 0; mr < memberRoleOptions.length; mr++) {
+          var memberRole = memberRoleOptions[mr];
+          html += '<option value="' + memberRole + '"' + (memberRole === member.role ? ' selected' : '') + '>'
+            + UI.escapeHtml(memberRole) + '</option>';
+        }
+        html += '</select>';
+        html += '<button class="decidr-so-btn decidr-so-btn-danger decidr-so-btn-sm" data-remove-member-user-id="' + UI.escapeHtml(member.userId || member.id) + '"' + (canRemoveMember ? '' : ' disabled') + '>Remove</button>';
+        html += '</div>';
+        html += '</div>';
+      }
+    }
+    html += '</div>';
+
+    html += '<div class="decidr-so-section">';
+    html += UI.SlideOut._renderSectionHeader('Pending Invites', invitations.length);
+    if (!invitations.length) {
+      html += '<div class="decidr-so-empty-hint">No pending invitations.</div>';
+    } else {
+      for (var i = 0; i < invitations.length; i++) {
+        var invitation = invitations[i];
+        var canCancelInvite = permissions.canInviteMembers && (currentUserRole === 'OWNER' || invitation.role !== 'OWNER');
+        html += '<div class="decidr-so-org-row">';
+        html += '<div class="decidr-so-org-person">';
+        html += '<div class="decidr-so-org-person-copy">';
+        html += '<div class="decidr-so-org-person-name">' + UI.escapeHtml(invitation.email) + '</div>';
+        html += '<div class="decidr-so-org-person-meta">Role ' + UI.escapeHtml(invitation.role)
+          + ' · ' + UI.escapeHtml(invitation.targetProduct || 'DECIDR')
+          + ' · Expires ' + UI.escapeHtml(UI.formatDate(invitation.expiresAt))
+          + '</div>';
+        html += '</div>';
+        html += '</div>';
+        html += '<div class="decidr-so-org-actions">';
+        html += '<span class="decidr-so-org-inline-note">Invited by ' + UI.escapeHtml(invitation.invitedByName || 'Unknown') + '</span>';
+        html += '<button class="decidr-so-btn decidr-so-btn-sm" data-cancel-invitation-id="' + UI.escapeHtml(invitation.id) + '"' + (canCancelInvite ? '' : ' disabled') + '>Cancel</button>';
+        html += '</div>';
+        html += '</div>';
+      }
+    }
+    html += '</div>';
+
+    html += '</div>';
+    return html;
+  };
+
   /**
    * Render project slide-out detail panel.
    * @param {Object} project - Project data with _enriched sub-objects
