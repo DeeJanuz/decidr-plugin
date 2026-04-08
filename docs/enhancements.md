@@ -1,12 +1,30 @@
 # DecidR Plugin - Technical Debt & Enhancements Log
 
-**Last Updated:** 2026-04-06
-**Total Active Issues:** 1
+**Last Updated:** 2026-04-07
+**Total Active Issues:** 3
 **Resolved This Month:** 11
 
 ---
 
 ## Active Issues
+
+### [LOW-005] HTML injection sink in github-auth status element
+- **Severity:** Low
+- **Introduced:** 2026-04-07 (commit 8abb974)
+- **File:** `renderers/github-auth.js` (line ~90, `showStatus`; lines ~97-148, `describeError`)
+- **Description:** `showStatus` was changed from `statusEl.textContent = message` to `statusEl.innerHTML = message` so `describeError` can emit `<strong>` and `<br>` for richer formatting. Inputs in this commit are safe (hard-coded literals plus `err.bodyMessage`/`err.message` from the DecidR API), but `detail` is interpolated into the 400/422 and 5xx templates without escaping. If a future error path lets attacker-influenced text reach `bodyMessage`, the renderer would render it as HTML.
+- **SOLID Impact:** None directly; security/encapsulation concern.
+- **Suggested Fix:** Either (a) escape `detail` with a small `escapeHtml()` helper before interpolation, or (b) restructure `describeError` to return `{ variant, prefixHtml, detailText }` and have `showStatus` build the DOM with `textContent` for the detail portion and `innerHTML` only for the trusted prefix.
+- **Priority:** Low — current inputs are trusted; fix opportunistically when touching this file.
+
+### [LOW-006] Transitional dual API for token check (`hasToken()` vs `_hasToken`)
+- **Severity:** Low
+- **Introduced:** 2026-04-07 (commit 8abb974)
+- **File:** `renderers/shared/00-api-client.js` (lines 127-129 public method, lines 592-595 legacy defineProperty), `renderers/github-auth.js` (line ~158 fallback shim)
+- **Description:** A new public `API.hasToken()` was added as the preferred way to check token presence. The old non-enumerable `_hasToken` getter is kept for backward compatibility, and the github-auth renderer uses a `typeof` shim to prefer the new method but fall back to the legacy property. This is a transitional state, not a permanent design.
+- **SOLID Impact:** Mild ISP — there are now two ways to express the same query, slightly fattening the API surface.
+- **Suggested Fix:** Once the API client bundle ships everywhere, drop the `_hasToken` `defineProperty` block in 00-api-client.js and the `typeof API.hasToken === 'function'` shim in github-auth.js.
+- **Priority:** Low — purely cleanup, no behavioral risk.
 
 ### [LOW-004] Cross-file private var leakage via UI._* aliases
 - **Severity:** Low
@@ -72,3 +90,4 @@
 | 2026-04-06 | 05ad0fa | 72/100 | Good |
 | 2026-04-06 | 8c7428a | 88/100 | Good |
 | 2026-04-06 | 304867c | 90/100 | Excellent |
+| 2026-04-07 | 8abb974 | 84/100 | Good |

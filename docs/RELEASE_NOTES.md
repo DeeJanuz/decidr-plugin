@@ -1,5 +1,9 @@
 # Unreleased
 
+# 0.1.8
+
+- **fix**: Distinguish DecidR auth failures from PAT rejection in `decidr_github_auth` renderer. Previously the PAT form swallowed all non-2xx responses as a generic "Failed to connect" error, so users with an expired or missing Ludflow OAuth session thought their PAT was being rejected when the request never reached the PAT check. The shared API client (`renderers/shared/00-api-client.js`) now reads the response body in `_handleResponse` and throws a structured `Error` with `.status`, `.statusText`, `.body`, `.bodyText`, and `.bodyMessage` so callers can branch on status code and surface the server's message. A new public `API.hasToken()` method lets renderers preflight without reaching into the non-enumerable `_hasToken` getter. The `github-auth` renderer now preflights the DecidR session before POSTing — if there is no token it shows an amber warning telling the user to complete plugin sign-in instead of submitting and getting a misleading 401. `describeError` maps 401/403/400/422/5xx/network into distinct, actionable messages (401/403 use a new amber `warning` variant that explicitly clarifies "PAT was not rejected"). Help text under the PAT field now states the user must be signed in to DecidR in the companion first for the PAT to be saved.
+
 # 0.1.6
 
 - **fix**: GitHub auth renderer filename now matches the companion's renderer-name → filename resolution rule. The companion converts ALL underscores in a renderer name to hyphens (e.g. `decidr_github_auth` → `decidr-github-auth.js`), but `build.sh` was producing `decidr-github_auth.js`, leaving the second underscore intact. The companion could not locate the renderer, so the `decidr_github_auth` content type appeared as "no renderer for content type" on stricter platforms (Windows in particular). All other renderers were unaffected because their names had no internal underscores.
