@@ -531,6 +531,13 @@
       return api.delete('/organizations/' + orgId + '/members?invitationId=' + encodeURIComponent(invitationId));
     },
 
+    resendOrgInvitation: function(orgId, invitationId) {
+      return api.post('/organizations/' + orgId + '/members', {
+        action: 'resend_invite',
+        invitationId: invitationId
+      });
+    },
+
     listOrganizations: function() {
       return api.get('/organizations').then(function(resp) {
         if (resp && Array.isArray(resp.data)) return resp.data;

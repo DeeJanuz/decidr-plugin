@@ -2458,6 +2458,24 @@
         };
       }
 
+      var resendButtons = panel.querySelectorAll('[data-resend-invitation-id]');
+      for (var ri = 0; ri < resendButtons.length; ri++) {
+        (function(btn) {
+          btn.onclick = function() {
+            if (btn.disabled) return;
+            var invitationId = btn.getAttribute('data-resend-invitation-id');
+            if (!invitationId) return;
+            if (UI.SlideOut._guardBusy()) return;
+            API.resendOrgInvitation(id, invitationId).then(function() {
+              UI.SlideOut._refetchAndRender();
+            }).catch(function(err) {
+              UI.SlideOut._busy = false;
+              console.error('[decidr] Resend invitation failed:', err);
+            });
+          };
+        })(resendButtons[ri]);
+      }
+
       var roleSelects = panel.querySelectorAll('[data-member-role-user-id]');
       for (var i = 0; i < roleSelects.length; i++) {
         (function(select) {

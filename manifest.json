@@ -1,6 +1,6 @@
 {
   "name": "decidr",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "prompt_definitions": [
     {
       "name": "initiative_planning",
@@ -51,7 +51,7 @@
     "Before taking any action on a GitHub issue or PR linked to DecidR (fix, create_pr, review_pr, merge_pr, or any reconciliation), fetch the github_pr_lifecycle prompt and follow its coder or reviewer path. DecidR does not yet receive webhooks from GitHub, so you must reconcile DecidR state to match GitHub before and after every lifecycle step. Never add DecidR-side enforcement for review or merge policy \u2014 that lives in GitHub.",
     "When any GitHub tool fails with 'GitHub connection not found' or the user asks to connect GitHub, push the decidr_github_auth renderer \u2014 do not call connect_github with a PAT collected in chat. Before using GitHub tools for the first time in a session, verify with list_repos; if empty, the likely cause is a missing connection or no linked repos \u2014 push decidr_github_auth first, then call link_repo."
   ],
-  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.11/decidr.zip",
+  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.12/decidr.zip",
   "registry_index": {
     "summary": "Decision governance \u2014 initiatives, projects, decisions, tasks, and bridges with approval workflows",
     "tags": [
@@ -195,7 +195,7 @@
     "list_organizations": "List organizations the current user belongs to.",
     "list_members": "List all active members of the current organization.",
     "list_member_invites": "List pending member invitations for the current organization.",
-    "manage_member": "Invite, update role, or remove organization members. Use action: add with email to send an invite, update_role with user_id+role to change role, remove with user_id to remove a member, or cancel_invite with invitation_id to cancel a pending invite.",
+    "manage_member": "Invite, update role, or remove organization members. Use action: add with email to send an invite, update_role with user_id+role to change role, remove with user_id to remove a member, cancel_invite with invitation_id to cancel a pending invite, or resend_invite with invitation_id to resend the email.",
     "link_document": "Attach a document to any entity. Use type URL for external links, LUDFLOW for LudFlow documents. Search LudFlow docs first with search_ludflow_documents.",
     "list_entity_documents": "List all documents linked to an entity. Essential context before approving decisions.",
     "search_ludflow_documents": "Search LudFlow documents by title. Use results with link_document to attach to DecidR entities.",

@@ -237,7 +237,7 @@
           + UI.escapeHtml(inviteRole) + '</option>';
       }
       html += '</select>';
-      html += '<button class="decidr-so-btn decidr-so-btn-primary" id="decidr-so-btn-send-org-invite">Send Invite</button>';
+      html += '<button class="decidr-so-btn decidr-so-btn-primary" id="decidr-so-btn-send-org-invite">Send New Invite</button>';
       html += '</div>';
       html += '<div class="decidr-so-muted-note">Invites route through shared Ludflow auth, then guide people into DecidR setup.</div>';
     } else {
@@ -291,7 +291,7 @@
     } else {
       for (var i = 0; i < invitations.length; i++) {
         var invitation = invitations[i];
-        var canCancelInvite = permissions.canInviteMembers && (currentUserRole === 'OWNER' || invitation.role !== 'OWNER');
+        var canManageInvite = permissions.canInviteMembers && (currentUserRole === 'OWNER' || invitation.role !== 'OWNER');
         html += '<div class="decidr-so-org-row">';
         html += '<div class="decidr-so-org-person">';
         html += '<div class="decidr-so-org-person-copy">';
@@ -304,7 +304,8 @@
         html += '</div>';
         html += '<div class="decidr-so-org-actions">';
         html += '<span class="decidr-so-org-inline-note">Invited by ' + UI.escapeHtml(invitation.invitedByName || 'Unknown') + '</span>';
-        html += '<button class="decidr-so-btn decidr-so-btn-sm" data-cancel-invitation-id="' + UI.escapeHtml(invitation.id) + '"' + (canCancelInvite ? '' : ' disabled') + '>Cancel</button>';
+        html += '<button class="decidr-so-btn decidr-so-btn-sm" data-resend-invitation-id="' + UI.escapeHtml(invitation.id) + '"' + (canManageInvite ? '' : ' disabled') + '>Resend</button>';
+        html += '<button class="decidr-so-btn decidr-so-btn-sm" data-cancel-invitation-id="' + UI.escapeHtml(invitation.id) + '"' + (canManageInvite ? '' : ' disabled') + '>Cancel</button>';
         html += '</div>';
         html += '</div>';
       }
