@@ -162,6 +162,7 @@
       if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
         var initIpcArgs = { pluginName: 'decidr' };
         if (_activeOrgId) initIpcArgs.orgId = _activeOrgId;
+        var targetedOrgId = _activeOrgId;
         return window.__TAURI__.core.invoke('get_plugin_auth_header', initIpcArgs)
           .then(function(authHeader) {
             var t = (authHeader || '').replace(/^Bearer\s+/i, '');
@@ -169,7 +170,16 @@
             api._initialized = true;
             return api._fetchCurrentUser();
           })
-          .catch(function() {
+          .catch(function(err) {
+            // If caller explicitly targeted an org and Tauri has no stored token
+            // for it, propagate the failure so the UI can show an auth prompt.
+            // Only fall back to window.__decidrToken for non-targeted autoInit
+            // (e.g., test harnesses or initial boot with no stored active org).
+            if (targetedOrgId) {
+              api._initialized = false;
+              _token = '';
+              return Promise.reject(err || new Error('No stored token for plugin org ' + targetedOrgId));
+            }
             _token = window.__decidrToken || '';
             api._initialized = true;
             return api._fetchCurrentUser();
@@ -511,6 +521,18 @@
       _token = '';
       api._initialized = false;
       return api.autoInit({});
+    },
+
+    getUserPreferences: function() {
+      return api.get('/me/preferences');
+    },
+
+    setDefaultOrg: function(orgId) {
+      return api.patch('/me/preferences', { defaultOrganizationId: orgId });
+    },
+
+    clearDefaultOrg: function() {
+      return api.patch('/me/preferences', { defaultOrganizationId: null });
     },
 
     // --- GitHub endpoints ---

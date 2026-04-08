@@ -2718,7 +2718,9 @@
 
   UI.orgPicker = function(orgs, activeOrgId, opts) {
     opts = opts || {};
-    if (!orgs || orgs.length <= 1) return '';
+    if (!orgs || orgs.length === 0) return '';
+
+    var defaultOrgId = opts.defaultOrgId || null;
 
     var activeOrg = null;
     for (var i = 0; i < orgs.length; i++) {
@@ -2728,26 +2730,52 @@
       }
     }
 
-    var label = activeOrg ? activeOrg.name : 'Select Organization';
+    var label = activeOrg ? (activeOrg.name || activeOrg.id) : 'Select Organization';
+    var displayLabel = label.length > 28 ? label.substring(0, 25) + '...' : label;
 
     var html = '<div class="decidr-org-picker">'
-      + '<button class="decidr-org-picker-btn" id="decidr-org-picker-toggle">'
-      + '<span>' + (label.length > 30 ? label.substring(0, 27) + '...' : label) + '</span>'
-      + '<svg class="decidr-org-picker-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">'
+      + '<button class="decidr-org-picker-btn" id="decidr-org-picker-toggle" aria-haspopup="listbox" aria-label="Switch organization">'
+      + '<svg class="decidr-org-picker-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+      + '<path d="M3 21V7l9-4 9 4v14"/>'
+      + '<path d="M9 21V12h6v9"/>'
+      + '</svg>'
+      + '<span class="decidr-org-picker-label">' + displayLabel + '</span>'
+      + '<svg class="decidr-org-picker-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
       + '<path d="M3 4.5L6 7.5L9 4.5"/>'
       + '</svg>'
       + '</button>'
-      + '<div class="decidr-org-picker-menu" id="decidr-org-picker-menu">';
+      + '<div class="decidr-org-picker-menu" id="decidr-org-picker-menu" role="listbox">'
+      + '<div class="decidr-org-picker-menu-header">Organizations</div>';
+
+    var starFilledSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>';
+    var starOutlineSvg = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>';
+    var checkSvg = '<svg class="decidr-org-picker-check" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>';
 
     for (var i = 0; i < orgs.length; i++) {
       var org = orgs[i];
       var isActive = org.id === activeOrgId;
+      var isDefault = org.id === defaultOrgId;
       var tokenStatus = org.tokenStatus || 'no-token';
-      html += '<button class="decidr-org-picker-option' + (isActive ? ' active' : '') + '"'
-        + ' data-org-id="' + org.id + '">'
-        + '<span class="decidr-org-picker-dot ' + tokenStatus + '"></span>'
-        + '<span>' + (org.name || org.id) + '</span>'
-        + '</button>';
+      var orgName = org.name || org.id;
+      var rowClasses = 'decidr-org-picker-option-row'
+        + (isActive ? ' is-active' : '')
+        + (tokenStatus === 'no-token' ? ' is-untrusted' : '');
+      var starTitle = isDefault ? 'Current default organization' : 'Set as default';
+
+      html += '<div class="' + rowClasses + '" role="option" aria-selected="' + (isActive ? 'true' : 'false') + '">'
+        + '<button class="decidr-org-picker-option" data-org-id="' + org.id + '" title="' + orgName + '">'
+        + '<span class="decidr-org-picker-check-slot">' + (isActive ? checkSvg : '') + '</span>'
+        + '<span class="decidr-org-picker-name">' + orgName + '</span>'
+        + (tokenStatus === 'no-token'
+            ? '<span class="decidr-org-picker-badge">Connect</span>'
+            : (isDefault ? '<span class="decidr-org-picker-badge is-default-badge">Default</span>' : ''))
+        + '</button>'
+        + '<button class="decidr-org-picker-star' + (isDefault ? ' is-default' : '') + '"'
+        + ' data-org-id="' + org.id + '" data-action="set-default"'
+        + ' aria-label="' + starTitle + '" title="' + starTitle + '">'
+        + (isDefault ? starFilledSvg : starOutlineSvg)
+        + '</button>'
+        + '</div>';
     }
 
     html += '</div></div>';

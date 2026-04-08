@@ -16,7 +16,8 @@
       transform: { x: 0, y: 0, k: 1 },
       // Org picker
       organizations: [],
-      activeOrgId: null
+      activeOrgId: null,
+      defaultOrgId: null
     };
 
     var currentLayout = null;
@@ -63,8 +64,35 @@
       + UI.loadingSpinner('Loading graph...')
       + '</div>';
 
-    // ── Fetch all data (single batch — no N+1) ───────────────
-    _fetchGraphData().then(function(gd) {
+    // ── Preflight: resolve the user's target org BEFORE fetching graph data.
+    // If we jump straight to _fetchGraphData the main data calls use whatever
+    // token withReady picked first (usually the currently-connected org), and
+    // the user's default-org preference is effectively ignored until they click
+    // the picker manually. This preflight only runs on initial mount — refetches
+    // triggered by explicit user switches reuse the already-bound token.
+    Promise.all([
+      API.listOrganizations().catch(function() { return []; }),
+      API.listPluginOrgs().catch(function() { return []; }),
+      API.getUserPreferences().catch(function() { return null; })
+    ]).then(function(results) {
+      var prePluginOrgs = results[1] || [];
+      var prePrefs = results[2] || null;
+      var prePluginOrgSet = {};
+      for (var ppo = 0; ppo < prePluginOrgs.length; ppo++) {
+        prePluginOrgSet[prePluginOrgs[ppo]] = true;
+      }
+      var pushedOrgId = (data && data.organization_id) ? data.organization_id : null;
+      var preDefaultOrgId = (prePrefs && prePrefs.defaultOrganizationId) || null;
+      var targetOrgId = pushedOrgId;
+      if (!targetOrgId && preDefaultOrgId && prePluginOrgSet[preDefaultOrgId]) {
+        targetOrgId = preDefaultOrgId;
+      }
+      if (targetOrgId && targetOrgId !== API.getActiveOrgId()) {
+        return API.switchOrg(targetOrgId).catch(function() {});
+      }
+    }).then(function() {
+      return _fetchGraphData();
+    }).then(function(gd) {
       graphData = gd;
       renderGraphWithData(gd);
     }).catch(function(err) {
@@ -92,7 +120,8 @@
         API.listProjects(),
         API.listOrgMembers(),
         API.listOrganizations().catch(function() { return []; }),
-        API.listPluginOrgs().catch(function() { return []; })
+        API.listPluginOrgs().catch(function() { return []; }),
+        API.getUserPreferences().catch(function() { return null; })
       ]).then(function(results) {
         var initiatives = _extractArray(results[0]);
         var allBridges = _extractArray(results[1]);
@@ -103,6 +132,7 @@
         // Merge org token status
         var orgs = results[5] || [];
         var pluginOrgs = results[6] || [];
+        var prefs = results[7] || null;
         var pluginOrgSet = {};
         for (var po = 0; po < pluginOrgs.length; po++) {
           pluginOrgSet[pluginOrgs[po]] = true;
@@ -111,9 +141,12 @@
           orgs[o].tokenStatus = pluginOrgSet[orgs[o].id] ? 'valid' : 'no-token';
         }
         graphState.organizations = orgs;
+        graphState.defaultOrgId = (prefs && prefs.defaultOrganizationId) || null;
         if (!graphState.activeOrgId && orgs.length > 0) {
           if (data && data.organization_id) {
             graphState.activeOrgId = data.organization_id;
+          } else if (graphState.defaultOrgId) {
+            graphState.activeOrgId = graphState.defaultOrgId;
           } else {
             graphState.activeOrgId = orgs[0].id;
           }
@@ -958,7 +991,7 @@
       // Action buttons — top left, horizontal text buttons
       var actions = '<div style="position:absolute;top:var(--space-3);left:var(--space-3);'
         + 'display:flex;gap:var(--space-2);align-items:center;z-index:100;">'
-        + UI.orgPicker(graphState.organizations, graphState.activeOrgId)
+        + UI.orgPicker(graphState.organizations, graphState.activeOrgId, { defaultOrgId: graphState.defaultOrgId })
         + '<button class="decidr-graph-zoom-btn" data-action="new-initiative"'
         + ' style="padding:6px 14px;width:auto;font-size:12px;">New Initiative</button>'
         + '<button class="decidr-graph-zoom-btn" data-action="new-project"'
@@ -1569,6 +1602,19 @@
         });
 
         orgMenu.addEventListener('click', function(e) {
+          var starBtn = e.target.closest('[data-action="set-default"]');
+          if (starBtn) {
+            e.stopPropagation();
+            e.preventDefault();
+            var starOrgId = starBtn.getAttribute('data-org-id');
+            API.setDefaultOrg(starOrgId).then(function() {
+              graphState.defaultOrgId = starOrgId;
+              _refetchAndRerender();
+            }).catch(function(err) {
+              console.error('[decidr] setDefaultOrg failed', err);
+            });
+            return;
+          }
           var btn = e.target.closest('[data-org-id]');
           if (!btn) return;
           var orgId = btn.getAttribute('data-org-id');

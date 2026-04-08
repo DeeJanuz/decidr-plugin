@@ -34,7 +34,8 @@
       decisionsExpanded: false,
       // Org picker
       organizations: [],
-      activeOrgId: null
+      activeOrgId: null,
+      defaultOrgId: null
     };
 
     // ── Show loading ───────────────────────────────────────
@@ -57,19 +58,48 @@
       return [];
     }
 
+    // Phase 1: lightweight fetches that don't depend on the active org token.
+    // We must resolve the user's preferred default org BEFORE firing the main
+    // data fetches, otherwise they run against whatever token withReady picked
+    // first (usually the currently-connected org, not the user's default).
     Promise.all([
-      API.listInitiatives({ take: 200 }).then(function(resp) { fetches.initiatives = unwrapList(resp); }),
-      API.listProjects({ take: 200 }).then(function(resp) { fetches.projects = unwrapList(resp); }),
-      API.listDecisions({ take: 200 }).then(function(resp) { fetches.decisions = unwrapList(resp); }),
-      API.listTasks({ take: 200 }).then(function(resp) { fetches.tasks = unwrapList(resp); }),
-      API.listBridges({ take: 200 }).then(function(resp) { fetches.bridges = unwrapList(resp); }),
-      API.listIssues({ take: 200 }).then(function(resp) { fetches.issues = unwrapList(resp); }).catch(function() { fetches.issues = []; }),
-      API.listPRs({ take: 200 }).then(function(resp) { fetches.prs = unwrapList(resp); }).catch(function() { fetches.prs = []; }),
-      API.getActionItems({ take: 200 }).then(function(resp) { fetches.actionItems = unwrapList(resp); }),
       API.listOrganizations().then(function(orgs) { fetches.organizations = orgs; }).catch(function() { fetches.organizations = []; }),
       API.listPluginOrgs().then(function(orgIds) { fetches.pluginOrgs = orgIds; }).catch(function() { fetches.pluginOrgs = []; }),
-      API.getTimeline({ take: 200 }).then(function(resp) { fetches.timeline = unwrapList(resp); }).catch(function() { fetches.timeline = []; })
+      API.getUserPreferences().then(function(p) { fetches.prefs = p; }).catch(function() { fetches.prefs = null; })
     ]).then(function() {
+      // Resolve the target org up front so Phase 2 fetches use the right token.
+      var pluginOrgs = fetches.pluginOrgs || [];
+      var pluginOrgSet = {};
+      for (var po = 0; po < pluginOrgs.length; po++) {
+        pluginOrgSet[pluginOrgs[po]] = true;
+      }
+      var pushedOrgId = (data && data.organization_id) ? data.organization_id : null;
+      var defaultOrgId = (fetches.prefs && fetches.prefs.defaultOrganizationId) || null;
+      var targetOrgId = pushedOrgId;
+      if (!targetOrgId && defaultOrgId && pluginOrgSet[defaultOrgId]) {
+        targetOrgId = defaultOrgId;
+      }
+      // Only switch if we have a target that differs from the currently-bound token.
+      if (targetOrgId && targetOrgId !== API.getActiveOrgId()) {
+        return API.switchOrg(targetOrgId).catch(function() {
+          // Fall through to the stored token — resolver fallback on the
+          // backend may still route to the default org.
+        });
+      }
+    }).then(function() {
+      // Phase 2: actual data fetches now run against the correct org token.
+      return Promise.all([
+        API.listInitiatives({ take: 200 }).then(function(resp) { fetches.initiatives = unwrapList(resp); }),
+        API.listProjects({ take: 200 }).then(function(resp) { fetches.projects = unwrapList(resp); }),
+        API.listDecisions({ take: 200 }).then(function(resp) { fetches.decisions = unwrapList(resp); }),
+        API.listTasks({ take: 200 }).then(function(resp) { fetches.tasks = unwrapList(resp); }),
+        API.listBridges({ take: 200 }).then(function(resp) { fetches.bridges = unwrapList(resp); }),
+        API.listIssues({ take: 200 }).then(function(resp) { fetches.issues = unwrapList(resp); }).catch(function() { fetches.issues = []; }),
+        API.listPRs({ take: 200 }).then(function(resp) { fetches.prs = unwrapList(resp); }).catch(function() { fetches.prs = []; }),
+        API.getActionItems({ take: 200 }).then(function(resp) { fetches.actionItems = unwrapList(resp); }),
+        API.getTimeline({ take: 200 }).then(function(resp) { fetches.timeline = unwrapList(resp); }).catch(function() { fetches.timeline = []; })
+      ]);
+    }).then(function() {
       // Projects have direct initiativeId
       var projectToInit = {};
       var projects = fetches.projects || [];
@@ -101,9 +131,12 @@
         orgs[o].tokenStatus = pluginOrgSet[orgs[o].id] ? 'valid' : 'no-token';
       }
       dashState.organizations = orgs;
-      // Use data.organization_id from push data if available, or first org with token
+      dashState.defaultOrgId = (fetches.prefs && fetches.prefs.defaultOrganizationId) || null;
+      // Use data.organization_id from push data if available, else default org, else first org
       if (data && data.organization_id) {
         dashState.activeOrgId = data.organization_id;
+      } else if (dashState.defaultOrgId) {
+        dashState.activeOrgId = dashState.defaultOrgId;
       } else if (orgs.length > 0) {
         dashState.activeOrgId = orgs[0].id;
       }
@@ -665,7 +698,7 @@
       // Title with org picker
       html += '<div style="display: flex; align-items: center; justify-content: space-between; margin: 0 0 var(--space-6) 0;">'
         + '<h1 style="font-size: var(--text-h1); font-weight: var(--weight-bold); margin: 0;">Dashboard</h1>'
-        + UI.orgPicker(dashState.organizations, dashState.activeOrgId)
+        + UI.orgPicker(dashState.organizations, dashState.activeOrgId, { defaultOrgId: dashState.defaultOrgId })
         + '</div>';
 
       // Stats
@@ -732,6 +765,19 @@
       });
 
       menu.addEventListener('click', function(e) {
+        var starBtn = e.target.closest('[data-action="set-default"]');
+        if (starBtn) {
+          e.stopPropagation();
+          e.preventDefault();
+          var starOrgId = starBtn.getAttribute('data-org-id');
+          API.setDefaultOrg(starOrgId).then(function() {
+            dashState.defaultOrgId = starOrgId;
+            renderDashboard();
+          }).catch(function(err) {
+            console.error('[decidr] setDefaultOrg failed', err);
+          });
+          return;
+        }
         var btn = e.target.closest('[data-org-id]');
         if (!btn) return;
         var orgId = btn.getAttribute('data-org-id');
