@@ -1,6 +1,6 @@
 {
   "name": "decidr",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "prompt_definitions": [
     {
       "name": "initiative_planning",
@@ -51,7 +51,7 @@
     "Before taking any action on a GitHub issue or PR linked to DecidR (fix, create_pr, review_pr, merge_pr, or any reconciliation), fetch the github_pr_lifecycle prompt and follow its coder or reviewer path. DecidR does not yet receive webhooks from GitHub, so you must reconcile DecidR state to match GitHub before and after every lifecycle step. Never add DecidR-side enforcement for review or merge policy \u2014 that lives in GitHub.",
     "When any GitHub tool fails with 'GitHub connection not found' or the user asks to connect GitHub, push the decidr_github_auth renderer \u2014 do not call connect_github with a PAT collected in chat. Before using GitHub tools for the first time in a session, verify with list_repos; if empty, the likely cause is a missing connection or no linked repos \u2014 push decidr_github_auth first, then call link_repo."
   ],
-  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.12/decidr.zip",
+  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.13/decidr.zip",
   "registry_index": {
     "summary": "Decision governance \u2014 initiatives, projects, decisions, tasks, and bridges with approval workflows",
     "tags": [
@@ -177,18 +177,18 @@
     "list_bridges": "Use to discover cross-project bridges. Push to decidr_list.",
     "get_initiative": "Get full initiative details. Push to decidr_list for detail view.",
     "get_project": "Get full project details including task/decision/bridge counts. Push to decidr_list.",
-    "get_decision": "Get full decision details including approval progress and linked documents. DRAFT decisions need documents linked before transitioning to PROPOSED. If status is IN_PROGRESS, tell user they can use update_decision with action: approve or reject. Check list_entity_documents for supporting context.",
+    "get_decision": "Get full decision details including approval progress and linked documents. Draft decisions need linked documents before leaving DRAFT, including a direct transition to IMPLEMENTED. Check list_entity_documents for supporting context and use allowedTransitions to choose the next valid status.",
     "get_task": "Get full task details. If status is TODO or IN_PROGRESS, user can use update_task with status: DONE. Push to decidr_list.",
     "get_bridge": "Get full bridge details including connected projects and decisions. Push to decidr_list.",
     "search": "Use when user describes something by name or keyword. Push results to decidr_list. Offer to drill into specific results with get_* tools.",
     "create_initiative": "Create a new initiative. Returns full created entity. Consider creating projects under it next.",
     "create_project": "Create a new project. Pass initiative_id to link to an initiative and member_ids to assign members. Returns full created entity. Consider adding decisions or tasks next.",
-    "create_decision": "Create a new decision. Requires entity_type and matching parent ID. Decisions default to DRAFT status \u2014 transition to PROPOSED when ready for review (requires linked documents). Consider linking supporting documents with link_document.",
+    "create_decision": "Create a new decision. Requires entity_type and matching parent ID. Decisions default to DRAFT status. Link supporting documents with link_document, then transition to PROPOSED for review or directly to IMPLEMENTED when recording already-completed work.",
     "create_task": "Create a new task. Returns full created entity. Consider assigning with update_task or linking a document.",
     "create_bridge": "Create a bridge between two projects. Returns full created entity.",
     "update_initiative": "Update initiative fields. Returns full updated entity.",
     "update_project": "Update project fields and/or transition status. Returns full updated entity.",
-    "update_decision": "Update decision fields and/or transition status. Use action param for approve/reject/supersede/unsupersede. DRAFT\u2192PROPOSED transition requires at least one linked document. Returns full updated entity. Field updates applied before status transition.",
+    "update_decision": "Update decision fields and/or transition status. Use action param for approve/reject/supersede/unsupersede. Draft decisions require at least one linked document before transitioning to PROPOSED or IMPLEMENTED. Returns the full updated entity. Field updates are applied before status transition.",
     "update_task": "Update task fields and/or transition status. Set status to DONE to complete a task. Returns full updated entity.",
     "update_bridge": "Update bridge fields and/or transition status. Returns full updated entity.",
     "create_organization": "Create a new organization. The caller becomes OWNER. Use manage_member to invite others.",

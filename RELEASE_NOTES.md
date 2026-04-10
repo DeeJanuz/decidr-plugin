@@ -1,3 +1,13 @@
+# 0.1.13 — Direct Draft Implementation
+
+## Features
+
+- **Direct `DRAFT` to `IMPLEMENTED` decision transitions**. DecidR can now record already-completed work without forcing the decision through `PROPOSED`, `APPROVED`, and `IN_PROGRESS` first.
+
+## Fixes
+
+- **Manifest guidance now reflects the direct-implementation path**. Agents are told that draft decisions can move straight to `IMPLEMENTED` once they have linked supporting documents.
+
 # 0.1.12 — Resend pending invites
 
 ## Features
