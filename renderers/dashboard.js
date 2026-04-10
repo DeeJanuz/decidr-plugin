@@ -732,6 +732,7 @@
 
       function openOrgSettings(orgId) {
         UI.SlideOut.open('organization-settings', orgId, {
+          source: container,
           onMutate: function() { refreshDashboard(); }
         });
       }
@@ -941,6 +942,7 @@
             var entityId = el.getAttribute('data-entity-id');
             if (entityType && entityId) {
               UI.SlideOut.open(entityType, entityId, {
+                source: container,
                 onClose: function() {},
                 onMutate: function() { refreshDashboard(); }
               });

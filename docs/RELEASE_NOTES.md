@@ -1,5 +1,10 @@
 # Unreleased
 
+# 0.1.14
+
+- **fix**: Scope DecidR slideout DOM and state per session container instead of a single global `.decidr-so-panel` / `.decidr-so-overlay`. This fixes the standalone-dashboard bug where opening a decision in a new tab reused the slideout from a previously visited tab.
+- **fix**: Pass renderer container context from dashboard, list, and graph views into `UI.SlideOut.open(...)` so entity details, nested navigation, archive/back flows, and org settings all stay bound to the tab the user is actively viewing.
+
 # 0.1.13
 
 - **feat**: Allow decisions to transition directly from `DRAFT` to `IMPLEMENTED` when they already have linked supporting documents. This supports post-hoc architecture and implementation records without forcing a retroactive review workflow through `PROPOSED`, `APPROVED`, and `IN_PROGRESS`.

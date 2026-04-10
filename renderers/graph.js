@@ -1379,6 +1379,7 @@
             var mergedIds = edgeEl.getAttribute('data-edge-ids');
             var edgeId = mergedIds ? mergedIds.split(',')[0] : edgeEl.getAttribute('data-edge-id');
             UI.SlideOut.open('bridge', edgeId, {
+              source: container,
               onMutate: function() { _refetchAndRerender(); }
             });
             return;
@@ -1480,6 +1481,7 @@
 
           // Open slide-out panel
           UI.SlideOut.open(type, id, {
+            source: container,
             onMutate: function() { _refetchAndRerender(); }
           });
 
@@ -1557,6 +1559,7 @@
       if (orgToggle && orgMenu) {
         function openOrgSettings(orgId) {
           UI.SlideOut.open('organization-settings', orgId, {
+            source: container,
             onMutate: function() { _refetchAndRerender(); }
           });
         }

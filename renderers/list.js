@@ -213,7 +213,7 @@
             );
             if (newCard) {
               newCard.addEventListener('click', function() {
-                UI.SlideOut.open('project', proj.id);
+                UI.SlideOut.open('project', proj.id, { source: container });
               });
             }
           }
@@ -786,7 +786,7 @@
           var type = el.getAttribute('data-entity-type');
           var id = el.getAttribute('data-entity-id');
           if (type && id) {
-            UI.SlideOut.open(type, id);
+            UI.SlideOut.open(type, id, { source: container });
           }
         });
       })(items[i]);

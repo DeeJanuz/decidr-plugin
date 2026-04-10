@@ -1124,122 +1124,210 @@
     _onCloseCallback: null,
     _onMutateCallback: null,
     _busy: false,
+    _contexts: {},
+    _contextSeq: 0,
+    _currentContextKey: null,
+    _contextScopeDepth: 0,
+
+    _resolveHost: function(source) {
+      var node = source && source.nodeType === 1 ? source : null;
+      if (node) {
+        if (node.classList && node.classList.contains('session-content')) {
+          return node;
+        }
+        if (typeof node.closest === 'function') {
+          var sessionHost = node.closest('.session-content');
+          if (sessionHost) return sessionHost;
+        }
+      }
+      return document.querySelector('.session-content.active') || document.body;
+    },
+
+    _getContextKeyForHost: function(host) {
+      if (!host || host === document.body) return '__body__';
+      if (!host.__decidrSlideOutContextKey) {
+        UI.SlideOut._contextSeq += 1;
+        host.__decidrSlideOutContextKey = 'decidr-so-context-' + UI.SlideOut._contextSeq;
+      }
+      return host.__decidrSlideOutContextKey;
+    },
+
+    _activateContext: function(source) {
+      var host = UI.SlideOut._resolveHost(source);
+      var key = UI.SlideOut._getContextKeyForHost(host);
+      UI.SlideOut._currentContextKey = key;
+      UI.SlideOut._getContext(key, host);
+      return key;
+    },
+
+    _resolveContextKey: function(sourceOrKey) {
+      if (typeof sourceOrKey === 'string' && sourceOrKey) return sourceOrKey;
+      if (UI.SlideOut._contextScopeDepth > 0 && UI.SlideOut._currentContextKey) {
+        return UI.SlideOut._currentContextKey;
+      }
+      return UI.SlideOut._activateContext(sourceOrKey);
+    },
+
+    _getContext: function(contextKey, host) {
+      var key = contextKey || UI.SlideOut._resolveContextKey();
+      var context = UI.SlideOut._contexts[key];
+      if (!context) {
+        context = {
+          key: key,
+          host: null,
+          stack: [],
+          overlay: null,
+          panel: null,
+          onCloseCallback: null,
+          onMutateCallback: null,
+          busy: false,
+          escapeHandlerBound: false
+        };
+        UI.SlideOut._contexts[key] = context;
+      }
+      if (host) context.host = host;
+      return context;
+    },
+
+    _withContextKey: function(contextKey, fn) {
+      var prevKey = UI.SlideOut._currentContextKey;
+      var prevDepth = UI.SlideOut._contextScopeDepth;
+      UI.SlideOut._currentContextKey = contextKey;
+      UI.SlideOut._contextScopeDepth = prevDepth + 1;
+      try {
+        return fn();
+      } finally {
+        UI.SlideOut._contextScopeDepth = prevDepth;
+        UI.SlideOut._currentContextKey = prevKey;
+      }
+    },
 
     open: function(type, id, opts) {
       type = (type || '').toLowerCase();
       var o = opts || {};
+      var contextKey = UI.SlideOut._resolveContextKey(o.contextKey || o.source);
 
-      // Store onClose callback only when opening root panel
-      if (UI.SlideOut._stack.length === 0 && o.onClose) {
-        UI.SlideOut._onCloseCallback = o.onClose;
-      }
-      if (UI.SlideOut._stack.length === 0 && o.onMutate) {
-        UI.SlideOut._onMutateCallback = o.onMutate;
-      }
+      UI.SlideOut._withContextKey(contextKey, function() {
+        // Store onClose callback only when opening root panel
+        if (UI.SlideOut._stack.length === 0 && o.onClose) {
+          UI.SlideOut._onCloseCallback = o.onClose;
+        }
+        if (UI.SlideOut._stack.length === 0 && o.onMutate) {
+          UI.SlideOut._onMutateCallback = o.onMutate;
+        }
 
-      // If preloaded data is provided, push and render immediately
-      if (o.data) {
-        UI.SlideOut._stack.push({ type: type, id: id, data: o.data, stale: false });
-        UI.SlideOut._render();
-        return;
-      }
+        // If preloaded data is provided, push and render immediately
+        if (o.data) {
+          UI.SlideOut._stack.push({ type: type, id: id, data: o.data, stale: false });
+          UI.SlideOut._render(contextKey);
+          return;
+        }
 
-      // Push a loading state and render
-      UI.SlideOut._stack.push({ type: type, id: id, data: null, stale: false });
-      UI.SlideOut._render();
+        // Push a loading state and render
+        UI.SlideOut._stack.push({ type: type, id: id, data: null, stale: false });
+        UI.SlideOut._render(contextKey);
 
-      // Fetch from API
-      var API = window.__decidrAPI;
-      if (!API) return;
+        // Fetch from API
+        var API = window.__decidrAPI;
+        if (!API) return;
 
-      var fetchFn = null;
-      if (type === 'project' || type === 'project-timeline') fetchFn = API.getProject;
-      else if (type === 'decision' || type === 'decision-timeline') fetchFn = API.getDecision;
-      else if (type === 'task') fetchFn = API.getTask;
-      else if (type === 'bridge') fetchFn = API.getBridge;
-      else if (type === 'initiative') fetchFn = API.getInitiative;
-      else if (type === 'organization-settings') fetchFn = API.getOrganizationMemberSettings;
-      else if (type === 'issue') fetchFn = function(id) { return API.getIssue(id); };
-      else if (type === 'pull_request') fetchFn = function(id) { return API.getPR(id); };
-      else if (type === 'repo') fetchFn = function(id) { return API.getRepo(id); };
+        var fetchFn = null;
+        if (type === 'project' || type === 'project-timeline') fetchFn = API.getProject;
+        else if (type === 'decision' || type === 'decision-timeline') fetchFn = API.getDecision;
+        else if (type === 'task') fetchFn = API.getTask;
+        else if (type === 'bridge') fetchFn = API.getBridge;
+        else if (type === 'initiative') fetchFn = API.getInitiative;
+        else if (type === 'organization-settings') fetchFn = API.getOrganizationMemberSettings;
+        else if (type === 'issue') fetchFn = function(id) { return API.getIssue(id); };
+        else if (type === 'pull_request') fetchFn = function(id) { return API.getPR(id); };
+        else if (type === 'repo') fetchFn = function(id) { return API.getRepo(id); };
 
-      if (fetchFn) {
-        fetchFn(id).then(function(data) {
-          // Update the top of stack with fetched data
-          var top = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
-          if (top && top.id === id && top.type === type) {
-            top.data = data;
-            // Don't render yet — wait for enrichment to complete
-            // so the glass loader stays visible until everything is ready
-            UI.SlideOut._enrichAndRender(type, id, data);
-          }
-        }).catch(function(err) {
-          // Render error state with debug info
-          console.error('[decidr] SlideOut fetch failed:', err);
-          console.error('[decidr] API baseUrl:', window.__decidrAPI ? window.__decidrAPI._baseUrl : 'NO API');
-          console.error('[decidr] API token:', window.__decidrAPI ? (window.__decidrAPI._hasToken ? 'present' : 'EMPTY') : 'NO API');
-          var top = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
-          if (top && top.id === id && top.type === type) {
-            top.data = { _error: true, _errorMsg: String(err.message || err) };
-            UI.SlideOut._render();
-          }
-        });
-      }
+        if (fetchFn) {
+          fetchFn(id).then(function(data) {
+            UI.SlideOut._withContextKey(contextKey, function() {
+              // Update the top of stack with fetched data
+              var top = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
+              if (top && top.id === id && top.type === type) {
+                top.data = data;
+                // Don't render yet — wait for enrichment to complete
+                // so the glass loader stays visible until everything is ready
+                UI.SlideOut._enrichAndRender(type, id, data, contextKey);
+              }
+            });
+          }).catch(function(err) {
+            UI.SlideOut._withContextKey(contextKey, function() {
+              // Render error state with debug info
+              console.error('[decidr] SlideOut fetch failed:', err);
+              console.error('[decidr] API baseUrl:', window.__decidrAPI ? window.__decidrAPI._baseUrl : 'NO API');
+              console.error('[decidr] API token:', window.__decidrAPI ? (window.__decidrAPI._hasToken ? 'present' : 'EMPTY') : 'NO API');
+              var top = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
+              if (top && top.id === id && top.type === type) {
+                top.data = { _error: true, _errorMsg: String(err.message || err) };
+                UI.SlideOut._render(contextKey);
+              }
+            });
+          });
+        }
+      });
     },
 
-    _render: function() {
-      if (UI.SlideOut._stack.length === 0) return;
-      var top = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
-      var els = UI.SlideOut._ensureDOM();
+    _render: function(contextKey) {
+      var resolvedKey = UI.SlideOut._resolveContextKey(contextKey);
+      return UI.SlideOut._withContextKey(resolvedKey, function() {
+        if (UI.SlideOut._stack.length === 0) return;
+        var top = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
+        var els = UI.SlideOut._ensureDOM(resolvedKey);
+        if (!els) return;
 
-      // Header
-      var hasStack = UI.SlideOut._stack.length > 1;
-      var backLabel = hasStack ? 'Back' : 'Close';
-      var backSvg = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" '
-        + 'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" '
-        + 'stroke-linejoin="round"><path d="M10 3l-5 5 5 5"/></svg>';
+        // Header
+        var hasStack = UI.SlideOut._stack.length > 1;
+        var backLabel = hasStack ? 'Back' : 'Close';
+        var backSvg = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" '
+          + 'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" '
+          + 'stroke-linejoin="round"><path d="M10 3l-5 5 5 5"/></svg>';
 
-      var typeLabels = {
-        project: 'Project', decision: 'Decision',
-        task: 'Task', bridge: 'Bridge', initiative: 'Initiative',
-        'project-timeline': 'Timeline', 'decision-timeline': 'Timeline',
-        'organization-settings': 'Organization'
-      };
+        var typeLabels = {
+          project: 'Project', decision: 'Decision',
+          task: 'Task', bridge: 'Bridge', initiative: 'Initiative',
+          'project-timeline': 'Timeline', 'decision-timeline': 'Timeline',
+          'organization-settings': 'Organization'
+        };
 
-      var headerHtml = '<div class="decidr-so-header-row">'
-        + '<button class="decidr-so-btn-back" id="decidr-so-btn-back" title="' + backLabel + '">'
-        + backSvg + '</button>'
-        + '<span class="decidr-so-type-badge decidr-so-type-' + UI.escapeHtml(top.type) + '">'
-        + UI.escapeHtml(typeLabels[top.type] || top.type)
-        + '</span>'
-        + '<span class="decidr-so-title">'
-        + UI.escapeHtml(UI.SlideOut._getTitle(top))
-        + '</span>'
-        + '</div>';
+        var headerHtml = '<div class="decidr-so-header-row">'
+          + '<button class="decidr-so-btn-back" id="decidr-so-btn-back" title="' + backLabel + '">'
+          + backSvg + '</button>'
+          + '<span class="decidr-so-type-badge decidr-so-type-' + UI.escapeHtml(top.type) + '">'
+          + UI.escapeHtml(typeLabels[top.type] || top.type)
+          + '</span>'
+          + '<span class="decidr-so-title">'
+          + UI.escapeHtml(UI.SlideOut._getTitle(top))
+          + '</span>'
+          + '</div>';
 
-      els.header.innerHTML = headerHtml;
+        els.header.innerHTML = headerHtml;
 
-      // Content — glass loader stays until primary + enrichment data are both ready
-      var contentHtml;
-      if (!top.data || (!top.data._error && !top.data._enrichmentDone)) {
-        contentHtml = UI.loadingSpinner('Loading ' + (typeLabels[top.type] || '') + '...');
-      } else if (top.data._error) {
-        contentHtml = UI.emptyState('Failed to load data: ' + (top.data._errorMsg || 'Unknown error'));
-      } else {
-        contentHtml = UI.SlideOut._renderDetail(top.type, top.data);
-      }
-      els.content.innerHTML = contentHtml;
+        // Content — glass loader stays until primary + enrichment data are both ready
+        var contentHtml;
+        if (!top.data || (!top.data._error && !top.data._enrichmentDone)) {
+          contentHtml = UI.loadingSpinner('Loading ' + (typeLabels[top.type] || '') + '...');
+        } else if (top.data._error) {
+          contentHtml = UI.emptyState('Failed to load data: ' + (top.data._errorMsg || 'Unknown error'));
+        } else {
+          contentHtml = UI.SlideOut._renderDetail(top.type, top.data);
+        }
+        els.content.innerHTML = contentHtml;
 
-      // Wire events
-      UI.SlideOut._wirePanel(els.panel);
+        // Wire events
+        UI.SlideOut._wirePanel(els.panel);
 
-      // Show
-      els.overlay.style.display = 'block';
-      els.panel.style.display = 'flex';
-      requestAnimationFrame(function() {
+        // Show
+        els.overlay.style.display = 'block';
+        els.panel.style.display = 'flex';
         requestAnimationFrame(function() {
-          els.overlay.classList.add('decidr-so-open');
-          els.panel.classList.add('decidr-so-open');
+          requestAnimationFrame(function() {
+            els.overlay.classList.add('decidr-so-open');
+            els.panel.classList.add('decidr-so-open');
+          });
         });
       });
     },
@@ -1278,42 +1366,47 @@
 
     // ─── Enrichment Infrastructure ──────────────────────────────────
 
-    _enrichAndRender: function(type, id, data) {
-      // Phase 1: already rendered with primary data
-      data._enriched = {};
+    _enrichAndRender: function(type, id, data, contextKey) {
+      var resolvedKey = UI.SlideOut._resolveContextKey(contextKey);
+      UI.SlideOut._withContextKey(resolvedKey, function() {
+        // Phase 1: already rendered with primary data
+        data._enriched = {};
 
-      // Phase 2: determine needed fetches
-      var fetches = UI.SlideOut._getEnrichmentFetches(type, id, data);
-      if (fetches.length === 0) {
-        data._enrichmentDone = true;
-        UI.SlideOut._render();
-        return;
-      }
-
-      var keys = [];
-      var promises = [];
-      for (var i = 0; i < fetches.length; i++) {
-        keys.push(fetches[i].key);
-        promises.push(fetches[i].promise);
-      }
-
-      Promise.all(promises.map(function(p) {
-        return p.catch(function(err) {
-          console.warn('[decidr] Enrichment fetch failed:', err);
-          return null;
-        });
-      })).then(function(results) {
-        // Stale guard
-        var top = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
-        if (!top || top.type !== type || top.id !== id) return;
-
-        for (var i = 0; i < keys.length; i++) {
-          if (results[i] != null) {
-            top.data._enriched[keys[i]] = results[i];
-          }
+        // Phase 2: determine needed fetches
+        var fetches = UI.SlideOut._getEnrichmentFetches(type, id, data);
+        if (fetches.length === 0) {
+          data._enrichmentDone = true;
+          UI.SlideOut._render(resolvedKey);
+          return;
         }
-        top.data._enrichmentDone = true;
-        UI.SlideOut._render();
+
+        var keys = [];
+        var promises = [];
+        for (var i = 0; i < fetches.length; i++) {
+          keys.push(fetches[i].key);
+          promises.push(fetches[i].promise);
+        }
+
+        Promise.all(promises.map(function(p) {
+          return p.catch(function(err) {
+            console.warn('[decidr] Enrichment fetch failed:', err);
+            return null;
+          });
+        })).then(function(results) {
+          UI.SlideOut._withContextKey(resolvedKey, function() {
+            // Stale guard
+            var top = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
+            if (!top || top.type !== type || top.id !== id) return;
+
+            for (var i = 0; i < keys.length; i++) {
+              if (results[i] != null) {
+                top.data._enriched[keys[i]] = results[i];
+              }
+            }
+            top.data._enrichmentDone = true;
+            UI.SlideOut._render(resolvedKey);
+          });
+        });
       });
     },
 
@@ -1329,31 +1422,38 @@
     // Use after any write operation (create task, post comment, link doc, etc.)
     // Clears _busy flag on completion.
     _refetchAndRender: function() {
-      var top = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
-      if (!top) { UI.SlideOut._busy = false; return; }
-      var API = window.__decidrAPI;
-      if (!API) { UI.SlideOut._busy = false; return; }
+      var contextKey = UI.SlideOut._resolveContextKey();
+      UI.SlideOut._withContextKey(contextKey, function() {
+        var top = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
+        if (!top) { UI.SlideOut._busy = false; return; }
+        var API = window.__decidrAPI;
+        if (!API) { UI.SlideOut._busy = false; return; }
 
-      var type = top.type;
-      var id = top.id;
+        var type = top.type;
+        var id = top.id;
 
-      API.getEntity(type, id).then(function(freshData) {
-        UI.SlideOut._busy = false;
-        var current = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
-        if (!current || current.type !== type || current.id !== id) return;
-        current.data = freshData;
-        // Mark parent stack entries as stale so they re-fetch on Back navigation
-        for (var i = 0; i < UI.SlideOut._stack.length - 1; i++) {
-          UI.SlideOut._stack[i].stale = true;
-        }
-        UI.SlideOut._render();
-        UI.SlideOut._enrichAndRender(type, id, freshData);
-        if (UI.SlideOut._onMutateCallback) {
-          try { UI.SlideOut._onMutateCallback(type, id); } catch(e) { console.error('[decidr] onMutate callback error:', e); }
-        }
-      }).catch(function(err) {
-        UI.SlideOut._busy = false;
-        console.error('[decidr] Refetch failed:', err);
+        API.getEntity(type, id).then(function(freshData) {
+          UI.SlideOut._withContextKey(contextKey, function() {
+            UI.SlideOut._busy = false;
+            var current = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
+            if (!current || current.type !== type || current.id !== id) return;
+            current.data = freshData;
+            // Mark parent stack entries as stale so they re-fetch on Back navigation
+            for (var i = 0; i < UI.SlideOut._stack.length - 1; i++) {
+              UI.SlideOut._stack[i].stale = true;
+            }
+            UI.SlideOut._render(contextKey);
+            UI.SlideOut._enrichAndRender(type, id, freshData, contextKey);
+            if (UI.SlideOut._onMutateCallback) {
+              try { UI.SlideOut._onMutateCallback(type, id); } catch(e) { console.error('[decidr] onMutate callback error:', e); }
+            }
+          });
+        }).catch(function(err) {
+          UI.SlideOut._withContextKey(contextKey, function() {
+            UI.SlideOut._busy = false;
+            console.error('[decidr] Refetch failed:', err);
+          });
+        });
       });
     },
 
@@ -1704,94 +1804,142 @@
 
     // ─── Detail Renderers (delegated to UI.slideOutX functions) ─────
 
-    back: function() {
-      UI.SlideOut._stack.pop();
-      if (UI.SlideOut._stack.length === 0) {
-        UI.SlideOut.close();
-      } else {
-        var top = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
-        if (top.stale) {
-          top.stale = false;
-          // Re-fetch entity data and enrichments
-          var API = window.__decidrAPI;
-          if (API && top.type && top.id) {
-            UI.SlideOut._render(); // Show current (stale) data immediately
-            API.getEntity(top.type, top.id).then(function(freshData) {
-              var current = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
-              if (!current || current.type !== top.type || current.id !== top.id) return;
-              current.data = freshData;
-              UI.SlideOut._enrichAndRender(top.type, top.id, freshData);
-            }).catch(function(err) {
-              console.error('[decidr] Stale refetch failed:', err);
-            });
-          } else {
-            UI.SlideOut._render();
-          }
+    back: function(sourceOrKey) {
+      var contextKey = UI.SlideOut._resolveContextKey(sourceOrKey);
+      UI.SlideOut._withContextKey(contextKey, function() {
+        UI.SlideOut._stack.pop();
+        if (UI.SlideOut._stack.length === 0) {
+          UI.SlideOut.close(contextKey);
         } else {
-          UI.SlideOut._render();
-        }
-      }
-    },
-
-    close: function() {
-      UI.SlideOut._stack = [];
-      var els = UI.SlideOut._ensureDOM();
-      els.overlay.classList.remove('decidr-so-open');
-      els.panel.classList.remove('decidr-so-open');
-      var callback = UI.SlideOut._onCloseCallback;
-      UI.SlideOut._onCloseCallback = null;
-      UI.SlideOut._onMutateCallback = null;
-      setTimeout(function() {
-        els.overlay.style.display = 'none';
-        els.panel.style.display = 'none';
-        if (callback) callback();
-      }, 300);
-    },
-
-    _ensureDOM: function() {
-      var overlay = document.querySelector('.decidr-so-overlay');
-      var panel = document.querySelector('.decidr-so-panel');
-
-      if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.className = 'decidr-so-overlay';
-        overlay.addEventListener('click', function() {
-          UI.SlideOut.close();
-        });
-        var host = document.querySelector('.session-content.active') || document.body;
-        host.appendChild(overlay);
-        UI.SlideOut._overlay = overlay;
-      }
-
-      if (!panel) {
-        panel = document.createElement('div');
-        panel.className = 'decidr-so-panel';
-
-        var header = document.createElement('div');
-        header.className = 'decidr-so-header';
-
-        var content = document.createElement('div');
-        content.className = 'decidr-so-content';
-
-        panel.appendChild(header);
-        panel.appendChild(content);
-        var host2 = document.querySelector('.session-content.active') || document.body;
-        host2.appendChild(panel);
-
-        // Escape key handler
-        document.addEventListener('keydown', function(e) {
-          if (e.key === 'Escape' && UI.SlideOut._stack.length > 0) {
-            UI.SlideOut.close();
+          var top = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
+          if (top.stale) {
+            top.stale = false;
+            // Re-fetch entity data and enrichments
+            var API = window.__decidrAPI;
+            if (API && top.type && top.id) {
+              UI.SlideOut._render(contextKey); // Show current (stale) data immediately
+              API.getEntity(top.type, top.id).then(function(freshData) {
+                UI.SlideOut._withContextKey(contextKey, function() {
+                  var current = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
+                  if (!current || current.type !== top.type || current.id !== top.id) return;
+                  current.data = freshData;
+                  UI.SlideOut._enrichAndRender(top.type, top.id, freshData, contextKey);
+                });
+              }).catch(function(err) {
+                console.error('[decidr] Stale refetch failed:', err);
+              });
+            } else {
+              UI.SlideOut._render(contextKey);
+            }
+          } else {
+            UI.SlideOut._render(contextKey);
           }
-        });
-      }
+        }
+      });
+    },
 
-      return {
-        overlay: overlay,
-        panel: panel,
-        header: panel.querySelector('.decidr-so-header'),
-        content: panel.querySelector('.decidr-so-content')
-      };
+    close: function(sourceOrKey) {
+      var contextKey = UI.SlideOut._resolveContextKey(sourceOrKey);
+      UI.SlideOut._withContextKey(contextKey, function() {
+        UI.SlideOut._stack = [];
+        var els = UI.SlideOut._ensureDOM(contextKey);
+        if (!els) return;
+        els.overlay.classList.remove('decidr-so-open');
+        els.panel.classList.remove('decidr-so-open');
+        var callback = UI.SlideOut._onCloseCallback;
+        UI.SlideOut._onCloseCallback = null;
+        UI.SlideOut._onMutateCallback = null;
+        setTimeout(function() {
+          els.overlay.style.display = 'none';
+          els.panel.style.display = 'none';
+          if (callback) callback();
+        }, 300);
+      });
+    },
+
+    _ensureDOM: function(contextKey) {
+      var resolvedKey = UI.SlideOut._resolveContextKey(contextKey);
+      return UI.SlideOut._withContextKey(resolvedKey, function() {
+        var context = UI.SlideOut._getContext(resolvedKey);
+        var host = context.host;
+        if (!host) {
+          host = UI.SlideOut._resolveHost();
+          context.host = host;
+        }
+        if (host !== document.body && !host.isConnected) {
+          return null;
+        }
+
+        var overlay = context.overlay;
+        if (!overlay || !overlay.isConnected) {
+          var overlays = host.querySelectorAll('.decidr-so-overlay');
+          for (var oi = 0; oi < overlays.length; oi++) {
+            if (overlays[oi].getAttribute('data-decidr-so-context') === resolvedKey) {
+              overlay = overlays[oi];
+              break;
+            }
+          }
+        }
+
+        if (!overlay) {
+          overlay = document.createElement('div');
+          overlay.className = 'decidr-so-overlay';
+          overlay.setAttribute('data-decidr-so-context', resolvedKey);
+          overlay.addEventListener('click', function() {
+            UI.SlideOut.close(resolvedKey);
+          });
+          host.appendChild(overlay);
+        }
+        context.overlay = overlay;
+
+        var panel = context.panel;
+        if (!panel || !panel.isConnected) {
+          var panels = host.querySelectorAll('.decidr-so-panel');
+          for (var pi = 0; pi < panels.length; pi++) {
+            if (panels[pi].getAttribute('data-decidr-so-context') === resolvedKey) {
+              panel = panels[pi];
+              break;
+            }
+          }
+        }
+
+        if (!panel) {
+          panel = document.createElement('div');
+          panel.className = 'decidr-so-panel';
+          panel.setAttribute('data-decidr-so-context', resolvedKey);
+
+          var header = document.createElement('div');
+          header.className = 'decidr-so-header';
+
+          var content = document.createElement('div');
+          content.className = 'decidr-so-content';
+
+          panel.appendChild(header);
+          panel.appendChild(content);
+          host.appendChild(panel);
+        }
+        context.panel = panel;
+
+        if (!context.escapeHandlerBound) {
+          document.addEventListener('keydown', function(e) {
+            if (e.key !== 'Escape') return;
+            var activeHost = UI.SlideOut._resolveHost();
+            if (activeHost !== host) return;
+            var activeContext = UI.SlideOut._getContext(resolvedKey, host);
+            if (activeContext.stack.length > 0) {
+              UI.SlideOut.close(resolvedKey);
+            }
+          });
+          context.escapeHandlerBound = true;
+        }
+
+        return {
+          overlay: overlay,
+          panel: panel,
+          header: panel.querySelector('.decidr-so-header'),
+          content: panel.querySelector('.decidr-so-content')
+        };
+      });
     },
 
     _wirePanel: function(panel) {
@@ -1802,9 +1950,9 @@
       if (backBtn) {
         backBtn.onclick = function() {
           if (UI.SlideOut._stack.length > 1) {
-            UI.SlideOut.back();
+            UI.SlideOut.back(panel);
           } else {
-            UI.SlideOut.close();
+            UI.SlideOut.close(panel);
           }
         };
       }
@@ -1821,7 +1969,7 @@
             var entityType = el.getAttribute('data-entity-type');
             var entityId = el.getAttribute('data-entity-id');
             if (entityType && entityId) {
-              UI.SlideOut.open(entityType, entityId);
+              UI.SlideOut.open(entityType, entityId, { source: panel });
             }
           };
         })(navItems[i]);
@@ -1920,7 +2068,7 @@
               if (UI.SlideOut._onMutateCallback) {
                 try { UI.SlideOut._onMutateCallback(entityType, id); } catch(e) { console.error('[decidr] onMutate callback error:', e); }
               }
-              UI.SlideOut.back();
+              UI.SlideOut.back(panel);
             }).catch(function(err) { UI.SlideOut._busy = false; console.error('[decidr] Archive failed:', err); });
           }
         };
@@ -1935,7 +2083,7 @@
       var viewAllDecBtn = panel.querySelector('#decidr-so-btn-view-all-decision-timeline');
       if (viewAllDecBtn) {
         viewAllDecBtn.onclick = function() {
-          UI.SlideOut.open('decision-timeline', id);
+          UI.SlideOut.open('decision-timeline', id, { source: panel });
         };
       }
 
@@ -2005,7 +2153,7 @@
             UI.SlideOut._busy = false;
             state.supersedeFormOpen = false;
             if (result && result.id) {
-              UI.SlideOut.open('decision', result.id);
+              UI.SlideOut.open('decision', result.id, { source: panel });
             } else {
               UI.SlideOut._render();
             }
@@ -2285,7 +2433,7 @@
       var viewAllBtn = panel.querySelector('#decidr-so-btn-view-all-project-timeline');
       if (viewAllBtn) {
         viewAllBtn.onclick = function() {
-          UI.SlideOut.open('project-timeline', id);
+          UI.SlideOut.open('project-timeline', id, { source: panel });
         };
       }
 
@@ -2834,6 +2982,29 @@
       }
     }
   };
+
+  Object.defineProperties(UI.SlideOut, {
+    _stack: {
+      get: function() { return UI.SlideOut._getContext().stack; },
+      set: function(value) { UI.SlideOut._getContext().stack = value; }
+    },
+    _overlay: {
+      get: function() { return UI.SlideOut._getContext().overlay; },
+      set: function(value) { UI.SlideOut._getContext().overlay = value; }
+    },
+    _onCloseCallback: {
+      get: function() { return UI.SlideOut._getContext().onCloseCallback; },
+      set: function(value) { UI.SlideOut._getContext().onCloseCallback = value; }
+    },
+    _onMutateCallback: {
+      get: function() { return UI.SlideOut._getContext().onMutateCallback; },
+      set: function(value) { UI.SlideOut._getContext().onMutateCallback = value; }
+    },
+    _busy: {
+      get: function() { return UI.SlideOut._getContext().busy; },
+      set: function(value) { UI.SlideOut._getContext().busy = value; }
+    }
+  });
 
   // ─── Expose private vars for 03-slideouts.js ──────────────────────
   UI._ENTITY_ICONS = ENTITY_ICONS;
