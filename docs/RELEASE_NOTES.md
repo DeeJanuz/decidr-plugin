@@ -1,5 +1,10 @@
 # Unreleased
 
+# 0.1.15
+
+- **fix**: Align `review_pr` plugin guidance with the live backend's flexible PR status transitions. The manifest now describes `review_pr` as assigning the reviewer and moving the PR artifact to the requested status instead of implying it can only set `IN_REVIEW`.
+- **fix**: Update the `github_pr_lifecycle` runbook to use explicit `review_pr(status: ...)` calls for `APPROVED` and `CHANGES_REQUESTED`, removing the prompt/tool mismatch that left BitBooks PR artifacts parked in `IN_REVIEW`.
+
 # 0.1.14
 
 - **fix**: Scope DecidR slideout DOM and state per session container instead of a single global `.decidr-so-panel` / `.decidr-so-overlay`. This fixes the standalone-dashboard bug where opening a decision in a new tab reused the slideout from a previously visited tab.
