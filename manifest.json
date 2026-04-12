@@ -213,7 +213,7 @@
     "list_issue_links": "List entity links for a GitHub issue. Push to decidr_list.",
     "create_pr": "Create a PR artifact tracking record. No auto-push.",
     "list_prs": "List PR artifacts. Push to decidr_list.",
-    "review_pr": "Assign reviewer and transition PR to IN_REVIEW. No auto-push.",
+    "review_pr": "Assign reviewer and transition PR to the requested status (defaults to IN_REVIEW). No auto-push.",
     "merge_pr": "Transition PR to MERGED status. No auto-push.",
     "generate_fix_prompt": "Generate a code fix prompt from issue context. Returns text. No auto-push.",
     "generate_review_prompt": "Generate a PR review prompt. Returns text. No auto-push.",

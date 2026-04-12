@@ -68,13 +68,13 @@ sequenceDiagram
     Agent->>Agent: reconcile (DR &lt;- GH)
     Note over Agent: User tooling runs review<br/>(diff analysis out of scope)
     alt Approve as-is
-        Agent->>DR: review_pr (APPROVED)
+        Agent->>DR: review_pr (status: APPROVED)
         Agent->>GH: submit approval
     else Approve with follow-up commit
         Agent->>GH: commit, push to PR branch
-        Agent->>DR: review_pr (APPROVED)
+        Agent->>DR: review_pr (status: APPROVED)
     else Reject
-        Agent->>DR: review_pr (CHANGES_REQUESTED, comments)
+        Agent->>DR: review_pr (status: CHANGES_REQUESTED)
         Agent->>GH: submit review with comments
     else Close + new PR
         Agent->>GH: close PR
@@ -91,9 +91,9 @@ sequenceDiagram
 2. **Pull PR context from both sides.** Fetch the PR from GitHub and the PR artifact from DecidR. Include the linked issue, the branch state, CI status, and any existing review decisions. Reconcile DecidR to match GitHub before proceeding.
 3. **Run the review.** Hand off to the user's own agent tooling for diff analysis. This runbook does not prescribe review heuristics.
 4. **Act on the review decision.** Exactly one of:
-   - **Approve as-is.** Call `review_pr` with an `APPROVED` decision. GitHub records the approval.
-   - **Approve with a follow-up commit.** Push your commit to the PR branch first, then call `review_pr` with `APPROVED`. Never approve code you modified without also committing that modification visibly on the PR branch.
-   - **Reject.** Call `review_pr` with `CHANGES_REQUESTED` and include the specific comments. Leave the PR open for the coder to respond.
+   - **Approve as-is.** Call `review_pr` with `status: "APPROVED"`.
+   - **Approve with a follow-up commit.** Push your commit to the PR branch first, then call `review_pr` with `status: "APPROVED"`. Never approve code you modified without also committing that modification visibly on the PR branch.
+   - **Reject.** Call `review_pr` with `status: "CHANGES_REQUESTED"`. Leave the PR open for the coder to respond.
    - **Close and restart.** Close the PR on GitHub, reconcile DecidR to reflect the closed state, then hand the original issue back to a coder session to open a fresh PR.
 5. **Reconcile after the action.** Refetch both sides and confirm convergence.
 6. **Report back.** Give the user the outcome, the linked issue, the coder to notify (if rejecting), and the DecidR PR artifact status.
