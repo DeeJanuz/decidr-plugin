@@ -1507,6 +1507,9 @@
       } else if (type === 'initiative') {
         fetches.push({ key: 'projects', promise: API.listProjects({ initiativeId: id }) });
         fetches.push({ key: 'decisions', promise: API.listDecisions({ initiativeId: id }) });
+      } else if (type === 'organization-settings') {
+        fetches.push({ key: 'githubStatus', promise: API.getLudflowGitHubStatus() });
+        fetches.push({ key: 'githubRepositories', promise: API.listLudflowGitHubRepositories({ page: 1, limit: 100 }) });
       } else if (type === 'project-timeline') {
         fetches.push({ key: 'timeline', promise: API.getTimeline({ projectId: id, take: 100 }) });
       } else if (type === 'decision-timeline') {
@@ -2581,6 +2584,59 @@
     _wireOrganizationSettingsEvents: function(panel, id, data) {
       var API = window.__decidrAPI;
       if (!API) return;
+
+      var connectGitHubBtn = panel.querySelector('#decidr-so-btn-connect-ludflow-github');
+      if (connectGitHubBtn) {
+        connectGitHubBtn.onclick = function() {
+          if (UI.SlideOut._guardBusy()) return;
+          API.connectLudflowGitHub().then(function(result) {
+            UI.SlideOut._busy = false;
+            if (result && result.installUrl) {
+              window.open(result.installUrl, '_blank');
+            }
+          }).catch(function(err) {
+            UI.SlideOut._busy = false;
+            console.error('[decidr] Connect Ludflow GitHub failed:', err);
+          });
+        };
+      }
+
+      var metadataToggleButtons = panel.querySelectorAll('[data-ludflow-github-toggle-id]');
+      for (var mt = 0; mt < metadataToggleButtons.length; mt++) {
+        (function(btn) {
+          btn.onclick = function() {
+            var repoId = btn.getAttribute('data-ludflow-github-toggle-id');
+            if (!repoId) return;
+            var currentlyEnabled = btn.getAttribute('data-ludflow-github-toggle-enabled') === '1';
+            if (UI.SlideOut._guardBusy()) return;
+            API.updateLudflowGitHubRepository(repoId, {
+              metadataSyncEnabled: !currentlyEnabled
+            }).then(function() {
+              UI.SlideOut._refetchAndRender();
+            }).catch(function(err) {
+              UI.SlideOut._busy = false;
+              console.error('[decidr] Update Ludflow GitHub repository failed:', err);
+            });
+          };
+        })(metadataToggleButtons[mt]);
+      }
+
+      var metadataRefreshButtons = panel.querySelectorAll('[data-ludflow-github-refresh-id]');
+      for (var mr = 0; mr < metadataRefreshButtons.length; mr++) {
+        (function(btn) {
+          btn.onclick = function() {
+            var repoId = btn.getAttribute('data-ludflow-github-refresh-id');
+            if (!repoId) return;
+            if (UI.SlideOut._guardBusy()) return;
+            API.refreshLudflowGitHubRepository(repoId).then(function() {
+              UI.SlideOut._refetchAndRender();
+            }).catch(function(err) {
+              UI.SlideOut._busy = false;
+              console.error('[decidr] Refresh Ludflow GitHub repository failed:', err);
+            });
+          };
+        })(metadataRefreshButtons[mr]);
+      }
 
       var inviteBtn = panel.querySelector('#decidr-so-btn-send-org-invite');
       if (inviteBtn) {

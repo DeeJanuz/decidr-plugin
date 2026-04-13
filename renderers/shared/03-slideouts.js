@@ -209,7 +209,12 @@
     var permissions = payload.permissions || {};
     var members = payload.members || [];
     var invitations = payload.invitations || [];
+    var enriched = payload._enriched || {};
+    var githubStatus = enriched.githubStatus || null;
+    var githubRepoResponse = enriched.githubRepositories || null;
+    var githubRepos = githubRepoResponse && githubRepoResponse.repositories ? githubRepoResponse.repositories : [];
     var currentUserRole = permissions.currentUserRole || 'MEMBER';
+    var canManageGitHub = currentUserRole === 'OWNER' || currentUserRole === 'ADMIN';
     var inviteRoleOptions = currentUserRole === 'OWNER'
       ? ['OWNER', 'ADMIN', 'MEMBER']
       : ['ADMIN', 'MEMBER'];
@@ -224,6 +229,72 @@
       metaItems.push({ html: '<strong>Slug:</strong> ' + UI.escapeHtml(organization.slug) });
     }
     html += UI.SlideOut._renderMeta(metaItems);
+
+    html += '<div class="decidr-so-section">';
+    html += UI.SlideOut._renderSectionHeader('GitHub Sync');
+    if (githubStatus) {
+      var connected = !!githubStatus.connected;
+      var ghSummary = githubStatus.summary || {};
+      html += '<div class="decidr-so-meta" style="margin-bottom:var(--space-3);">';
+      html += '<span class="decidr-so-meta-item"><strong>Status:</strong> ' + UI.escapeHtml(connected ? 'Connected via Ludflow' : 'Not connected') + '</span>';
+      html += '<span class="decidr-so-meta-item"><strong>Repos:</strong> ' + UI.escapeHtml(String(ghSummary.repositoryCount || 0)) + '</span>';
+      html += '<span class="decidr-so-meta-item"><strong>Metadata Sync:</strong> ' + UI.escapeHtml(String(ghSummary.metadataSyncRepositoryCount || 0)) + ' enabled</span>';
+      html += '</div>';
+
+      if (githubStatus.installations && githubStatus.installations.length) {
+        html += '<div class="decidr-so-empty-hint" style="margin-bottom:var(--space-2);">Connected account: '
+          + UI.escapeHtml(githubStatus.installations[0].accountLogin || 'GitHub') + '</div>';
+      }
+
+      if (canManageGitHub) {
+        html += '<div class="decidr-so-quick-actions">';
+        html += '<button class="decidr-so-btn decidr-so-btn-sm" id="decidr-so-btn-connect-ludflow-github">'
+          + (connected ? 'Reconnect GitHub' : 'Connect GitHub')
+          + '</button>';
+        html += '</div>';
+      }
+
+      if (connected) {
+        if (githubRepos.length > 0) {
+          for (var gr = 0; gr < githubRepos.length; gr++) {
+            var repo = githubRepos[gr];
+            html += '<div class="decidr-so-doc-item" style="align-items:flex-start;gap:10px;">';
+            html += '<div style="flex:1 1 auto;">';
+            html += '<div class="decidr-so-doc-link" style="pointer-events:none;">' + UI.escapeHtml(repo.fullName || ((repo.owner || '') + '/' + (repo.name || ''))) + '</div>';
+            html += '<div class="decidr-so-empty-hint">';
+            html += UI.escapeHtml(repo.metadataSyncEnabled ? 'Hourly metadata sync enabled' : 'Metadata sync disabled');
+            if (repo.lastMetadataSyncedAt) {
+              html += ' · Last sync ' + UI.escapeHtml(UI.formatDate(repo.lastMetadataSyncedAt));
+            } else {
+              html += ' · Never synced';
+            }
+            if (repo.metadataSyncStatus) {
+              html += ' · Status ' + UI.escapeHtml(repo.metadataSyncStatus);
+            }
+            html += '</div>';
+            html += '</div>';
+            if (canManageGitHub) {
+              html += '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">';
+              html += '<button class="decidr-so-btn decidr-so-btn-sm" data-ludflow-github-toggle-id="' + UI.escapeHtml(repo.id) + '" data-ludflow-github-toggle-enabled="' + (repo.metadataSyncEnabled ? '1' : '0') + '">'
+                + (repo.metadataSyncEnabled ? 'Disable Sync' : 'Enable Sync')
+                + '</button>';
+              html += '<button class="decidr-so-btn decidr-so-btn-sm" data-ludflow-github-refresh-id="' + UI.escapeHtml(repo.id) + '">Refresh Now</button>';
+              html += '</div>';
+            }
+            html += '</div>';
+          }
+        } else {
+          html += '<div class="decidr-so-empty-hint">GitHub is connected, but no repositories have been fetched in Ludflow yet.</div>';
+        }
+      } else {
+        html += '<div class="decidr-so-empty-hint">Connect GitHub through Ludflow to manage automatic repository metadata sync.</div>';
+      }
+    } else if (!payload._enrichmentDone) {
+      html += '<div class="decidr-so-empty-hint">Loading GitHub sync settings...</div>';
+    } else {
+      html += '<div class="decidr-so-empty-hint">Unable to load GitHub sync settings right now.</div>';
+    }
+    html += '</div>';
 
     html += '<div class="decidr-so-section">';
     html += UI.SlideOut._renderSectionHeader('Invite Member');

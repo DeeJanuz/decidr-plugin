@@ -507,6 +507,30 @@
       return api.get('/organizations/' + orgId + '/members');
     },
 
+    getLudflowGitHubStatus: function() {
+      return api.get('/github/ludflow/status');
+    },
+
+    connectLudflowGitHub: function() {
+      return api.post('/github/ludflow/connect', {});
+    },
+
+    listLudflowGitHubRepositories: function(params) {
+      return api.get('/github/ludflow/repositories' + _qs(params));
+    },
+
+    getLudflowGitHubRepository: function(id) {
+      return api.get('/github/ludflow/repositories/' + id);
+    },
+
+    updateLudflowGitHubRepository: function(id, data) {
+      return api.patch('/github/ludflow/repositories/' + id, data);
+    },
+
+    refreshLudflowGitHubRepository: function(id) {
+      return api.post('/github/ludflow/repositories/' + id + '/refresh-metadata', {});
+    },
+
     inviteOrgMember: function(orgId, data) {
       var payload = {
         email: data.email,
@@ -665,14 +689,6 @@
 
     getPR: function(id) {
       return api.get('/github/prs/' + id);
-    },
-
-    syncIssues: function(repoId) {
-      return api.post('/github/sync/' + repoId);
-    },
-
-    getSyncStatus: function(repoId) {
-      return api.get('/github/sync/' + repoId);
     },
 
     getEntityGithubSummary: function(entityType, entityId) {

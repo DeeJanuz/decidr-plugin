@@ -4,7 +4,7 @@ You are an agent participating in a GitHub PR lifecycle governed by DecidR. This
 
 ## Prime directives (non-negotiable)
 
-1. **GitHub is authoritative.** DecidR does not yet receive webhook updates from GitHub. You must actively reconcile DecidR to match GitHub before and after your actions. Never update GitHub to match DecidR.
+1. **GitHub is authoritative.** Inbound GitHub sync into DecidR is handled automatically through Ludflow-managed metadata. Never invent a parallel manual sync path.
 2. **Never add DecidR-side enforcement.** Review policy, required approvals, branch protection, and merge gates live in GitHub. If GitHub blocks you, surface the blocker to the user in plain language. Do not route around it.
 3. **Stay in your lane.** Only touch the specific issue or PR the user explicitly directed you to. Do not scan other issues, modify other PRs, or trigger side effects outside the current lifecycle step.
 4. **Do not prescribe the fix.** Code generation, review heuristics, and diff analysis are owned by the user's own agent tooling. This runbook only covers the lifecycle mechanics around those steps.
@@ -46,11 +46,11 @@ sequenceDiagram
 ### Coder steps
 
 1. **Identify the issue.** Resolve the user's pointer to an `issue_ref_id`. Use `list_issues` / DecidR search if the user only gave you a partial reference or URL.
-2. **Pull issue context from both sides.** Fetch the issue on GitHub and the DecidR entity linked to it. If they diverge, reconcile DecidR to match GitHub before doing anything else.
+2. **Pull issue context from both sides.** Fetch the issue on GitHub and the DecidR entity linked to it. If the user asks about freshness, use the Ludflow-backed metadata refresh tools instead of hand-managed sync logic.
 3. **Create a branch.** Use the convention `fix/<issue-number>-<short-description>` unless the user specifies otherwise.
 4. **Generate the fix.** Hand off to the user's own agent tooling for code generation, tests, and commit messages. This runbook does not prescribe how the fix is produced.
 5. **Open the PR.** Call `create_pr` with the branch name, the `issue_ref` linking it to the DecidR issue, and a reviewer assignment. The DecidR tool surfaces the PR in GitHub with the correct linkage.
-6. **Reconcile after creation.** Refetch the PR artifact from DecidR and the PR state from GitHub. Confirm they agree. Report any residual drift as a warning, not a silent fix.
+6. **Confirm creation.** Refetch the PR artifact from DecidR and the PR state from GitHub. Report any residual mismatch as a warning, not a silent fix.
 7. **Report back.** Give the user the PR URL, the reviewer, the DecidR PR artifact ID, and the current status. Stop. Your job is done until the reviewer responds.
 
 ## Reviewer path
@@ -88,34 +88,19 @@ sequenceDiagram
 ### Reviewer steps
 
 1. **Identify the PR.** Resolve the user's pointer to a DecidR PR artifact ID. Use `list_prs` if needed.
-2. **Pull PR context from both sides.** Fetch the PR from GitHub and the PR artifact from DecidR. Include the linked issue, the branch state, CI status, and any existing review decisions. Reconcile DecidR to match GitHub before proceeding.
+2. **Pull PR context from both sides.** Fetch the PR from GitHub and the PR artifact from DecidR. Include the linked issue, the branch state, CI status, and any existing review decisions.
 3. **Run the review.** Hand off to the user's own agent tooling for diff analysis. This runbook does not prescribe review heuristics.
 4. **Act on the review decision.** Exactly one of:
    - **Approve as-is.** Call `review_pr` with `status: "APPROVED"`.
    - **Approve with a follow-up commit.** Push your commit to the PR branch first, then call `review_pr` with `status: "APPROVED"`. Never approve code you modified without also committing that modification visibly on the PR branch.
    - **Reject.** Call `review_pr` with `status: "CHANGES_REQUESTED"`. Leave the PR open for the coder to respond.
    - **Close and restart.** Close the PR on GitHub, reconcile DecidR to reflect the closed state, then hand the original issue back to a coder session to open a fresh PR.
-5. **Reconcile after the action.** Refetch both sides and confirm convergence.
+5. **Confirm the action.** Refetch both sides and confirm the write completed.
 6. **Report back.** Give the user the outcome, the linked issue, the coder to notify (if rejecting), and the DecidR PR artifact status.
 
-## Reconciliation protocol (the no-webhook workaround)
+## Sync model
 
-DecidR does not currently receive webhook updates from GitHub. Every lifecycle step must be wrapped in explicit reconciliation:
-
-1. **Before the action.** Fetch GitHub state. Fetch DecidR state. Diff them.
-2. **If diverged.** Update DecidR to match GitHub. Never the reverse. GitHub is truth.
-3. **Take the action.** Prefer DecidR tools that proxy to GitHub (e.g., `create_pr`, `review_pr`) over direct GitHub calls so that DecidR records the change as it happens.
-4. **After the action.** Refetch both sides. Confirm convergence. If drift remains, retry reconciliation once. If it still remains, surface the divergence to the user and stop.
-
-### Fields to reconcile
-
-- PR status (open, closed, merged)
-- Head SHA
-- Review decision (approved, changes requested, pending)
-- Merge state (clean, blocked, dirty, behind)
-- Linked issue ref
-- Reviewer assignment
-- CI check status
+Inbound GitHub state flows into DecidR from Ludflow-managed metadata sync. Use `get_repo_last_sync` or `refresh_repo_metadata` if the user needs to verify freshness. Outbound actions such as `create_issue`, `create_pr`, `review_pr`, and `merge_pr` still use the caller's DecidR GitHub PAT connection.
 
 ## Failure modes
 
@@ -127,7 +112,7 @@ DecidR does not currently receive webhook updates from GitHub. Every lifecycle s
 | Merge conflict | Report the conflict. Do not auto-resolve. Ask the user whether to rebase manually or abandon. |
 | Stale branch (behind base) | Report the drift. Ask the user whether to rebase the branch. |
 | Context truncated mid-lifecycle | The next agent session resumes by querying `list_prs` filtered by the `issue_ref`. No resume token is required — the PR artifact is the resume point. |
-| DecidR / GitHub divergence after reconciliation | Log a reconciliation warning. Retry once. If still diverged, hand off to the user with the exact field-level diff. |
+| DecidR / GitHub mismatch after a write action | Report the exact mismatch to the user. Use the Ludflow-backed refresh tools if the issue is on the inbound sync side. |
 
 ## What this runbook deliberately does NOT cover
 
@@ -136,4 +121,4 @@ DecidR does not currently receive webhook updates from GitHub. Every lifecycle s
 - DecidR-side approval gates (none exist; governance lives in GitHub)
 - Non-PR lifecycles such as issue triage or decision approval (separate runbooks)
 - Cross-repo coordination or stacked PRs (single PR scope only in v1)
-- Webhook-driven sync (explicitly out of scope until DecidR ships webhook ingestion)
+- Alternate manual sync workflows outside Ludflow-managed metadata

@@ -7,7 +7,7 @@ MCPViews plugin for [DecidR](https://app.decidrmcp.com) — a decision graph too
 - **decidr_list** — Universal entity list/detail view with slide-out panels
 - **decidr_dashboard** — Initiative dashboard with health bars, project cards, and action items
 - **decidr_graph** — Force-directed SVG graph of projects and bridges
-- **decidr_github_auth** — Secure GitHub PAT entry form
+- **decidr_github_auth** — Secure GitHub PAT entry form for outbound GitHub write actions
 
 ## Organization Picker
 

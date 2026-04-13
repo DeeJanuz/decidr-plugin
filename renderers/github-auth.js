@@ -16,9 +16,9 @@
       html += '<svg width="40" height="40" viewBox="0 0 16 16" fill="none" style="margin-bottom:var(--space-3);">';
       html += '<path fill-rule="evenodd" clip-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" fill="currentColor"/>';
       html += '</svg>';
-      html += '<h2 style="margin:0;font-size:var(--text-h2);color:var(--text-primary);">Connect GitHub</h2>';
+      html += '<h2 style="margin:0;font-size:var(--text-h2);color:var(--text-primary);">Connect GitHub PAT</h2>';
       html += '<p style="margin:var(--space-2) 0 0;color:var(--text-secondary);font-size:var(--text-small);">';
-      html += 'Enter your GitHub username and a Personal Access Token to connect.</p>';
+      html += 'Enter your GitHub username and a Personal Access Token for outbound GitHub write actions. Repository sync itself is managed automatically through Ludflow.</p>';
       html += '</div>';
 
       // Form
@@ -45,6 +45,7 @@
       html += '<p style="margin:var(--space-1) 0 0;font-size:var(--text-xs);color:var(--text-tertiary);">';
       html += 'Create at GitHub &rarr; Settings &rarr; Developer settings &rarr; Personal access tokens. ';
       html += 'Your PAT is sent directly to DecidR and encrypted &mdash; it never passes through the AI agent. ';
+      html += 'This PAT is used for outbound actions like creating issues, opening PRs, reviews, and merges. ';
       html += 'Note: you must be signed in to DecidR in this companion first for the PAT to be saved.</p>';
       html += '</div>';
 
@@ -57,7 +58,7 @@
       html += 'background:var(--accent-primary);color:#fff;border:none;border-radius:var(--border-radius-md);';
       html += 'font-size:var(--text-body);font-weight:var(--weight-medium);cursor:pointer;';
       html += 'transition:background 0.15s ease;';
-      html += '">Connect GitHub Account</button>';
+      html += '">Save GitHub PAT</button>';
 
       html += '</div>'; // form
       html += '</div>'; // wrapper
@@ -96,7 +97,7 @@
 
       function resetSubmitButton() {
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Connect GitHub Account';
+        submitBtn.textContent = 'Save GitHub PAT';
         submitBtn.style.opacity = '1';
       }
 
@@ -172,8 +173,8 @@
           githubUsername: username,
           accessToken: token
         }).then(function() {
-          showStatus('GitHub account connected successfully! You can close this panel.', 'success');
-          submitBtn.textContent = 'Connected';
+          showStatus('GitHub PAT saved successfully for outbound write actions. You can close this panel.', 'success');
+          submitBtn.textContent = 'Saved';
           submitBtn.style.background = 'rgba(34,197,94,0.8)';
           tokenInput.value = '';
         }).catch(function(err) {

@@ -12,8 +12,8 @@
   function detectEntityType(toolName) {
     if (!toolName) return '';
     // Handle GitHub-specific tools that don't match the standard regex
-    if (toolName === 'sync_issues' || toolName === 'list_issue_links') return 'issue';
-    if (toolName === 'sync_status' || toolName === 'link_repo' || toolName === 'unlink_repo' || toolName === 'manage_repo_admin') return 'repo';
+    if (toolName === 'list_issue_links' || toolName === 'create_issue') return 'issue';
+    if (toolName === 'get_repo_last_sync' || toolName === 'refresh_repo_metadata' || toolName === 'link_repo_to_project' || toolName === 'manage_repo_admin') return 'repo';
     if (toolName === 'connect_github' || toolName === 'disconnect_github') return '';
     if (toolName === 'link_issue' || toolName === 'unlink_issue') return 'issue';
     if (toolName === 'review_pr' || toolName === 'merge_pr') return 'pull_request';

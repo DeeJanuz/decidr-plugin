@@ -40,7 +40,7 @@
     },
     {
       "name": "github_pr_lifecycle",
-      "description": "Behavioral runbook for agents participating in the GitHub PR lifecycle governed by DecidR. Covers coder and reviewer role paths, the no-webhook reconciliation protocol, failure modes, and scope boundaries. Fetch and follow before taking any action on a GitHub issue or PR linked to a DecidR entity.",
+      "description": "Behavioral runbook for agents participating in the GitHub PR lifecycle governed by DecidR. Covers coder and reviewer role paths, failure modes, and scope boundaries. Fetch and follow before taking any action on a GitHub issue or PR linked to a DecidR entity.",
       "arguments": [],
       "source": "prompts/github-pr-lifecycle.md"
     }
@@ -48,8 +48,8 @@
   "plugin_rules": [
     "When the user asks for action items, to-do items, pending work, or what needs attention: call my_action_items and push to decidr_list. Never open decidr_dashboard for these requests.",
     "When showing entity details (get_initiative, get_project, get_decision, get_task, get_bridge): always push to decidr_list. Only open decidr_dashboard or decidr_graph when the user explicitly asks for a 'dashboard', 'overview', 'graph', or 'map'.",
-    "Before taking any action on a GitHub issue or PR linked to DecidR (fix, create_pr, review_pr, merge_pr, or any reconciliation), fetch the github_pr_lifecycle prompt and follow its coder or reviewer path. DecidR does not yet receive webhooks from GitHub, so you must reconcile DecidR state to match GitHub before and after every lifecycle step. Never add DecidR-side enforcement for review or merge policy \u2014 that lives in GitHub.",
-    "When any GitHub tool fails with 'GitHub connection not found' or the user asks to connect GitHub, push the decidr_github_auth renderer \u2014 do not call connect_github with a PAT collected in chat. Before using GitHub tools for the first time in a session, verify with list_repos; if empty, the likely cause is a missing connection or no linked repos \u2014 push decidr_github_auth first, then call link_repo."
+    "Before taking any action on a GitHub issue or PR linked to DecidR (create_issue, create_pr, review_pr, merge_pr, or prompt generation), fetch the github_pr_lifecycle prompt and follow it. Inbound GitHub sync is automatic through Ludflow-backed metadata. Use get_repo_last_sync or refresh_repo_metadata when the user asks about freshness, and never reintroduce manual sync or reconciliation instructions.",
+    "When a GitHub write tool fails with 'GitHub connection not found' or the user asks to connect a GitHub PAT for outbound writes, push the decidr_github_auth renderer \u2014 do not call connect_github with a PAT collected in chat. For org-level GitHub connection and metadata-sync settings, use the organization settings GitHub section backed by Ludflow, not the PAT flow."
   ],
   "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.15/decidr.zip",
   "registry_index": {
@@ -138,13 +138,15 @@
       },
       {
         "name": "GitHub",
-        "hint": "GitHub integration \u2014 connect repos, sync issues, manage PRs, generate prompts",
+        "hint": "GitHub integration \u2014 Ludflow-backed inbound sync plus DecidR PAT-backed outbound writes",
         "tools": [
           "connect_github",
           "disconnect_github",
-          "link_repo",
-          "unlink_repo",
           "list_repos",
+          "get_repo_last_sync",
+          "refresh_repo_metadata",
+          "link_repo_to_project",
+          "create_issue",
           "list_issues",
           "link_issue",
           "unlink_issue",
@@ -155,8 +157,6 @@
           "merge_pr",
           "generate_fix_prompt",
           "generate_review_prompt",
-          "sync_issues",
-          "sync_status",
           "manage_repo_admin"
         ]
       }
@@ -202,23 +202,23 @@
     "find_entities_by_ludflow_document": "Find all DecidR entities linked to a LudFlow document. Enables bidirectional navigation.",
     "archive_entity": "Soft-delete (archive) an entity. Archived entities are hidden from default lists but can be restored. Use when the user wants to remove or delete an entity.",
     "restore_entity": "Restore a previously archived entity. Use when the user wants to undelete or bring back an archived entity.",
-    "connect_github": "Do NOT call this tool directly with a user-supplied PAT \u2014 that leaks the token through the chat. Instead push the decidr_github_auth renderer (empty data, or { github_username }) so the user enters their PAT in the companion's secure form. Only call this tool directly when you already hold a service credential (e.g., from an OAuth callback). Connection is per-user, per-org.",
+    "connect_github": "Do NOT call this tool directly with a user-supplied PAT \u2014 that leaks the token through the chat. Instead push the decidr_github_auth renderer so the user enters their PAT in the companion's secure form. This PAT is only for outbound GitHub write actions such as create_issue/create_pr/review_pr/merge_pr.",
     "disconnect_github": "Disconnect GitHub account from the current org. No auto-push.",
-    "link_repo": "Link a GitHub repo to the current org. Requires an existing GitHub connection (push decidr_github_auth first if missing). No auto-push.",
-    "unlink_repo": "Unlink a GitHub repo from the current org. No auto-push.",
-    "list_repos": "List linked GitHub repos. Use as a preflight check before sync_issues/list_issues. Push to decidr_list.",
+    "list_repos": "List DecidR-linked GitHub repos. Push to decidr_list.",
+    "get_repo_last_sync": "Get Ludflow-backed metadata sync state for a linked repo, including the last sync timestamp. Push to decidr_list.",
+    "refresh_repo_metadata": "Ask Ludflow to refresh GitHub metadata for a linked repo. Use when the user wants a fresh inbound sync. No auto-push.",
+    "link_repo_to_project": "Link a GitHub repo to a project so Ludflow-synced issues and pull requests appear on that project. No auto-push.",
+    "create_issue": "Create a GitHub issue using the caller's DecidR PAT connection and record the created issue in DecidR. No auto-push.",
     "list_issues": "List synced GitHub issues. Push to decidr_list.",
     "link_issue": "Link a GitHub issue to a DecidR entity. No auto-push.",
     "unlink_issue": "Unlink a GitHub issue from a DecidR entity. No auto-push.",
     "list_issue_links": "List entity links for a GitHub issue. Push to decidr_list.",
-    "create_pr": "Create a PR artifact tracking record. No auto-push.",
+    "create_pr": "Create a GitHub pull request using the caller's DecidR PAT connection and record the resulting PR artifact in DecidR. No auto-push.",
     "list_prs": "List PR artifacts. Push to decidr_list.",
-    "review_pr": "Assign reviewer and transition PR to the requested status (defaults to IN_REVIEW). No auto-push.",
-    "merge_pr": "Transition PR to MERGED status. No auto-push.",
+    "review_pr": "Record the current user as reviewer in DecidR and, for APPROVED/CHANGES_REQUESTED, post the corresponding review to GitHub. No auto-push.",
+    "merge_pr": "Merge a GitHub pull request and mark the DecidR PR artifact as MERGED. No auto-push.",
     "generate_fix_prompt": "Generate a code fix prompt from issue context. Returns text. No auto-push.",
     "generate_review_prompt": "Generate a PR review prompt. Returns text. No auto-push.",
-    "sync_issues": "Sync GitHub issues into DecidR. Requires a GitHub connection AND a linked repo \u2014 if either is missing, push decidr_github_auth or call link_repo first. No auto-push.",
-    "sync_status": "Get sync status for a linked repo. Requires a linked repo. Push to decidr_list.",
     "manage_repo_admin": "Add or remove repo admin. No auto-push."
   },
   "no_auto_push": [
@@ -239,8 +239,9 @@
     "restore_entity",
     "connect_github",
     "disconnect_github",
-    "link_repo",
-    "unlink_repo",
+    "link_repo_to_project",
+    "refresh_repo_metadata",
+    "create_issue",
     "link_issue",
     "unlink_issue",
     "create_pr",
@@ -248,7 +249,6 @@
     "merge_pr",
     "generate_fix_prompt",
     "generate_review_prompt",
-    "sync_issues",
     "manage_repo_admin"
   ],
   "renderers": {
@@ -287,9 +287,11 @@
     "restore_entity": "decidr_list",
     "connect_github": "decidr_github_auth",
     "disconnect_github": "decidr_list",
-    "link_repo": "decidr_list",
-    "unlink_repo": "decidr_list",
     "list_repos": "decidr_list",
+    "get_repo_last_sync": "decidr_list",
+    "refresh_repo_metadata": "decidr_list",
+    "link_repo_to_project": "decidr_list",
+    "create_issue": "decidr_list",
     "list_issues": "decidr_list",
     "link_issue": "decidr_list",
     "unlink_issue": "decidr_list",
@@ -300,8 +302,6 @@
     "merge_pr": "decidr_list",
     "generate_fix_prompt": "decidr_list",
     "generate_review_prompt": "decidr_list",
-    "sync_issues": "decidr_list",
-    "sync_status": "decidr_list",
     "manage_repo_admin": "decidr_list"
   },
   "renderer_definitions": [
@@ -345,9 +345,11 @@
         "restore_entity",
         "connect_github",
         "disconnect_github",
-        "link_repo",
-        "unlink_repo",
         "list_repos",
+        "get_repo_last_sync",
+        "refresh_repo_metadata",
+        "link_repo_to_project",
+        "create_issue",
         "list_issues",
         "link_issue",
         "unlink_issue",
@@ -358,8 +360,6 @@
         "merge_pr",
         "generate_fix_prompt",
         "generate_review_prompt",
-        "sync_issues",
-        "sync_status",
         "manage_repo_admin"
       ],
       "data_hint": "IMPORTANT: Always use ref-only mode. Pass entity references \u2014 the renderer fetches full data from the API. Format: { entities: [{ type: 'initiative'|'project'|'decision'|'task'|'bridge'|'issue'|'pull_request'|'repo', id: string }], meta: { organization_id: string, result_count: number, tool_name: string } }. The tool_name determines rendering mode: 'list_decisions' for list view, 'get_decision' for detail view, 'my_action_items' for action items, 'search' for search results. Entity type names are singular lowercase. Never pass full entity payloads \u2014 only type and id."
@@ -377,7 +377,7 @@
       "name": "decidr_github_auth",
       "description": "Secure GitHub authentication form \u2014 enter PAT directly in the companion without passing through the AI agent",
       "scope": "tool",
-      "rule": "Push whenever the user needs to connect GitHub OR when any GitHub tool fails with 'GitHub connection not found'. Renders a secure form in the companion \u2014 the user's PAT goes straight to DecidR and never passes through the agent. Never ask the user to paste a PAT in chat; push this renderer instead.",
+      "rule": "Push whenever the user needs to connect a GitHub PAT for outbound GitHub writes OR when a write tool fails with 'GitHub connection not found'. Renders a secure form in the companion \u2014 the user's PAT goes straight to DecidR and never passes through the agent. Never ask the user to paste a PAT in chat; push this renderer instead.",
       "tools": [
         "connect_github"
       ],
