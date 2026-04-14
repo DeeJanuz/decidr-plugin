@@ -1,5 +1,9 @@
 # Unreleased
 
+# 0.1.17
+
+- **fix**: Hydrate linked documents through the shared slideout enrichment pipeline for project, decision, task, bridge, and initiative panels. These slideouts all render the shared document section from `entity.documents`, but some detail endpoints do not include linked documents in their primary payloads. The slideout now calls `listEntityDocuments(...)` during enrichment and normalizes that response back onto `entity.documents`, so linked LudFlow documents reliably appear in the project slideout instead of incorrectly showing "No linked documents."
+
 # 0.1.15
 
 - **fix**: Align `review_pr` plugin guidance with the live backend's flexible PR status transitions. The manifest now describes `review_pr` as assigning the reviewer and moving the PR artifact to the requested status instead of implying it can only set `IN_REVIEW`.

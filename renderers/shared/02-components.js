@@ -1400,6 +1400,11 @@
 
             for (var i = 0; i < keys.length; i++) {
               if (results[i] != null) {
+                if (keys[i] === 'documents') {
+                  top.data.documents = UI.SlideOut._normalizeListPayload(results[i]);
+                  top.data._enriched[keys[i]] = top.data.documents;
+                  continue;
+                }
                 top.data._enriched[keys[i]] = results[i];
               }
             }
@@ -1461,6 +1466,20 @@
       var API = window.__decidrAPI;
       if (!API) return [];
       var fetches = [];
+      var documentEntityTypes = {
+        decision: 'DECISION',
+        project: 'PROJECT',
+        task: 'TASK',
+        bridge: 'BRIDGE',
+        initiative: 'INITIATIVE'
+      };
+
+      if (documentEntityTypes[type]) {
+        fetches.push({
+          key: 'documents',
+          promise: API.listEntityDocuments(documentEntityTypes[type], id)
+        });
+      }
 
       if (type === 'decision') {
         // Parent entity
@@ -1517,6 +1536,13 @@
       }
 
       return fetches;
+    },
+
+    _normalizeListPayload: function(payload) {
+      if (!payload) return [];
+      if (Array.isArray(payload)) return payload;
+      if (Array.isArray(payload.data)) return payload.data;
+      return [];
     },
 
     // ─── Shared Rendering Helpers ──────────────────────────────────
