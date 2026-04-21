@@ -56,6 +56,7 @@ bundle_renderer() {
 
 bundle_renderer renderers/list.js        decidr-list.js
 bundle_renderer renderers/dashboard.js  decidr-dashboard.js
+bundle_renderer renderers/timeline.js   decidr-timeline.js
 bundle_renderer renderers/graph.js      decidr-graph.js
 bundle_renderer renderers/github-auth.js decidr-github-auth.js
 

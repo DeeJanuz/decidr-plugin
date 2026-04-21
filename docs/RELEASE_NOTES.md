@@ -1,5 +1,13 @@
 # Unreleased
 
+# 0.1.19
+
+- **feat**: Add the standalone `decidr_timeline` renderer for executive roadmap scanning across initiatives, blending task due dates, entity lifecycle markers, GitHub items, and `/timeline` activity into all-initiatives and focused-initiative views with org switching and slideout drill-in.
+
+# 0.1.18
+
+- **feat**: Add the `planning_decision_governance` behavioral runbook and an always-on plugin rule that breadcrumbs agents to ask before logging DecidR-looking implementation plans, discover the right organization/context, prefer updating existing decisions and docs, and review batch decision/document mutations before execution.
+
 # 0.1.17
 
 - **fix**: Hydrate linked documents through the shared slideout enrichment pipeline for project, decision, task, bridge, and initiative panels. These slideouts all render the shared document section from `entity.documents`, but some detail endpoints do not include linked documents in their primary payloads. The slideout now calls `listEntityDocuments(...)` during enrichment and normalizes that response back onto `entity.documents`, so linked LudFlow documents reliably appear in the project slideout instead of incorrectly showing "No linked documents."
