@@ -55,7 +55,11 @@ Before transitioning a decision out of `DRAFT`, confirm it has at least one link
 For each logged plan, ensure there is supporting documentation:
 
 - Prefer an existing LudFlow document when it already describes the plan or decision.
-- If document creation tooling is available, create or update the supporting document before linking it.
+- Before creating a new LudFlow document, search or list existing LudFlow documents and folders to identify the right location.
+- Reuse an existing relevant folder hierarchy when one already exists.
+- If no relevant folder structure exists, create or use a folder named after the best matching DecidR project.
+- If no project context is identifiable, ask the user where the document should live before creating it.
+- If document creation tooling is available, create or update the supporting document before linking it, then move the document into the selected folder if the write tool created it elsewhere.
 - If no document can be created from the current toolset, ask the user for the document URL or LudFlow document to link.
 - Link supporting documents to the DecidR decision or parent entity with `decidr_link_document`.
 

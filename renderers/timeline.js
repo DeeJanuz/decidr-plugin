@@ -651,8 +651,10 @@
 
       for (i = 0; i < lanes.length; i++) {
         var activityItems = [];
-        for (var ai = 0; ai < lanes[i].items.length; ai++) {
-          if (lanes[i].items[ai].isActivity) activityItems.push(lanes[i].items[ai]);
+        for (var ai = 0; ai < items.length; ai++) {
+          if (items[ai].initiativeId === lanes[i].initiative.id && items[ai].isActivity) {
+            activityItems.push(items[ai]);
+          }
         }
         activityItems.sort(function(a, b) { return b.date.getTime() - a.date.getTime(); });
         lanes[i].lastActivity = activityItems.length ? activityItems[0] : null;
