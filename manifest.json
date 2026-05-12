@@ -1,6 +1,6 @@
 {
   "name": "decidr",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "prompt_definitions": [
     {
       "name": "initiative_planning",
@@ -61,9 +61,10 @@
     "When creating supporting LudFlow documents for DecidR work, place them in an existing relevant folder structure or, if none exists, in a folder named for the DecidR project; fetch planning_decision_governance for details.",
     "When a GitHub write tool fails with 'GitHub connection not found' or the user asks to connect a GitHub PAT for outbound writes, push the decidr_github_auth renderer \u2014 do not call connect_github with a PAT collected in chat. For org-level GitHub connection and metadata-sync settings, use the organization settings GitHub section backed by Ludflow, not the PAT flow.",
     "When the user asks what happened on a project or needs an auditable project ledger, use list_audit_events or get_audit_event and push to decidr_list when the user asked to see the results.",
-    "When the user asks for an auditability dashboard, audit dashboard, audit overview, or manager view of audit events, push decidr_audit_dashboard directly. The renderer fetches audit events, categories, projects, and decisions from the API and provides filters plus audit-event drilldowns."
+    "When the user asks for an auditability dashboard, audit dashboard, audit overview, or manager view of audit events, push decidr_audit_dashboard directly. The renderer fetches audit events, categories, projects, and decisions from the API and provides filters plus audit-event drilldowns.",
+    "When the user asks for audit reports, custom audit reporting, a report builder over audit events, CSV export of audit events, or Salesforce-like filtering over audit payloads, push decidr_audit_reports directly. The renderer fetches reports, field catalogs, projects, categories, members, and preview rows from the API."
   ],
-  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.22/decidr.zip",
+  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.23/decidr.zip",
   "registry_index": {
     "summary": "Decision governance \u2014 initiatives, projects, decisions, tasks, and bridges with approval workflows",
     "tags": [
@@ -186,6 +187,7 @@
       "decidr_list",
       "decidr_dashboard",
       "decidr_audit_dashboard",
+      "decidr_audit_reports",
       "decidr_timeline",
       "decidr_graph",
       "decidr_github_auth"
@@ -437,6 +439,16 @@
       "data_hint": "{ organization_id?: string, project_id?: string, decision_id?: string, status?: \"OPEN\"|\"ACKNOWLEDGED\"|\"RESOLVED\"|\"ARCHIVED\", range?: \"7\"|\"30\"|\"90\"|\"all\"|\"custom\", search?: string }",
       "standalone": true,
       "standalone_label": "Audit Dashboard"
+    },
+    {
+      "name": "decidr_audit_reports",
+      "description": "Audit report builder with org-scoped saved reports, rule-based payload filtering, selectable columns, sharing, version history, and CSV export",
+      "scope": "universal",
+      "rule": "Push directly when the user asks for audit reports, custom audit reporting, a report builder over audit events, CSV export of audit trails, or Salesforce-like filtering over audit payload fields. Do NOT call list_audit_events first. The renderer fetches report definitions, audit field catalogs, projects, categories, members, and preview rows from the API.",
+      "invoke_schema": "{ \"type\": \"object\", \"properties\": { \"organization_id\": { \"type\": \"string\" }, \"project_id\": { \"type\": \"string\" }, \"report_id\": { \"type\": \"string\" }, \"status\": { \"type\": \"string\", \"enum\": [\"OPEN\", \"ACKNOWLEDGED\", \"RESOLVED\", \"ARCHIVED\"] }, \"category_id\": { \"type\": \"string\" } } }",
+      "data_hint": "{ organization_id?: string, project_id?: string, report_id?: string, status?: \"OPEN\"|\"ACKNOWLEDGED\"|\"RESOLVED\"|\"ARCHIVED\", category_id?: string }",
+      "standalone": true,
+      "standalone_label": "Audit Reports"
     },
     {
       "name": "decidr_timeline",

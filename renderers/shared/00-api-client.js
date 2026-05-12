@@ -14,7 +14,7 @@
       var seg = segments[i];
       // Skip empty segments, known resource names, and query strings
       if (!seg || seg.indexOf('?') !== -1) continue;
-      if (/^[a-z_-]+$/.test(seg)) continue;
+      if (/^[a-z_.-]+$/.test(seg)) continue;
       // This segment looks like an ID — validate it
       if (!isValidId(seg)) {
         throw new Error('Invalid ID in path: ' + seg);
@@ -79,6 +79,19 @@
     return response.json();
   }
 
+  function _handleTextResponse(response) {
+    if (!response.ok) {
+      return response.text().then(function(text) {
+        throw _buildApiError(response, text);
+      }, function() {
+        throw _buildApiError(response, '');
+      });
+    }
+    return response.text().then(function(text) {
+      return { text: text, response: response };
+    });
+  }
+
   function _hasTauri() {
     return window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function';
   }
@@ -112,6 +125,22 @@
         });
       }
       return _handleResponse(response);
+    });
+  }
+
+  function _fetchTextWithRetry(url, opts) {
+    return fetch(url, opts).then(function(response) {
+      if (response.status === 401 && _hasTauri()) {
+        return _refreshToken().then(function() {
+          var retryOpts = {};
+          for (var key in opts) {
+            if (opts.hasOwnProperty(key)) retryOpts[key] = opts[key];
+          }
+          retryOpts.headers = _headers(!!retryOpts.body);
+          return fetch(url, retryOpts).then(_handleTextResponse);
+        });
+      }
+      return _handleTextResponse(response);
     });
   }
 
@@ -307,6 +336,14 @@
       return api.get('/audit-categories' + _qs(params));
     },
 
+    listAuditReports: function(params) {
+      return api.get('/audit-reports' + _qs(params));
+    },
+
+    getAuditReportFields: function(params) {
+      return api.get('/audit-report-fields' + _qs(params));
+    },
+
     // --- Single entity endpoints ---
 
     getInitiative: function(id) {
@@ -333,6 +370,10 @@
       return api.get('/audit-events/' + id);
     },
 
+    getAuditReport: function(id) {
+      return api.get('/audit-reports/' + id);
+    },
+
     // --- Special endpoints ---
 
     getActionItems: function(params) {
@@ -345,6 +386,10 @@
 
     getTimeline: function(params) {
       return api.get('/timeline' + _qs(params));
+    },
+
+    runAuditReport: function(data) {
+      return api.post('/audit-reports/run', data);
     },
 
     // --- Transition / action endpoints ---
@@ -407,6 +452,10 @@
       return api.post('/audit-events', data);
     },
 
+    createAuditReport: function(data) {
+      return api.post('/audit-reports', data);
+    },
+
     // --- CRUD: Update ---
 
     updateInitiative: function(id, data) {
@@ -433,6 +482,26 @@
       return api.patch('/audit-events/' + id, data);
     },
 
+    updateAuditReport: function(id, data) {
+      return api.patch('/audit-reports/' + id, data);
+    },
+
+    shareAuditReport: function(id, data) {
+      return api.post('/audit-reports/' + id + '/share', data);
+    },
+
+    unshareAuditReport: function(id, userId) {
+      return api.delete('/audit-reports/' + id + '/share/' + userId);
+    },
+
+    exportAuditReportCsv: function(id) {
+      _validatePathIds('/audit-reports/' + id + '/export.csv');
+      return _fetchTextWithRetry(api._baseUrl + '/audit-reports/' + id + '/export.csv', {
+        method: 'POST',
+        headers: _headers(false)
+      });
+    },
+
     // --- Archive endpoints ---
 
     archiveInitiative: function(id) {
@@ -457,6 +526,10 @@
 
     archiveAuditEvent: function(id) {
       return api.delete('/audit-events/' + id);
+    },
+
+    archiveAuditReport: function(id) {
+      return api.delete('/audit-reports/' + id);
     },
 
     // --- Restore endpoints ---
@@ -505,6 +578,10 @@
 
     getLudflowDocument: function(id) {
       return api.get('/ludflow-documents/' + id);
+    },
+
+    listMembers: function() {
+      return api.get('/auth/members');
     },
 
     // Backward-compat aliases
