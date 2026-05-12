@@ -1,5 +1,10 @@
 # Unreleased
 
+# 0.1.23
+
+- **feat**: Add the standalone `decidr_audit_reports` renderer and routing guidance for custom audit reporting, Salesforce-like payload filtering, saved report definitions, sharing, version history, and CSV export. The shared API client now includes audit-report endpoints, field catalog loading, text-response CSV export support, and member lookup for report sharing.
+- **fix**: Harden audit-report follow-ups by rejecting dot path segments while preserving `export.csv`, keeping saved rule fields selectable when the live field catalog is missing them, and filtering the field palette in place so search input focus is not lost while typing.
+
 # 0.1.22
 
 - **feat**: Add DecidR audit event support to the plugin manifest and list/detail renderer. Agents can route audit ledger tools through `decidr_list`, project slideouts expose an Audit Events tab, decision slideouts show linked audit events, and audit event slideouts show linked decisions, payload/source context, URL links, and revision history.

@@ -12,9 +12,18 @@
     var segments = path.split('/');
     for (var i = 0; i < segments.length; i++) {
       var seg = segments[i];
-      // Skip empty segments, known resource names, and query strings
-      if (!seg || seg.indexOf('?') !== -1) continue;
-      if (/^[a-z_.-]+$/.test(seg)) continue;
+      if (!seg) continue;
+      if (seg.indexOf('?') !== -1) {
+        if (i !== segments.length - 1) {
+          throw new Error('Invalid query position in path');
+        }
+        seg = seg.split('?')[0];
+      }
+      if (!seg) continue;
+      if (seg === '.' || seg === '..') {
+        throw new Error('Invalid path segment: ' + seg);
+      }
+      if (/^[a-z_-]+$/.test(seg) || /^[a-z_-]+\.csv$/.test(seg)) continue;
       // This segment looks like an ID — validate it
       if (!isValidId(seg)) {
         throw new Error('Invalid ID in path: ' + seg);

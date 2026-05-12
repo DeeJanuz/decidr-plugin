@@ -337,6 +337,21 @@
         return fieldPath;
       }
 
+      function ruleFieldOptions(selectedField) {
+        var html = '';
+        var foundSelected = false;
+        for (var i = 0; i < state.fields.length; i++) {
+          var fieldPath = state.fields[i].fieldPath || '';
+          if (!fieldPath) continue;
+          if (fieldPath === selectedField) foundSelected = true;
+          html += option(fieldPath, fieldPath, selectedField);
+        }
+        if (selectedField && !foundSelected) {
+          html = option(selectedField, selectedField + ' (saved field)', selectedField) + html;
+        }
+        return html;
+      }
+
       function renderHeader() {
         var html = '<div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);margin-bottom:var(--space-4);">';
         html += '<div style="min-width:0;"><h1 style="font-size:var(--text-h1);font-weight:var(--weight-bold);margin:0;">Audit Reports</h1>'
@@ -401,13 +416,22 @@
       function renderFieldPalette() {
         var search = state.fieldSearch.toLowerCase();
         var fields = state.fields.filter(function(field) {
-          return !search || field.fieldPath.toLowerCase().indexOf(search) !== -1 || String(field.source || '').toLowerCase().indexOf(search) !== -1;
+          var fieldPath = String(field.fieldPath || '').toLowerCase();
+          return !search || fieldPath.indexOf(search) !== -1 || String(field.source || '').toLowerCase().indexOf(search) !== -1;
         }).slice(0, 80);
         var html = '<div class="decidr-section" style="padding:var(--space-4);height:100%;overflow:auto;">';
         html += '<div class="decidr-section-header">Fields</div>';
         html += '<div style="display:flex;gap:var(--space-2);margin-bottom:var(--space-3);">'
           + '<input id="audit-report-field-search" type="search" value="' + UI.escapeHtml(state.fieldSearch) + '" placeholder="Search fields" style="' + controlStyle() + '">'
           + '<button id="audit-report-refresh-fields" style="' + smallButtonStyle(false) + '">Refresh</button></div>';
+        html += '<div id="audit-report-field-list">';
+        html += renderFieldListItems(fields);
+        html += '</div></div>';
+        return html;
+      }
+
+      function renderFieldListItems(fields) {
+        var html = '';
         if (!fields.length) {
           html += '<div style="color:var(--text-tertiary);font-size:var(--text-small);">No fields found for this scope.</div>';
         }
@@ -428,7 +452,6 @@
           }
           html += '</div>';
         }
-        html += '</div>';
         return html;
       }
 
@@ -451,9 +474,7 @@
           var labelValue = then.label || (Array.isArray(then.labels) ? then.labels[0] : '') || '';
           html += '<div style="display:grid;grid-template-columns:32px minmax(150px,1fr) 120px minmax(120px,1fr) 100px minmax(90px,1fr) 32px;gap:6px;align-items:end;border-top:1px solid var(--border-subtle);padding:8px 0;">';
           html += '<div style="font-size:var(--text-xs);color:var(--text-tertiary);padding-bottom:8px;">IF</div>';
-          html += '<select data-rule-field="' + i + '" style="' + controlStyle() + '">';
-          for (var fIdx = 0; fIdx < state.fields.length; fIdx++) html += option(state.fields[fIdx].fieldPath, state.fields[fIdx].fieldPath, field);
-          html += '</select>';
+          html += '<select data-rule-field="' + i + '" style="' + controlStyle() + '">' + ruleFieldOptions(field) + '</select>';
           html += '<select data-rule-op="' + i + '" style="' + controlStyle() + '">' + operatorOptions(fieldMeta.valueType, cond.op || 'equals') + '</select>';
           html += '<input data-rule-value="' + i + '" value="' + UI.escapeHtml(cond.value == null ? '' : String(cond.value)) + '" style="' + controlStyle() + '">';
           html += '<select data-rule-action="' + i + '" style="' + controlStyle() + '">'
@@ -636,7 +657,7 @@
           var val = container.querySelector('[data-rule-value="' + i + '"]');
           var action = container.querySelector('[data-rule-action="' + i + '"]');
           var lbl = container.querySelector('[data-rule-label="' + i + '"]');
-          rules[i].if = { field: f ? f.value : '', op: op ? op.value : 'equals', value: coerceRuleValue(val ? val.value : '', op ? op.value : 'equals') };
+          rules[i].if = { field: f ? f.value : ((rules[i].if && rules[i].if.field) || ''), op: op ? op.value : 'equals', value: coerceRuleValue(val ? val.value : '', op ? op.value : 'equals') };
           rules[i].then = {};
           if (action && action.value === 'exclude') rules[i].then.include = false;
           else if (action && action.value === 'label') {
@@ -711,14 +732,25 @@
         var shareBtn = container.querySelector('#audit-report-share');
         if (shareBtn) shareBtn.addEventListener('click', function() { syncDraftFromControls(); shareReport(); });
         var fieldSearch = container.querySelector('#audit-report-field-search');
-        if (fieldSearch) fieldSearch.addEventListener('input', function() { state.fieldSearch = fieldSearch.value; render(); });
+        if (fieldSearch) fieldSearch.addEventListener('input', function() {
+          state.fieldSearch = fieldSearch.value;
+          var list = container.querySelector('#audit-report-field-list');
+          if (!list) {
+            render();
+            return;
+          }
+          var search = state.fieldSearch.toLowerCase();
+          var fields = state.fields.filter(function(field) {
+            var fieldPath = String(field.fieldPath || '').toLowerCase();
+            return !search || fieldPath.indexOf(search) !== -1 || String(field.source || '').toLowerCase().indexOf(search) !== -1;
+          }).slice(0, 80);
+          list.innerHTML = renderFieldListItems(fields);
+          wireFieldPaletteButtons(list);
+        });
         var addRuleBtn = container.querySelector('#audit-report-add-rule');
         if (addRuleBtn) addRuleBtn.addEventListener('click', function() { addRule(); });
 
-        var addColumnBtns = container.querySelectorAll('[data-add-column]');
-        for (var i = 0; i < addColumnBtns.length; i++) addColumnBtns[i].addEventListener('click', function(e) { addColumn(e.currentTarget.getAttribute('data-add-column')); });
-        var addRuleBtns = container.querySelectorAll('[data-add-rule]');
-        for (var r = 0; r < addRuleBtns.length; r++) addRuleBtns[r].addEventListener('click', function(e) { addRule(e.currentTarget.getAttribute('data-add-rule')); });
+        wireFieldPaletteButtons(container);
         var removeRuleBtns = container.querySelectorAll('[data-remove-rule]');
         for (var rr = 0; rr < removeRuleBtns.length; rr++) removeRuleBtns[rr].addEventListener('click', function(e) {
           syncDraftFromControls();
@@ -738,6 +770,26 @@
 
         wireOrgPicker();
         wireEntityClicks();
+      }
+
+      function wireFieldPaletteButtons(scope) {
+        var root = scope || container;
+        var addColumnBtns = root.querySelectorAll('[data-add-column]');
+        for (var i = 0; i < addColumnBtns.length; i++) {
+          if (addColumnBtns[i]._auditReportsColumnWired) continue;
+          addColumnBtns[i]._auditReportsColumnWired = true;
+          addColumnBtns[i].addEventListener('click', function(e) {
+            addColumn(e.currentTarget.getAttribute('data-add-column'));
+          });
+        }
+        var addRuleBtns = root.querySelectorAll('[data-add-rule]');
+        for (var r = 0; r < addRuleBtns.length; r++) {
+          if (addRuleBtns[r]._auditReportsRuleWired) continue;
+          addRuleBtns[r]._auditReportsRuleWired = true;
+          addRuleBtns[r].addEventListener('click', function(e) {
+            addRule(e.currentTarget.getAttribute('data-add-rule'));
+          });
+        }
       }
 
       function reloadForActiveOrg() {
