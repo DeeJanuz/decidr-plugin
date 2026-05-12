@@ -790,7 +790,7 @@
           var type = el.getAttribute('data-entity-type');
           var id = el.getAttribute('data-entity-id');
           if (type && id) {
-            UI.SlideOut.open(type, id, { source: container });
+            UI.SlideOut.open(type, id, { source: root });
           }
         });
       })(items[i]);
