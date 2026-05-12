@@ -244,7 +244,12 @@
   UI.slideOutAuditEvent = function(event) {
     var state = UI.SlideOut._auditEventPanelState;
     var enriched = event._enriched || {};
-    var category = event.category && event.category.name ? event.category.name : '';
+    var category = '';
+    if (event.category && event.category.name) {
+      category = event.category.name;
+    } else if (typeof event.category === 'string') {
+      category = event.category;
+    }
     var links = Array.isArray(event.links) ? event.links : [];
     var decisionLinks = event.decisionLinks || [];
     var revisions = event.revisions || [];
@@ -594,7 +599,7 @@
 
     var decisionsForTab = (enriched.decisions && enriched.decisions.data) || enriched.decisions || [];
     var auditEventsForTab = (enriched.auditEvents && enriched.auditEvents.data) || enriched.auditEvents || [];
-    var activeProjectTab = state.activeTab || 'decisions';
+    var activeProjectTab = project._activeTab || 'decisions';
     html += projectAuditTabs(
       activeProjectTab,
       Array.isArray(decisionsForTab) ? decisionsForTab.length : null,

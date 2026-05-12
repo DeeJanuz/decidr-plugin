@@ -1,5 +1,10 @@
 # Unreleased
 
+# 0.1.22
+
+- **feat**: Add DecidR audit event support to the plugin manifest and list/detail renderer. Agents can route audit ledger tools through `decidr_list`, project slideouts expose an Audit Events tab, decision slideouts show linked audit events, and audit event slideouts show linked decisions, payload/source context, URL links, and revision history.
+- **fix**: Keep project audit tabs scoped to the current slideout instead of shared global panel state, and normalize audit event categories consistently for string and object-shaped API payloads.
+
 # 0.1.21
 
 - **fix**: Keep DecidR decision discovery quiet by disabling auto-push for `search`, `list_decisions`, and `get_decision`; agents now only push `decidr_list` when the user explicitly asks to see decision results or details.

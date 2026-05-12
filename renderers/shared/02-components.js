@@ -1469,6 +1469,13 @@
     // Re-fetch the current entity from API and re-render with enrichment.
     // Use after any write operation (create task, post comment, link doc, etc.)
     // Clears _busy flag on completion.
+    _preserveTransientData: function(type, previousData, freshData) {
+      if (type === 'project' && previousData && previousData._activeTab) {
+        freshData._activeTab = previousData._activeTab;
+      }
+      return freshData;
+    },
+
     _refetchAndRender: function() {
       var contextKey = UI.SlideOut._resolveContextKey();
       UI.SlideOut._withContextKey(contextKey, function() {
@@ -1479,19 +1486,20 @@
 
         var type = top.type;
         var id = top.id;
+        var previousData = top.data;
 
         API.getEntity(type, id).then(function(freshData) {
           UI.SlideOut._withContextKey(contextKey, function() {
             UI.SlideOut._busy = false;
             var current = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
             if (!current || current.type !== type || current.id !== id) return;
-            current.data = freshData;
+            current.data = UI.SlideOut._preserveTransientData(type, previousData, freshData);
             // Mark parent stack entries as stale so they re-fetch on Back navigation
             for (var i = 0; i < UI.SlideOut._stack.length - 1; i++) {
               UI.SlideOut._stack[i].stale = true;
             }
             UI.SlideOut._render(contextKey);
-            UI.SlideOut._enrichAndRender(type, id, freshData, contextKey);
+            UI.SlideOut._enrichAndRender(type, id, current.data, contextKey);
             if (UI.SlideOut._onMutateCallback) {
               try { UI.SlideOut._onMutateCallback(type, id); } catch(e) { console.error('[decidr] onMutate callback error:', e); }
             }
@@ -1861,7 +1869,6 @@
     },
 
     _projectPanelState: {
-      activeTab: 'decisions',
       timelineFilter: 'all',
       addDocFormOpen: false,
       addTaskFormOpen: false,
@@ -1900,13 +1907,14 @@
             // Re-fetch entity data and enrichments
             var API = window.__decidrAPI;
             if (API && top.type && top.id) {
+              var previousData = top.data;
               UI.SlideOut._render(contextKey); // Show current (stale) data immediately
               API.getEntity(top.type, top.id).then(function(freshData) {
                 UI.SlideOut._withContextKey(contextKey, function() {
                   var current = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
                   if (!current || current.type !== top.type || current.id !== top.id) return;
-                  current.data = freshData;
-                  UI.SlideOut._enrichAndRender(top.type, top.id, freshData, contextKey);
+                  current.data = UI.SlideOut._preserveTransientData(top.type, previousData, freshData);
+                  UI.SlideOut._enrichAndRender(top.type, top.id, current.data, contextKey);
                 });
               }).catch(function(err) {
                 console.error('[decidr] Stale refetch failed:', err);
@@ -2517,16 +2525,17 @@
             }
           }
 
+          var category = categoryInput ? categoryInput.value.trim() : '';
           var updates = {
             title: titleInput ? titleInput.value.trim() : data.title,
             summary: summaryInput ? summaryInput.value.trim() : data.summary,
             status: statusInput ? statusInput.value : data.status,
-            category: categoryInput ? categoryInput.value.trim() : undefined,
             links: links,
             payload: payload,
             sourceContext: sourceContext,
             editReason: reasonInput ? reasonInput.value.trim() : undefined
           };
+          if (category) updates.category = category;
 
           if (!updates.title) return;
           if (UI.SlideOut._guardBusy()) return;
@@ -2601,7 +2610,8 @@
           btn.onclick = function(e) {
             e.preventDefault();
             e.stopPropagation();
-            state.activeTab = btn.getAttribute('data-project-tab') || 'decisions';
+            data._activeTab = btn.getAttribute('data-project-tab') === 'audit-events'
+              ? 'audit-events' : 'decisions';
             UI.SlideOut._render();
           };
         })(tabButtons[pt]);
