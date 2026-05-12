@@ -24,6 +24,7 @@
       allPRs: [],
       allTasks: [],
       allBridges: [],
+      allAuditEvents: [],
       lastActivityByEntity: {},  // { entityId: { action, label, createdAt } }
       loaded: false,
       error: null,
@@ -49,6 +50,7 @@
       decisions: null,
       tasks: null,
       bridges: null,
+      auditEvents: null,
       actionItems: null
     };
 
@@ -74,9 +76,10 @@
         API.listDecisions({ take: 200 }).then(function(resp) { fetches.decisions = unwrapList(resp); }),
         API.listTasks({ take: 200 }).then(function(resp) { fetches.tasks = unwrapList(resp); }),
         API.listBridges({ take: 200 }).then(function(resp) { fetches.bridges = unwrapList(resp); }),
+        API.listAuditEvents({ take: 200 }).then(function(resp) { fetches.auditEvents = unwrapList(resp); }).catch(function() { fetches.auditEvents = []; }),
         API.listIssues({ take: 200 }).then(function(resp) { fetches.issues = unwrapList(resp); }).catch(function() { fetches.issues = []; }),
         API.listPRs({ take: 200 }).then(function(resp) { fetches.prs = unwrapList(resp); }).catch(function() { fetches.prs = []; }),
-        API.getActionItems({ take: 200 }).then(function(resp) { fetches.actionItems = unwrapList(resp); }),
+        API.getActionItems({ take: 200 }).then(function(resp) { fetches.actionItems = unwrapList(resp); }).catch(function() { fetches.actionItems = []; }),
         API.getTimeline({ take: 200 }).then(function(resp) { fetches.timeline = unwrapList(resp); }).catch(function() { fetches.timeline = []; })
       ]);
     }).then(function() {
@@ -123,7 +126,8 @@
       dashState.allBridges = fetches.bridges;
       dashState.allIssues = fetches.issues || [];
       dashState.allPRs = fetches.prs || [];
-      dashState.actionItems = fetches.actionItems;
+      dashState.allAuditEvents = fetches.auditEvents || [];
+      dashState.actionItems = fetches.actionItems || [];
 
       // Build last-activity-per-entity map from timeline events
       dashState.lastActivityByEntity = buildActivityMap(fetches.timeline || []);
@@ -158,7 +162,7 @@
     function refreshDashboard() {
       var rf = {
         initiatives: null, projects: null, decisions: null, tasks: null,
-        bridges: null, issues: null, prs: null, actionItems: null, timeline: null
+        bridges: null, issues: null, prs: null, auditEvents: null, actionItems: null, timeline: null
       };
       return Promise.all([
         API.listInitiatives({ take: 200 }).then(function(resp) { rf.initiatives = unwrapList(resp); }),
@@ -166,9 +170,10 @@
         API.listDecisions({ take: 200 }).then(function(resp) { rf.decisions = unwrapList(resp); }),
         API.listTasks({ take: 200 }).then(function(resp) { rf.tasks = unwrapList(resp); }),
         API.listBridges({ take: 200 }).then(function(resp) { rf.bridges = unwrapList(resp); }),
+        API.listAuditEvents({ take: 200 }).then(function(resp) { rf.auditEvents = unwrapList(resp); }).catch(function() { rf.auditEvents = []; }),
         API.listIssues({ take: 200 }).then(function(resp) { rf.issues = unwrapList(resp); }).catch(function() { rf.issues = []; }),
         API.listPRs({ take: 200 }).then(function(resp) { rf.prs = unwrapList(resp); }).catch(function() { rf.prs = []; }),
-        API.getActionItems({ take: 200 }).then(function(resp) { rf.actionItems = unwrapList(resp); }),
+        API.getActionItems({ take: 200 }).then(function(resp) { rf.actionItems = unwrapList(resp); }).catch(function() { rf.actionItems = []; }),
         API.getTimeline({ take: 200 }).then(function(resp) { rf.timeline = unwrapList(resp); }).catch(function() { rf.timeline = []; })
       ]).then(function() {
         var projects = rf.projects || [];
@@ -192,7 +197,8 @@
         dashState.allBridges = rf.bridges;
         dashState.allIssues = rf.issues || [];
         dashState.allPRs = rf.prs || [];
-        dashState.actionItems = rf.actionItems;
+        dashState.allAuditEvents = rf.auditEvents || [];
+        dashState.actionItems = rf.actionItems || [];
 
         dashState.lastActivityByEntity = buildActivityMap(rf.timeline || []);
 
@@ -324,6 +330,12 @@
       return sortByCreatedDesc(dashState.allDecisions).slice(0, limit || 5);
     }
 
+    function getRecentAuditEvents(limit) {
+      return (dashState.allAuditEvents || []).slice().sort(function(a, b) {
+        return new Date(b.occurredAt || b.createdAt || 0) - new Date(a.occurredAt || a.createdAt || 0);
+      }).slice(0, limit || 8);
+    }
+
     function getPendingDecisions() {
       var results = [];
       var allProjects = getAllProjects();
@@ -352,7 +364,8 @@
         { value: allProjects.length, label: 'Projects', opts: { animDelay: 0.10 } },
         { value: dashState.allDecisions.length, label: 'Decisions', opts: { animDelay: 0.15 } },
         { value: dashState.allTasks.length, label: 'Tasks', opts: { animDelay: 0.20 } },
-        { value: actionCount, label: 'Needs Action', opts: { animDelay: 0.25 } }
+        { value: dashState.allAuditEvents.length, label: 'Audit Events', opts: { animDelay: 0.25 } },
+        { value: actionCount, label: 'Needs Action', opts: { animDelay: 0.30 } }
       ]);
     }
 
@@ -486,6 +499,23 @@
     function renderNextStepsSection() {
       return UI.section('calendar', 'Next Steps', dashState.actionItems.length,
         '<div id="decidr-next-steps-container">' + renderNextStepsContent() + '</div>');
+    }
+
+    function renderAuditTrailSection() {
+      var events = getRecentAuditEvents(8);
+      var content = '';
+
+      if (events.length === 0) {
+        content = UI.emptyState('No audit events found.');
+      } else {
+        content += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:var(--space-4);">';
+        for (var i = 0; i < events.length; i++) {
+          content += UI.auditEventCard(events[i], { animDelay: 0.05 + i * 0.04 });
+        }
+        content += '</div>';
+      }
+
+      return UI.section('Recent Audit Trail', dashState.allAuditEvents.length, content);
     }
 
     function renderActiveDecisionsContent() {
@@ -678,6 +708,11 @@
 
       // Stats
       html += renderStatsSection();
+
+      // Audit Trail
+      html += '<div style="margin-top: var(--space-8);">'
+        + renderAuditTrailSection()
+        + '</div>';
 
       // Next Steps (replaces Action Items)
       html += '<div style="margin-top: var(--space-8);">'
