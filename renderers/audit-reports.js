@@ -352,6 +352,22 @@
         return html;
       }
 
+      function renderStyles() {
+        return '<style>'
+          + '.audit-reports-shell{max-width:1480px;margin:0 auto;padding:var(--space-5) var(--space-4);font-family:var(--font-sans);color:var(--text-primary);}'
+          + '.audit-reports-top{display:grid;grid-template-columns:minmax(180px,1.1fr) minmax(240px,2fr) minmax(130px,.7fr) repeat(4,auto);gap:var(--space-3);align-items:end;}'
+          + '.audit-reports-scope{display:grid;grid-template-columns:minmax(240px,1.5fr) repeat(5,minmax(130px,1fr));gap:var(--space-3);align-items:end;}'
+          + '.audit-reports-main{display:grid;grid-template-columns:minmax(280px,340px) minmax(0,1fr) minmax(320px,380px);gap:var(--space-4);align-items:start;}'
+          + '.audit-rule-card{border-top:1px solid var(--border-subtle);padding:10px 0;display:flex;flex-direction:column;gap:8px;}'
+          + '.audit-rule-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(96px,120px);gap:8px;align-items:end;}'
+          + '.audit-rule-action-row{display:grid;grid-template-columns:minmax(92px,112px) minmax(0,1fr) 34px;gap:8px;align-items:end;}'
+          + '.audit-column-row{display:grid;grid-template-columns:minmax(0,1fr) 34px;gap:8px;align-items:start;margin-bottom:8px;}'
+          + '.audit-column-path{color:var(--text-tertiary);font-size:var(--text-xs);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:4px;}'
+          + '@media (max-width:1180px){.audit-reports-main{grid-template-columns:minmax(260px,320px) minmax(0,1fr);} .audit-reports-side{grid-column:1 / -1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--space-4);}.audit-reports-scope{grid-template-columns:minmax(220px,1.4fr) repeat(3,minmax(130px,1fr));}.audit-reports-top{grid-template-columns:minmax(160px,1fr) minmax(220px,2fr) minmax(120px,.8fr) repeat(4,auto);}}'
+          + '@media (max-width:820px){.audit-reports-top,.audit-reports-scope,.audit-reports-main,.audit-reports-side{grid-template-columns:1fr;}.audit-reports-top button{width:100%;}.audit-rule-row,.audit-rule-action-row{grid-template-columns:1fr;}}'
+          + '</style>';
+      }
+
       function renderHeader() {
         var html = '<div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);margin-bottom:var(--space-4);">';
         html += '<div style="min-width:0;"><h1 style="font-size:var(--text-h1);font-weight:var(--weight-bold);margin:0;">Audit Reports</h1>'
@@ -363,7 +379,7 @@
 
       function renderTopControls() {
         var html = '<div class="decidr-section" style="padding:var(--space-4);margin-bottom:var(--space-4);">';
-        html += '<div style="display:grid;grid-template-columns:minmax(180px,1.2fr) minmax(220px,2fr) minmax(130px,.7fr) repeat(4,auto);gap:var(--space-3);align-items:end;">';
+        html += '<div class="audit-reports-top">';
         html += label('Saved report') + '<select id="audit-report-select" style="' + controlStyle() + '">'
           + option('', 'New unsaved report', state.selectedReportId);
         for (var i = 0; i < state.reports.length; i++) {
@@ -387,7 +403,7 @@
       function renderScope() {
         var html = '<div class="decidr-section" style="padding:var(--space-4);margin-bottom:var(--space-4);">';
         html += '<div class="decidr-section-header">Scope</div>';
-        html += '<div style="display:grid;grid-template-columns:minmax(220px,1.4fr) repeat(5,minmax(130px,1fr));gap:var(--space-3);align-items:end;">';
+        html += '<div class="audit-reports-scope">';
         html += label('Projects') + '<select id="audit-report-projects" multiple size="4" style="' + controlStyle('min-height:92px;') + '">';
         for (var p = 0; p < state.projects.length; p++) {
           var selected = state.draft.projectIds.indexOf(state.projects[p].id) !== -1;
@@ -406,8 +422,8 @@
           + option('', 'All', state.filters.categoryId);
         for (var c = 0; c < state.categories.length; c++) html += option(state.categories[c].id, state.categories[c].name, state.filters.categoryId);
         html += '</select></label>';
-        html += label('From') + '<input id="audit-report-from" type="date" value="' + UI.escapeHtml(state.filters.occurredFrom) + '" style="' + controlStyle() + '"></label>';
-        html += label('To') + '<input id="audit-report-to" type="date" value="' + UI.escapeHtml(state.filters.occurredTo) + '" style="' + controlStyle() + '"></label>';
+        html += label('From') + '<input id="audit-report-from" inputmode="numeric" placeholder="YYYY-MM-DD" value="' + UI.escapeHtml(state.filters.occurredFrom) + '" style="' + controlStyle() + '"></label>';
+        html += label('To') + '<input id="audit-report-to" inputmode="numeric" placeholder="YYYY-MM-DD" value="' + UI.escapeHtml(state.filters.occurredTo) + '" style="' + controlStyle() + '"></label>';
         html += label('Search') + '<input id="audit-report-search" type="search" value="' + UI.escapeHtml(state.filters.search) + '" placeholder="Title or summary" style="' + controlStyle() + '"></label>';
         html += '</div></div>';
         return html;
@@ -472,11 +488,14 @@
           var fieldMeta = state.fields.filter(function(f) { return f.fieldPath === field; })[0] || {};
           var action = then.include === false ? 'exclude' : (then.include === true ? 'include' : 'label');
           var labelValue = then.label || (Array.isArray(then.labels) ? then.labels[0] : '') || '';
-          html += '<div style="display:grid;grid-template-columns:32px minmax(150px,1fr) 120px minmax(120px,1fr) 100px minmax(90px,1fr) 32px;gap:6px;align-items:end;border-top:1px solid var(--border-subtle);padding:8px 0;">';
-          html += '<div style="font-size:var(--text-xs);color:var(--text-tertiary);padding-bottom:8px;">IF</div>';
+          html += '<div class="audit-rule-card">';
+          html += '<div style="font-size:var(--text-xs);color:var(--text-tertiary);font-weight:var(--weight-semibold);text-transform:uppercase;">If</div>';
           html += '<select data-rule-field="' + i + '" style="' + controlStyle() + '">' + ruleFieldOptions(field) + '</select>';
+          html += '<div class="audit-rule-row">';
           html += '<select data-rule-op="' + i + '" style="' + controlStyle() + '">' + operatorOptions(fieldMeta.valueType, cond.op || 'equals') + '</select>';
-          html += '<input data-rule-value="' + i + '" value="' + UI.escapeHtml(cond.value == null ? '' : String(cond.value)) + '" style="' + controlStyle() + '">';
+          html += '<input data-rule-value="' + i + '" value="' + UI.escapeHtml(cond.value == null ? '' : String(cond.value)) + '" placeholder="Value" style="' + controlStyle() + '">';
+          html += '</div>';
+          html += '<div class="audit-rule-action-row">';
           html += '<select data-rule-action="' + i + '" style="' + controlStyle() + '">'
             + option('include', 'include', action)
             + option('exclude', 'exclude', action)
@@ -484,6 +503,7 @@
             + '</select>';
           html += '<input data-rule-label="' + i + '" value="' + UI.escapeHtml(labelValue) + '" placeholder="Label" style="' + controlStyle() + '">';
           html += '<button data-remove-rule="' + i + '" style="' + smallButtonStyle(false) + '">×</button>';
+          html += '</div>';
           html += '</div>';
         }
         html += '</div>';
@@ -495,9 +515,9 @@
         html += '<div class="decidr-section-header">Columns</div>';
         for (var i = 0; i < state.draft.selectedColumns.length; i++) {
           var col = state.draft.selectedColumns[i];
-          html += '<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(90px,.7fr) 32px;gap:6px;align-items:center;margin-bottom:6px;">'
-            + '<input data-column-label="' + i + '" value="' + UI.escapeHtml(col.label || col.field) + '" style="' + controlStyle() + '">'
-            + '<div style="color:var(--text-tertiary);font-size:var(--text-xs);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + UI.escapeHtml(col.field) + '</div>'
+          html += '<div class="audit-column-row">'
+            + '<div><input data-column-label="' + i + '" value="' + UI.escapeHtml(col.label || col.field) + '" style="' + controlStyle() + '">'
+            + '<div class="audit-column-path">' + UI.escapeHtml(col.field) + '</div></div>'
             + '<button data-remove-column="' + i + '" style="' + smallButtonStyle(false) + '">×</button></div>';
         }
         html += '</div>';
@@ -615,14 +635,14 @@
           container.innerHTML = UI.loadingSpinner('Loading audit reports...');
           return;
         }
-        var html = '<div style="max-width:1480px;margin:0 auto;padding:var(--space-5) var(--space-4);font-family:var(--font-sans);color:var(--text-primary);">';
+        var html = renderStyles() + '<div class="audit-reports-shell">';
         html += renderHeader();
         html += renderTopControls();
         html += renderScope();
-        html += '<div style="display:grid;grid-template-columns:minmax(260px,320px) minmax(0,1fr) minmax(300px,360px);gap:var(--space-4);align-items:start;">';
+        html += '<div class="audit-reports-main">';
         html += renderFieldPalette();
         html += renderPreview();
-        html += '<div>' + renderRules() + renderColumnsAndShare() + '</div>';
+        html += '<div class="audit-reports-side">' + renderRules() + renderColumnsAndShare() + '</div>';
         html += '</div></div>';
         container.innerHTML = html;
         wire();
