@@ -43,6 +43,43 @@
     return html;
   };
 
+  UI.auditEventsList = function(events, opts) {
+    opts = opts || {};
+    var items = events || [];
+    if (!items.length) {
+      return opts.emptyText ? '<div class="decidr-so-empty-hint">' + UI.escapeHtml(opts.emptyText) + '</div>' : '';
+    }
+    var html = '<div class="decidr-so-list">';
+    for (var i = 0; i < items.length; i++) {
+      var event = items[i];
+      var category = event.category && event.category.name ? event.category.name : event.category;
+      html += '<div class="decidr-so-list-item" data-entity-type="audit_event" data-entity-id="' + UI.escapeHtml(event.id) + '" style="cursor:pointer;">';
+      html += UI.statusBadge(event.status || 'OPEN');
+      html += '<span class="decidr-so-list-title">' + UI.escapeHtml(event.title || 'Untitled event') + '</span>';
+      if (category) {
+        html += '<span class="decidr-so-doc-type-badge">' + UI.escapeHtml(category) + '</span>';
+      }
+      if (event.occurredAt) {
+        html += '<span class="decidr-so-empty-hint" style="margin-left:auto;">' + UI.escapeHtml(UI.formatDate(event.occurredAt)) + '</span>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+    return html;
+  };
+
+  function projectAuditTabs(activeTab, decisionCount, eventCount) {
+    var active = activeTab || 'decisions';
+    var html = '<div class="decidr-so-section" style="margin-top:var(--space-4);">';
+    html += '<div style="display:flex;gap:var(--space-2);border-bottom:1px solid var(--border-subtle);">';
+    html += '<button class="decidr-so-btn decidr-so-btn-sm' + (active === 'decisions' ? ' decidr-so-btn-primary' : '') + '" data-project-tab="decisions">'
+      + 'Decisions' + (decisionCount != null ? ' (' + decisionCount + ')' : '') + '</button>';
+    html += '<button class="decidr-so-btn decidr-so-btn-sm' + (active === 'audit-events' ? ' decidr-so-btn-primary' : '') + '" data-project-tab="audit-events">'
+      + 'Audit Events' + (eventCount != null ? ' (' + eventCount + ')' : '') + '</button>';
+    html += '</div></div>';
+    return html;
+  }
+
   /**
    * Render issue slide-out detail panel.
    * @param {Object} issue - Issue data with _enriched sub-objects
@@ -200,6 +237,131 @@
     if (repo.defaultBranch) metaItems.push({ html: '<strong>Default:</strong> ' + UI.escapeHtml(repo.defaultBranch) });
     if (repo.stagingBranch) metaItems.push({ html: '<strong>Staging:</strong> ' + UI.escapeHtml(repo.stagingBranch) });
     if (metaItems.length > 0) html += UI.SlideOut._renderMeta(metaItems);
+    html += '</div>';
+    return html;
+  };
+
+  UI.slideOutAuditEvent = function(event) {
+    var state = UI.SlideOut._auditEventPanelState;
+    var enriched = event._enriched || {};
+    var category = event.category && event.category.name ? event.category.name : '';
+    var links = Array.isArray(event.links) ? event.links : [];
+    var decisionLinks = event.decisionLinks || [];
+    var revisions = event.revisions || [];
+    var html = '<div class="decidr-so-detail">';
+
+    html += '<div class="decidr-so-action-bar">';
+    html += '<button class="decidr-so-btn" id="decidr-so-btn-audit-edit">'
+      + ICON_EDIT + ' ' + (state.editMode ? 'Cancel Edit' : 'Edit') + '</button>';
+    html += '<span class="decidr-so-spacer"></span>';
+    html += '<button class="decidr-so-btn decidr-so-btn-danger decidr-so-btn-sm" id="decidr-so-btn-audit-archive">' + ICON_TRASH + ' Archive</button>';
+    html += '</div>';
+
+    var metaItems = [
+      { html: UI.statusBadge(event.status || 'OPEN') }
+    ];
+    if (category) metaItems.push({ html: '<strong>Category:</strong> ' + UI.escapeHtml(category) });
+    if (event.occurredAt) metaItems.push({ html: ICON_CALENDAR + ' ' + UI.formatDate(event.occurredAt) });
+    if (event.createdByClient) metaItems.push({ html: '<strong>Source:</strong> ' + UI.escapeHtml(event.createdByClient) });
+    if (event.createdBy && event.createdBy.name) metaItems.push({ html: UI.userChip(event.createdBy) });
+    html += UI.SlideOut._renderMeta(metaItems);
+
+    if (state.editMode) {
+      html += '<input type="text" class="decidr-so-edit-input" id="decidr-so-audit-title" value="' + UI.escapeHtml(event.title || '') + '">';
+      html += '<textarea class="decidr-so-edit-textarea" id="decidr-so-audit-summary" rows="3">' + UI.escapeHtml(event.summary || '') + '</textarea>';
+      html += '<div class="decidr-so-form-row" style="display:flex;gap:var(--space-2);margin-bottom:var(--space-2);">';
+      html += '<select class="decidr-so-edit-input" id="decidr-so-audit-status" style="flex:1;">';
+      var statuses = ['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'ARCHIVED'];
+      for (var si = 0; si < statuses.length; si++) {
+        html += '<option value="' + statuses[si] + '"' + (statuses[si] === event.status ? ' selected' : '') + '>'
+          + UI.escapeHtml(STATUS_LABELS[statuses[si]] || statuses[si]) + '</option>';
+      }
+      html += '</select>';
+      html += '<input type="text" class="decidr-so-edit-input" id="decidr-so-audit-category" placeholder="Category" value="' + UI.escapeHtml(category) + '" style="flex:1;">';
+      html += '</div>';
+      html += '<textarea class="decidr-so-edit-textarea" id="decidr-so-audit-links" rows="2" placeholder="One URL per line">' + UI.escapeHtml(links.join('\n')) + '</textarea>';
+      html += '<textarea class="decidr-so-edit-textarea" id="decidr-so-audit-payload" rows="5">' + UI.escapeHtml(JSON.stringify(event.payload || {}, null, 2)) + '</textarea>';
+      html += '<textarea class="decidr-so-edit-textarea" id="decidr-so-audit-source-context" rows="4">' + UI.escapeHtml(JSON.stringify(event.sourceContext || {}, null, 2)) + '</textarea>';
+      html += '<input type="text" class="decidr-so-edit-input" id="decidr-so-audit-edit-reason" placeholder="Edit reason (optional)">';
+      html += '<div class="decidr-so-form-actions">'
+        + '<button class="decidr-so-btn" id="decidr-so-btn-cancel-audit-edit">Cancel</button>'
+        + '<button class="decidr-so-btn decidr-so-btn-primary" id="decidr-so-btn-save-audit-edit">Save</button>'
+        + '</div>';
+    } else {
+      html += '<h3 class="decidr-so-detail-title">' + UI.escapeHtml(event.title || 'Untitled event') + '</h3>';
+      if (event.summary) {
+        html += '<p class="decidr-so-description">' + UI.escapeHtml(event.summary) + '</p>';
+      }
+    }
+
+    var project = event.project || enriched.project;
+    if (project) {
+      html += UI.SlideOut._renderParentLink(ENTITY_ICONS.project, 'Project', 'project', project);
+    }
+
+    html += '<div class="decidr-so-section">';
+    html += UI.SlideOut._renderSectionHeader('Linked Decisions', decisionLinks.length);
+    if (decisionLinks.length === 0) {
+      html += '<div class="decidr-so-empty-hint">No linked decisions</div>';
+    } else {
+      var decisions = [];
+      for (var dl = 0; dl < decisionLinks.length; dl++) {
+        if (decisionLinks[dl].decision) decisions.push(decisionLinks[dl].decision);
+      }
+      html += UI.SlideOut._renderEntityList(decisions, 'decision', { emptyText: 'No linked decisions' });
+    }
+    html += '</div>';
+
+    if (links.length > 0) {
+      html += '<div class="decidr-so-section">';
+      html += UI.SlideOut._renderSectionHeader('Links', links.length);
+      for (var li = 0; li < links.length; li++) {
+        html += '<div class="decidr-so-doc-item">';
+        html += '<a class="decidr-so-doc-link" href="' + UI.escapeHtml(links[li]) + '" target="_blank">'
+          + UI.escapeHtml(links[li]) + '</a>';
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+
+    html += '<div class="decidr-so-section">';
+    html += UI.SlideOut._renderSectionHeader('Payload');
+    html += '<pre style="white-space:pre-wrap;word-break:break-word;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:var(--border-radius-md);padding:var(--space-3);font-size:12px;">'
+      + UI.escapeHtml(JSON.stringify(event.payload || {}, null, 2)) + '</pre>';
+    html += '</div>';
+
+    if (event.sourceContext) {
+      html += '<div class="decidr-so-section">';
+      html += UI.SlideOut._renderSectionHeader('Source Context');
+      html += '<pre style="white-space:pre-wrap;word-break:break-word;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:var(--border-radius-md);padding:var(--space-3);font-size:12px;">'
+        + UI.escapeHtml(JSON.stringify(event.sourceContext || {}, null, 2)) + '</pre>';
+      html += '</div>';
+    }
+
+    html += '<div class="decidr-so-section">';
+    html += UI.SlideOut._renderSectionHeader('Revision History', revisions.length);
+    if (revisions.length === 0) {
+      html += '<div class="decidr-so-empty-hint">No revisions</div>';
+    } else {
+      for (var ri = 0; ri < revisions.length; ri++) {
+        var rev = revisions[ri];
+        var editor = rev.editedBy && rev.editedBy.name ? rev.editedBy.name : rev.editedById;
+        html += '<div class="decidr-so-doc-item" style="display:block;">';
+        html += '<div style="display:flex;justify-content:space-between;gap:var(--space-2);margin-bottom:4px;">';
+        html += '<strong>' + UI.escapeHtml(editor || 'Unknown') + '</strong>';
+        html += '<span class="decidr-so-empty-hint">' + UI.escapeHtml(UI.timeAgo(rev.createdAt)) + '</span>';
+        html += '</div>';
+        if (rev.editReason) {
+          html += '<div class="decidr-so-empty-hint">' + UI.escapeHtml(rev.editReason) + '</div>';
+        }
+        html += '<pre style="white-space:pre-wrap;word-break:break-word;margin-top:6px;font-size:11px;color:var(--text-secondary);">'
+          + UI.escapeHtml(JSON.stringify({ before: rev.previousValues, after: rev.nextValues }, null, 2))
+          + '</pre>';
+        html += '</div>';
+      }
+    }
+    html += '</div>';
+
     html += '</div>';
     return html;
   };
@@ -428,6 +590,29 @@
     // Description
     if (project.description) {
       html += '<p class="decidr-so-description">' + UI.escapeHtml(project.description) + '</p>';
+    }
+
+    var decisionsForTab = (enriched.decisions && enriched.decisions.data) || enriched.decisions || [];
+    var auditEventsForTab = (enriched.auditEvents && enriched.auditEvents.data) || enriched.auditEvents || [];
+    var activeProjectTab = state.activeTab || 'decisions';
+    html += projectAuditTabs(
+      activeProjectTab,
+      Array.isArray(decisionsForTab) ? decisionsForTab.length : null,
+      Array.isArray(auditEventsForTab) ? auditEventsForTab.length : null
+    );
+
+    if (activeProjectTab === 'audit-events') {
+      if (Array.isArray(auditEventsForTab)) {
+        html += '<div class="decidr-so-section">';
+        html += UI.SlideOut._renderSectionHeader('Audit Events', auditEventsForTab.length);
+        html += UI.auditEventsList(auditEventsForTab, { emptyText: 'No audit events yet' });
+        html += '</div>';
+      } else if (!enriched.auditEvents) {
+        html += '<div class="decidr-so-loading-section"><div class="decidr-spinner"></div> Loading audit events...</div>';
+      }
+
+      html += '</div>';
+      return html;
     }
 
     // Task Progress
@@ -823,6 +1008,21 @@
 
     // Documents section (shared helper)
     html += UI.SlideOut._renderDocumentSection('DECISION', decision.id, decision.documents || [], state);
+
+    var linkedAuditEvents = [];
+    if (enriched.auditEvents && enriched.auditEvents.data) {
+      linkedAuditEvents = enriched.auditEvents.data;
+    } else if (Array.isArray(enriched.auditEvents)) {
+      linkedAuditEvents = enriched.auditEvents;
+    } else if (decision.auditEventLinks && decision.auditEventLinks.length) {
+      for (var aei = 0; aei < decision.auditEventLinks.length; aei++) {
+        if (decision.auditEventLinks[aei].auditEvent) linkedAuditEvents.push(decision.auditEventLinks[aei].auditEvent);
+      }
+    }
+    html += '<div class="decidr-so-section">';
+    html += UI.SlideOut._renderSectionHeader('Linked Audit Events', linkedAuditEvents.length);
+    html += UI.auditEventsList(linkedAuditEvents, { emptyText: 'No linked audit events' });
+    html += '</div>';
 
     // GitHub Issues & PRs
     var ghSummaryDec = enriched.githubSummary;

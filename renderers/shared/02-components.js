@@ -63,6 +63,8 @@
     DONE: 'Done',
     DRAFT: 'Draft',
     OPEN: 'Open',
+    ACKNOWLEDGED: 'Acknowledged',
+    RESOLVED: 'Resolved',
     EXTERNAL_OPEN: 'External',
     IN_REVIEW: 'In Review',
     CHANGES_REQUESTED: 'Changes Requested',
@@ -90,6 +92,7 @@
     project: 'Project',
     initiative: 'Initiative',
     issue: 'Issue',
+    audit_event: 'Audit Event',
     pull_request: 'Pull Request',
     repo: 'Repository'
   };
@@ -242,6 +245,7 @@
       + '<path d="M10 10L3 6"/>'
       + '</svg>',
     issue: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="11" r="1" fill="currentColor"/><path d="M8 5v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    audit_event: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3.5h10"/><path d="M3 8h10"/><path d="M3 12.5h6"/><circle cx="12" cy="12.5" r="1.5"/></svg>',
     pull_request: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="5" cy="4" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="11" cy="12" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="5" cy="12" r="2" stroke="currentColor" stroke-width="1.5"/><path d="M5 6v4M11 4v6" stroke="currentColor" stroke-width="1.5"/></svg>',
     repo: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 0 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5v-9z" fill="currentColor"/></svg>'
   };
@@ -566,6 +570,42 @@
       + UI.statusBadge(decision.status)
       + '</div>'
       + '<div class="decidr-card-title">' + UI.escapeHtml(decision.title) + '</div>'
+      + descHtml
+      + metaHtml
+      + '</div>'
+      + '</div>';
+  };
+
+  UI.auditEventCard = function(event, opts) {
+    var o = opts || {};
+
+    var animStyle = typeof o.animDelay === 'number'
+      ? ' style="animation-delay: ' + o.animDelay.toFixed(2) + 's;"' : '';
+
+    var category = event.category && event.category.name ? event.category.name : event.category;
+    var descHtml = event.summary
+      ? '<div class="decidr-card-desc">' + UI.escapeHtml(UI.truncate(event.summary, 120)) + '</div>'
+      : '';
+
+    var metaParts = [];
+    if (category) metaParts.push(category);
+    if (event.occurredAt) metaParts.push(UI.formatDate(event.occurredAt));
+    else if (event.createdAt) metaParts.push(UI.timeAgo(event.createdAt));
+    if (event.createdByClient) metaParts.push(event.createdByClient);
+    var metaHtml = metaParts.length > 0
+      ? '<div class="decidr-card-meta">' + UI.escapeHtml(metaParts.join(' \u00b7 ')) + '</div>'
+      : '';
+
+    return '<div class="decidr-card decidr-audit-event-card" '
+      + 'data-entity-type="audit_event" data-entity-id="' + UI.escapeHtml(event.id) + '"'
+      + animStyle + '>'
+      + '<div class="decidr-card-icon">' + entityIcon('audit_event') + '</div>'
+      + '<div class="decidr-card-body">'
+      + '<div class="decidr-card-header">'
+      + '<span class="decidr-card-type-label">Audit Event</span>'
+      + UI.statusBadge(event.status || 'OPEN')
+      + '</div>'
+      + '<div class="decidr-card-title">' + UI.escapeHtml(event.title || 'Untitled event') + '</div>'
       + descHtml
       + metaHtml
       + '</div>'
@@ -1237,6 +1277,7 @@
         else if (type === 'task') fetchFn = API.getTask;
         else if (type === 'bridge') fetchFn = API.getBridge;
         else if (type === 'initiative') fetchFn = API.getInitiative;
+        else if (type === 'audit_event') fetchFn = API.getAuditEvent;
         else if (type === 'organization-settings') fetchFn = API.getOrganizationMemberSettings;
         else if (type === 'issue') fetchFn = function(id) { return API.getIssue(id); };
         else if (type === 'pull_request') fetchFn = function(id) { return API.getPR(id); };
@@ -1288,6 +1329,7 @@
 
         var typeLabels = {
           project: 'Project', decision: 'Decision',
+          audit_event: 'Audit Event',
           task: 'Task', bridge: 'Bridge', initiative: 'Initiative',
           'project-timeline': 'Timeline', 'decision-timeline': 'Timeline',
           'organization-settings': 'Organization'
@@ -1354,6 +1396,7 @@
       'project-timeline': function(data) { return UI.slideOutTimeline(data, 'project'); },
       'decision-timeline': function(data) { return UI.slideOutTimeline(data, 'decision'); },
       issue: function(data) { return UI.slideOutIssue(data); },
+      audit_event: function(data) { return UI.slideOutAuditEvent(data); },
       pull_request: function(data) { return UI.slideOutPR(data); },
       repo: function(data) { return UI.slideOutRepo(data); }
     },
@@ -1500,10 +1543,12 @@
         if (data.parentId) {
           fetches.push({ key: 'parentDecision', promise: API.getDecision(data.parentId) });
         }
+        fetches.push({ key: 'auditEvents', promise: API.listAuditEvents({ decisionId: id, take: 50 }) });
         // GitHub summary
         fetches.push({ key: 'githubSummary', promise: API.getEntityGithubSummary('DECISION', id) });
       } else if (type === 'project') {
         fetches.push({ key: 'decisions', promise: API.listDecisions({ projectId: id }) });
+        fetches.push({ key: 'auditEvents', promise: API.listAuditEvents({ projectId: id, take: 100 }) });
         fetches.push({ key: 'tasks', promise: API.listTasks({ projectId: id }) });
         fetches.push({ key: 'bridges', promise: API.listBridges({ projectId: id }) });
         fetches.push({ key: 'timeline', promise: API.getTimeline({ projectId: id, take: 20 }) });
@@ -1521,6 +1566,10 @@
         fetches.push({ key: 'githubSummary', promise: API.getEntityGithubSummary('TASK', id) });
       } else if (type === 'issue') {
         fetches.push({ key: 'linkedPRs', promise: API.listPRs({ issueRefId: id }) });
+      } else if (type === 'audit_event') {
+        if (data.projectId) {
+          fetches.push({ key: 'project', promise: API.getProject(data.projectId) });
+        }
       } else if (type === 'bridge') {
         fetches.push({ key: 'timeline', promise: API.getTimeline({ bridgeId: id, take: 20 }) });
       } else if (type === 'initiative') {
@@ -1812,10 +1861,15 @@
     },
 
     _projectPanelState: {
+      activeTab: 'decisions',
       timelineFilter: 'all',
       addDocFormOpen: false,
       addTaskFormOpen: false,
       docFormTab: 'search'
+    },
+
+    _auditEventPanelState: {
+      editMode: false
     },
 
     _bridgePanelState: {
@@ -2021,6 +2075,11 @@
       // --- Project events ---
       if (top.type === 'project') {
         UI.SlideOut._wireProjectEvents(panel, top.id, top.data);
+      }
+
+      // --- Audit event events ---
+      if (top.type === 'audit_event') {
+        UI.SlideOut._wireAuditEventEvents(panel, top.id, top.data);
       }
 
       // --- Bridge events ---
@@ -2406,6 +2465,84 @@
       }
     },
 
+    _wireAuditEventEvents: function(panel, id, data) {
+      var state = UI.SlideOut._auditEventPanelState;
+      var API = window.__decidrAPI;
+
+      var editBtn = panel.querySelector('#decidr-so-btn-audit-edit');
+      if (editBtn) {
+        editBtn.onclick = function() {
+          state.editMode = !state.editMode;
+          UI.SlideOut._render();
+        };
+      }
+
+      var cancelBtn = panel.querySelector('#decidr-so-btn-cancel-audit-edit');
+      if (cancelBtn) {
+        cancelBtn.onclick = function() {
+          state.editMode = false;
+          UI.SlideOut._render();
+        };
+      }
+
+      var saveBtn = panel.querySelector('#decidr-so-btn-save-audit-edit');
+      if (saveBtn) {
+        saveBtn.onclick = function() {
+          if (!API) return;
+          var titleInput = panel.querySelector('#decidr-so-audit-title');
+          var summaryInput = panel.querySelector('#decidr-so-audit-summary');
+          var statusInput = panel.querySelector('#decidr-so-audit-status');
+          var categoryInput = panel.querySelector('#decidr-so-audit-category');
+          var linksInput = panel.querySelector('#decidr-so-audit-links');
+          var payloadInput = panel.querySelector('#decidr-so-audit-payload');
+          var sourceInput = panel.querySelector('#decidr-so-audit-source-context');
+          var reasonInput = panel.querySelector('#decidr-so-audit-edit-reason');
+
+          var payload = {};
+          var sourceContext = {};
+          try {
+            payload = payloadInput && payloadInput.value.trim() ? JSON.parse(payloadInput.value) : {};
+            sourceContext = sourceInput && sourceInput.value.trim() ? JSON.parse(sourceInput.value) : {};
+          } catch (err) {
+            alert('Payload and source context must be valid JSON.');
+            return;
+          }
+
+          var links = [];
+          if (linksInput && linksInput.value.trim()) {
+            var rawLinks = linksInput.value.split(/\n+/);
+            for (var li = 0; li < rawLinks.length; li++) {
+              var link = rawLinks[li].trim();
+              if (link) links.push(link);
+            }
+          }
+
+          var updates = {
+            title: titleInput ? titleInput.value.trim() : data.title,
+            summary: summaryInput ? summaryInput.value.trim() : data.summary,
+            status: statusInput ? statusInput.value : data.status,
+            category: categoryInput ? categoryInput.value.trim() : undefined,
+            links: links,
+            payload: payload,
+            sourceContext: sourceContext,
+            editReason: reasonInput ? reasonInput.value.trim() : undefined
+          };
+
+          if (!updates.title) return;
+          if (UI.SlideOut._guardBusy()) return;
+          API.updateAuditEvent(id, updates).then(function() {
+            state.editMode = false;
+            UI.SlideOut._refetchAndRender();
+          }).catch(function(err) {
+            UI.SlideOut._busy = false;
+            console.error('[decidr] Update audit event failed:', err);
+          });
+        };
+      }
+
+      UI.SlideOut._wireArchiveEvent(panel, '#decidr-so-btn-audit-archive', 'audit event', id, API.archiveAuditEvent);
+    },
+
     _wireTaskEvents: function(panel, id, data) {
       var state = UI.SlideOut._taskPanelState;
       var API = window.__decidrAPI;
@@ -2457,6 +2594,18 @@
     _wireProjectEvents: function(panel, id, data) {
       var state = UI.SlideOut._projectPanelState;
       var API = window.__decidrAPI;
+
+      var tabButtons = panel.querySelectorAll('[data-project-tab]');
+      for (var pt = 0; pt < tabButtons.length; pt++) {
+        (function(btn) {
+          btn.onclick = function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            state.activeTab = btn.getAttribute('data-project-tab') || 'decisions';
+            UI.SlideOut._render();
+          };
+        })(tabButtons[pt]);
+      }
 
       // View All Activity
       var viewAllBtn = panel.querySelector('#decidr-so-btn-view-all-project-timeline');

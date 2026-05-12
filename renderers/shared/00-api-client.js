@@ -299,6 +299,14 @@
       return api.get('/bridges' + _qs(params));
     },
 
+    listAuditEvents: function(params) {
+      return api.get('/audit-events' + _qs(params));
+    },
+
+    listAuditCategories: function(params) {
+      return api.get('/audit-categories' + _qs(params));
+    },
+
     // --- Single entity endpoints ---
 
     getInitiative: function(id) {
@@ -319,6 +327,10 @@
 
     getBridge: function(id) {
       return api.get('/bridges/' + id);
+    },
+
+    getAuditEvent: function(id) {
+      return api.get('/audit-events/' + id);
     },
 
     // --- Special endpoints ---
@@ -391,6 +403,10 @@
       return api.post('/bridges', data);
     },
 
+    createAuditEvent: function(data) {
+      return api.post('/audit-events', data);
+    },
+
     // --- CRUD: Update ---
 
     updateInitiative: function(id, data) {
@@ -413,6 +429,10 @@
       return api.patch('/bridges/' + id, data);
     },
 
+    updateAuditEvent: function(id, data) {
+      return api.patch('/audit-events/' + id, data);
+    },
+
     // --- Archive endpoints ---
 
     archiveInitiative: function(id) {
@@ -433,6 +453,10 @@
 
     archiveBridge: function(id) {
       return api.delete('/bridges/' + id);
+    },
+
+    archiveAuditEvent: function(id) {
+      return api.delete('/audit-events/' + id);
     },
 
     // --- Restore endpoints ---
@@ -497,6 +521,20 @@
 
     addReviewer: function(decisionId, userId) {
       return api.post('/decisions/' + decisionId + '/reviewers', { userId: userId });
+    },
+
+    linkDecisionAuditEvent: function(decisionId, auditEventId) {
+      return api.post('/decisions/' + decisionId + '/audit-events', { auditEventId: auditEventId });
+    },
+
+    unlinkDecisionAuditEvent: function(decisionId, auditEventId) {
+      return api.delete('/decisions/' + decisionId + '/audit-events/' + auditEventId);
+    },
+
+    replaceDecisions: function(replacingDecisionId, replacedDecisionIds) {
+      return api.post('/decisions/' + replacingDecisionId + '/replacements', {
+        replacedDecisionIds: replacedDecisionIds
+      });
     },
 
     listOrgMembers: function() {
@@ -708,6 +746,7 @@
         decision: api.getDecision,
         task: api.getTask,
         bridge: api.getBridge,
+        audit_event: api.getAuditEvent,
         'organization-settings': api.getOrganizationMemberSettings,
         issue: function(id) { return api.getIssue(id); },
         pull_request: function(id) { return api.getPR(id); },

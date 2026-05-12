@@ -28,6 +28,7 @@
       tasks: 'task',
       bridges: 'bridge',
       issues: 'issue',
+      audit_events: 'audit_event',
       prs: 'pull_request',
       repos: 'repo'
     };
@@ -56,6 +57,7 @@
     task: 'Task',
     bridge: 'Bridge',
     issue: 'Issue',
+    audit_event: 'Audit Event',
     pull_request: 'Pull Request',
     repo: 'Repository'
   };
@@ -81,6 +83,7 @@
     bridge: function(entity, o, UI) { return UI.bridgeCard(entity, o); },
     initiative: function(entity, o, UI) { return UI.initiativeCard(entity, o); },
     issue: function(entity, o, UI) { return UI.issueCard(entity, o); },
+    audit_event: function(entity, o, UI) { return UI.auditEventCard(entity, o); },
     pull_request: function(entity, o, UI) { return UI.prArtifactCard(entity, o); },
     repo: function(entity, o, UI) { return UI.repoCard(entity, o); }
   };
@@ -260,6 +263,7 @@
             task: API.listTasks,
             bridge: API.listBridges,
             issue: function(p) { return API.listIssues(p); },
+            audit_event: function(p) { return API.listAuditEvents(p); },
             pull_request: function(p) { return API.listPRs(p); },
             repo: function(p) { return API.listRepos(p); }
           };
