@@ -25,8 +25,10 @@
         reports: [],
         fields: [],
         currentReport: null,
+        builderTab: 'outline',
         fieldSearch: '',
         selectedReportId: (data && (data.report_id || data.reportId)) || '',
+        previewDirty: false,
         preview: { rows: [], total: 0, selectedColumns: [] },
         filters: {
           status: (data && data.status) || '',
@@ -182,6 +184,7 @@
       function runReport() {
         if (!state.draft.projectIds.length) {
           state.preview = { rows: [], total: 0, selectedColumns: state.draft.selectedColumns };
+          state.previewDirty = false;
           render();
           return Promise.resolve();
         }
@@ -195,6 +198,7 @@
             selectedColumns: resp.selectedColumns || state.draft.selectedColumns
           };
           state.running = false;
+          state.previewDirty = false;
           render();
         }).catch(function(err) {
           state.running = false;
@@ -354,32 +358,42 @@
 
       function renderStyles() {
         return '<style>'
-          + '.audit-reports-shell{max-width:1480px;margin:0 auto;padding:var(--space-5) var(--space-4);font-family:var(--font-sans);color:var(--text-primary);}'
-          + '.audit-reports-top{display:grid;grid-template-columns:minmax(180px,1.1fr) minmax(240px,2fr) minmax(130px,.7fr) repeat(4,auto);gap:var(--space-3);align-items:end;}'
-          + '.audit-reports-scope{display:grid;grid-template-columns:minmax(240px,1.5fr) repeat(5,minmax(130px,1fr));gap:var(--space-3);align-items:end;}'
-          + '.audit-reports-main{display:grid;grid-template-columns:minmax(280px,340px) minmax(0,1fr) minmax(320px,380px);gap:var(--space-4);align-items:start;}'
-          + '.audit-rule-card{border-top:1px solid var(--border-subtle);padding:10px 0;display:flex;flex-direction:column;gap:8px;}'
-          + '.audit-rule-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(96px,120px);gap:8px;align-items:end;}'
-          + '.audit-rule-action-row{display:grid;grid-template-columns:minmax(92px,112px) minmax(0,1fr) 34px;gap:8px;align-items:end;}'
-          + '.audit-column-row{display:grid;grid-template-columns:minmax(0,1fr) 34px;gap:8px;align-items:start;margin-bottom:8px;}'
+          + '.audit-reports-shell{height:100%;max-width:1600px;margin:0 auto;padding:var(--space-5) var(--space-4);font-family:var(--font-sans);color:var(--text-primary);}'
+          + '.audit-report-titlebar{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-4);margin-bottom:var(--space-3);}'
+          + '.audit-report-toolbar{display:grid;grid-template-columns:minmax(190px,1fr) minmax(260px,1.5fr) minmax(130px,.7fr) repeat(4,auto);gap:var(--space-3);align-items:end;padding:var(--space-3) var(--space-4);margin-bottom:var(--space-4);}'
+          + '.audit-builder-workspace{display:grid;grid-template-columns:360px minmax(0,1fr) 310px;gap:var(--space-4);align-items:start;}'
+          + '.audit-builder-panel{min-height:720px;max-height:calc(100vh - 230px);overflow:hidden;display:flex;flex-direction:column;}'
+          + '.audit-builder-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:var(--space-3);border-bottom:1px solid var(--border-subtle);}'
+          + '.audit-builder-tab{min-height:34px;border:1px solid transparent;border-radius:var(--border-radius-md);background:transparent;color:var(--text-secondary);font:inherit;font-size:var(--text-small);font-weight:var(--weight-semibold);cursor:pointer;}'
+          + '.audit-builder-tab.active{background:var(--bg-surface);border-color:var(--border-default);color:var(--text-primary);}'
+          + '.audit-builder-pane{padding:var(--space-4);overflow:auto;}'
+          + '.audit-report-side{display:flex;flex-direction:column;gap:var(--space-4);}'
+          + '.audit-report-scope-grid{display:grid;grid-template-columns:1fr;gap:var(--space-3);}'
+          + '.audit-rule-card{border:1px solid var(--border-subtle);border-radius:var(--border-radius-md);padding:10px;display:flex;flex-direction:column;gap:8px;margin-bottom:10px;background:var(--bg-surface);}'
+          + '.audit-rule-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(104px,128px);gap:8px;align-items:end;}'
+          + '.audit-rule-action-row{display:grid;grid-template-columns:minmax(112px,136px) minmax(0,1fr) 34px;gap:8px;align-items:end;}'
+          + '.audit-column-row{display:grid;grid-template-columns:28px minmax(0,1fr) 34px;gap:8px;align-items:start;margin-bottom:8px;}'
+          + '.audit-column-handle{width:28px;height:34px;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);}'
           + '.audit-column-path{color:var(--text-tertiary);font-size:var(--text-xs);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:4px;}'
-          + '@media (max-width:1180px){.audit-reports-main{grid-template-columns:minmax(260px,320px) minmax(0,1fr);} .audit-reports-side{grid-column:1 / -1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:var(--space-4);}.audit-reports-scope{grid-template-columns:minmax(220px,1.4fr) repeat(3,minmax(130px,1fr));}.audit-reports-top{grid-template-columns:minmax(160px,1fr) minmax(220px,2fr) minmax(120px,.8fr) repeat(4,auto);}}'
-          + '@media (max-width:820px){.audit-reports-top,.audit-reports-scope,.audit-reports-main,.audit-reports-side{grid-template-columns:1fr;}.audit-reports-top button{width:100%;}.audit-rule-row,.audit-rule-action-row{grid-template-columns:1fr;}}'
+          + '.audit-preview-card{min-height:720px;}'
+          + '.audit-preview-table-wrap{overflow:auto;max-height:calc(100vh - 330px);min-height:520px;}'
+          + '@media (max-width:1280px){.audit-builder-workspace{grid-template-columns:340px minmax(0,1fr);}.audit-report-side{grid-column:1 / -1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);}.audit-report-toolbar{grid-template-columns:minmax(180px,1fr) minmax(240px,1.6fr) minmax(120px,.8fr) repeat(4,auto);}.audit-preview-table-wrap{max-height:620px;}}'
+          + '@media (max-width:920px){.audit-report-titlebar{flex-direction:column;}.audit-report-toolbar,.audit-builder-workspace,.audit-report-side{grid-template-columns:1fr;}.audit-report-toolbar button{width:100%;}.audit-builder-panel,.audit-preview-card{min-height:auto;max-height:none;}.audit-preview-table-wrap{min-height:360px;max-height:520px;}.audit-rule-row,.audit-rule-action-row{grid-template-columns:1fr;}.audit-column-row{grid-template-columns:minmax(0,1fr) 34px;}.audit-column-handle{display:none;}}'
           + '</style>';
       }
 
       function renderHeader() {
-        var html = '<div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-4);margin-bottom:var(--space-4);">';
-        html += '<div style="min-width:0;"><h1 style="font-size:var(--text-h1);font-weight:var(--weight-bold);margin:0;">Audit Reports</h1>'
-          + '<div style="color:var(--text-secondary);font-size:var(--text-small);margin-top:4px;">Rule-based reports over audit events</div></div>';
+        var html = '<div class="audit-report-titlebar">';
+        html += '<div style="min-width:0;"><div style="color:var(--text-tertiary);font-size:var(--text-xs);font-weight:var(--weight-semibold);text-transform:uppercase;margin-bottom:4px;">Report Builder</div>'
+          + '<h1 style="font-size:var(--text-h1);font-weight:var(--weight-bold);margin:0;">Audit Events</h1>'
+          + '<div style="color:var(--text-secondary);font-size:var(--text-small);margin-top:4px;">' + UI.escapeHtml(state.draft.name || 'New audit report') + '</div></div>';
         html += UI.orgPicker(state.organizations, state.activeOrgId, { defaultOrgId: state.defaultOrgId });
         html += '</div>';
         return html;
       }
 
       function renderTopControls() {
-        var html = '<div class="decidr-section" style="padding:var(--space-4);margin-bottom:var(--space-4);">';
-        html += '<div class="audit-reports-top">';
+        var html = '<div class="decidr-section audit-report-toolbar">';
         html += label('Saved report') + '<select id="audit-report-select" style="' + controlStyle() + '">'
           + option('', 'New unsaved report', state.selectedReportId);
         for (var i = 0; i < state.reports.length; i++) {
@@ -396,14 +410,11 @@
         html += '<button id="audit-report-save" style="' + smallButtonStyle(false) + '">' + (state.saving ? 'Saving...' : 'Save') + '</button>';
         html += '<button id="audit-report-export" style="' + smallButtonStyle(false) + '">Export CSV</button>';
         html += '</div>';
-        html += '</div>';
         return html;
       }
 
       function renderScope() {
-        var html = '<div class="decidr-section" style="padding:var(--space-4);margin-bottom:var(--space-4);">';
-        html += '<div class="decidr-section-header">Scope</div>';
-        html += '<div class="audit-reports-scope">';
+        var html = '<div class="audit-report-scope-grid">';
         html += label('Projects') + '<select id="audit-report-projects" multiple size="4" style="' + controlStyle('min-height:92px;') + '">';
         for (var p = 0; p < state.projects.length; p++) {
           var selected = state.draft.projectIds.indexOf(state.projects[p].id) !== -1;
@@ -424,8 +435,8 @@
         html += '</select></label>';
         html += label('From') + '<input id="audit-report-from" inputmode="numeric" placeholder="YYYY-MM-DD" value="' + UI.escapeHtml(state.filters.occurredFrom) + '" style="' + controlStyle() + '"></label>';
         html += label('To') + '<input id="audit-report-to" inputmode="numeric" placeholder="YYYY-MM-DD" value="' + UI.escapeHtml(state.filters.occurredTo) + '" style="' + controlStyle() + '"></label>';
-        html += label('Search') + '<input id="audit-report-search" type="search" value="' + UI.escapeHtml(state.filters.search) + '" placeholder="Title or summary" style="' + controlStyle() + '"></label>';
-        html += '</div></div>';
+        html += label('Search') + '<input id="audit-report-search" type="search" value="' + UI.escapeHtml(state.filters.search) + '" placeholder="Title or summary" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" style="' + controlStyle() + '"></label>';
+        html += '</div>';
         return html;
       }
 
@@ -435,14 +446,13 @@
           var fieldPath = String(field.fieldPath || '').toLowerCase();
           return !search || fieldPath.indexOf(search) !== -1 || String(field.source || '').toLowerCase().indexOf(search) !== -1;
         }).slice(0, 80);
-        var html = '<div class="decidr-section" style="padding:var(--space-4);height:100%;overflow:auto;">';
-        html += '<div class="decidr-section-header">Fields</div>';
+        var html = '<div class="decidr-section-header">Fields</div>';
         html += '<div style="display:flex;gap:var(--space-2);margin-bottom:var(--space-3);">'
-          + '<input id="audit-report-field-search" type="search" value="' + UI.escapeHtml(state.fieldSearch) + '" placeholder="Search fields" style="' + controlStyle() + '">'
+          + '<input id="audit-report-field-search" type="search" value="' + UI.escapeHtml(state.fieldSearch) + '" placeholder="Search fields" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" style="' + controlStyle() + '">'
           + '<button id="audit-report-refresh-fields" style="' + smallButtonStyle(false) + '">Refresh</button></div>';
         html += '<div id="audit-report-field-list">';
         html += renderFieldListItems(fields);
-        html += '</div></div>';
+        html += '</div>';
         return html;
       }
 
@@ -458,8 +468,8 @@
             + '<div style="min-width:0;"><div style="font-size:var(--text-small);font-weight:var(--weight-semibold);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + UI.escapeHtml(f.fieldPath) + '</div>'
             + '<div style="color:var(--text-tertiary);font-size:var(--text-xs);">' + UI.escapeHtml((f.source || '') + ' · ' + (f.valueType || '')) + '</div></div>'
             + '<div style="display:flex;gap:4px;flex-shrink:0;">'
-            + '<button data-add-column="' + UI.escapeHtml(f.fieldPath) + '" style="' + smallButtonStyle(false) + '">Column</button>'
-            + '<button data-add-rule="' + UI.escapeHtml(f.fieldPath) + '" style="' + smallButtonStyle(false) + '">Rule</button>'
+            + '<button data-add-column="' + UI.escapeHtml(f.fieldPath) + '" style="' + smallButtonStyle(false) + '">Add</button>'
+            + '<button data-add-rule="' + UI.escapeHtml(f.fieldPath) + '" style="' + smallButtonStyle(false) + '">Filter</button>'
             + '</div></div>';
           var values = Array.isArray(f.distinctValues) ? f.distinctValues.slice(0, 4) : [];
           if (values.length) {
@@ -473,12 +483,12 @@
 
       function renderRules() {
         var rules = Array.isArray(state.draft.logic.rules) ? state.draft.logic.rules : [];
-        var html = '<div class="decidr-section" style="padding:var(--space-4);">';
+        var html = '<div style="margin-top:var(--space-4);">';
         html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:var(--space-2);">'
-          + '<div class="decidr-section-header" style="margin:0;">If/Then Logic</div>'
-          + '<button id="audit-report-add-rule" style="' + smallButtonStyle(false) + '">Add Rule</button></div>';
+          + '<div class="decidr-section-header" style="margin:0;">Advanced Filters</div>'
+          + '<button id="audit-report-add-rule" style="' + smallButtonStyle(false) + '">Add Filter</button></div>';
         if (!rules.length) {
-          html += '<div style="color:var(--text-tertiary);font-size:var(--text-small);padding:var(--space-3) 0;">No rules yet. The report includes all scoped events.</div>';
+          html += '<div style="color:var(--text-tertiary);font-size:var(--text-small);padding:var(--space-3) 0;">No advanced filters.</div>';
         }
         for (var i = 0; i < rules.length; i++) {
           var rule = rules[i];
@@ -489,19 +499,26 @@
           var action = then.include === false ? 'exclude' : (then.include === true ? 'include' : 'label');
           var labelValue = then.label || (Array.isArray(then.labels) ? then.labels[0] : '') || '';
           html += '<div class="audit-rule-card">';
-          html += '<div style="font-size:var(--text-xs);color:var(--text-tertiary);font-weight:var(--weight-semibold);text-transform:uppercase;">If</div>';
+          html += '<div style="font-size:var(--text-xs);color:var(--text-tertiary);font-weight:var(--weight-semibold);text-transform:uppercase;">Filter ' + (i + 1) + '</div>';
           html += '<select data-rule-field="' + i + '" style="' + controlStyle() + '">' + ruleFieldOptions(field) + '</select>';
           html += '<div class="audit-rule-row">';
           html += '<select data-rule-op="' + i + '" style="' + controlStyle() + '">' + operatorOptions(fieldMeta.valueType, cond.op || 'equals') + '</select>';
-          html += '<input data-rule-value="' + i + '" value="' + UI.escapeHtml(cond.value == null ? '' : String(cond.value)) + '" placeholder="Value" style="' + controlStyle() + '">';
+          html += '<input data-rule-value="' + i + '" list="audit-rule-values-' + i + '" value="' + UI.escapeHtml(cond.value == null ? '' : String(cond.value)) + '" placeholder="Value" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" style="' + controlStyle() + '">';
+          if (Array.isArray(fieldMeta.distinctValues) && fieldMeta.distinctValues.length) {
+            html += '<datalist id="audit-rule-values-' + i + '">';
+            for (var dv = 0; dv < fieldMeta.distinctValues.length; dv++) {
+              html += '<option value="' + UI.escapeHtml(String(fieldMeta.distinctValues[dv])) + '"></option>';
+            }
+            html += '</datalist>';
+          }
           html += '</div>';
           html += '<div class="audit-rule-action-row">';
           html += '<select data-rule-action="' + i + '" style="' + controlStyle() + '">'
-            + option('include', 'include', action)
-            + option('exclude', 'exclude', action)
-            + option('label', 'label', action)
+            + option('include', 'Include', action)
+            + option('exclude', 'Exclude', action)
+            + option('label', 'Add label', action)
             + '</select>';
-          html += '<input data-rule-label="' + i + '" value="' + UI.escapeHtml(labelValue) + '" placeholder="Label" style="' + controlStyle() + '">';
+          html += '<input data-rule-label="' + i + '" value="' + UI.escapeHtml(labelValue) + '" placeholder="Optional label" style="' + controlStyle() + '">';
           html += '<button data-remove-rule="' + i + '" style="' + smallButtonStyle(false) + '">×</button>';
           html += '</div>';
           html += '</div>';
@@ -510,19 +527,58 @@
         return html;
       }
 
-      function renderColumnsAndShare() {
-        var html = '<div class="decidr-section" style="padding:var(--space-4);">';
-        html += '<div class="decidr-section-header">Columns</div>';
+      function renderOutline() {
+        var html = '<div class="decidr-section-header">Outline</div>';
+        html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);margin-bottom:var(--space-3);">'
+          + '<div style="color:var(--text-secondary);font-size:var(--text-small);font-weight:var(--weight-semibold);">Columns</div>'
+          + '<button data-builder-tab="fields" style="' + smallButtonStyle(false) + '">Add Column</button></div>';
         for (var i = 0; i < state.draft.selectedColumns.length; i++) {
           var col = state.draft.selectedColumns[i];
           html += '<div class="audit-column-row">'
+            + '<div class="audit-column-handle">⋮</div>'
             + '<div><input data-column-label="' + i + '" value="' + UI.escapeHtml(col.label || col.field) + '" style="' + controlStyle() + '">'
             + '<div class="audit-column-path">' + UI.escapeHtml(col.field) + '</div></div>'
             + '<button data-remove-column="' + i + '" style="' + smallButtonStyle(false) + '">×</button></div>';
         }
-        html += '</div>';
+        html += '<div style="border-top:1px solid var(--border-subtle);margin-top:var(--space-4);padding-top:var(--space-4);">';
+        html += '<div style="color:var(--text-secondary);font-size:var(--text-small);font-weight:var(--weight-semibold);margin-bottom:var(--space-2);">Groups</div>';
+        html += '<div class="decidr-badge">None</div></div>';
+        return html;
+      }
 
-        html += '<div class="decidr-section" style="padding:var(--space-4);margin-top:var(--space-4);">';
+      function renderFiltersPane() {
+        var html = '<div class="decidr-section-header">Filters</div>';
+        html += renderScope();
+        html += renderRules();
+        return html;
+      }
+
+      function renderBuilderPanel() {
+        var active = state.builderTab || 'outline';
+        var html = '<div class="decidr-section audit-builder-panel">';
+        html += '<div class="audit-builder-tabs">'
+          + '<button class="audit-builder-tab' + (active === 'outline' ? ' active' : '') + '" data-builder-tab="outline">Outline</button>'
+          + '<button class="audit-builder-tab' + (active === 'filters' ? ' active' : '') + '" data-builder-tab="filters">Filters</button>'
+          + '<button class="audit-builder-tab' + (active === 'fields' ? ' active' : '') + '" data-builder-tab="fields">Fields</button>'
+          + '</div>';
+        html += '<div class="audit-builder-pane">';
+        if (active === 'filters') html += renderFiltersPane();
+        else if (active === 'fields') html += renderFieldPalette();
+        else html += renderOutline();
+        html += '</div></div>';
+        return html;
+      }
+
+      function renderReportSide() {
+        var html = '<div class="decidr-section" style="padding:var(--space-4);">';
+        html += '<div class="decidr-section-header">Report Details</div>';
+        html += '<div style="display:grid;gap:var(--space-3);">';
+        html += '<div><div style="color:var(--text-tertiary);font-size:var(--text-xs);font-weight:var(--weight-semibold);text-transform:uppercase;margin-bottom:4px;">Report type</div><div class="decidr-badge">Audit Events</div></div>';
+        html += '<div><div style="color:var(--text-tertiary);font-size:var(--text-xs);font-weight:var(--weight-semibold);text-transform:uppercase;margin-bottom:4px;">Rows in preview</div><div style="font-size:var(--text-h3);font-weight:var(--weight-bold);">' + UI.escapeHtml(String(state.preview.total || 0)) + '</div></div>';
+        html += '<div><div style="color:var(--text-tertiary);font-size:var(--text-xs);font-weight:var(--weight-semibold);text-transform:uppercase;margin-bottom:4px;">Configured columns</div><div style="font-weight:var(--weight-semibold);">' + UI.escapeHtml(String(state.draft.selectedColumns.length)) + '</div></div>';
+        html += '</div></div>';
+
+        html += '<div class="decidr-section" style="padding:var(--space-4);">';
         html += '<div class="decidr-section-header">Sharing</div>';
         var shares = (state.currentReport && Array.isArray(state.currentReport.shares)) ? state.currentReport.shares : [];
         if (!state.selectedReportId) {
@@ -554,7 +610,7 @@
         html += '</div></div>';
 
         var versions = (state.currentReport && Array.isArray(state.currentReport.versions)) ? state.currentReport.versions : [];
-        html += '<div class="decidr-section" style="padding:var(--space-4);margin-top:var(--space-4);">';
+        html += '<div class="decidr-section" style="padding:var(--space-4);">';
         html += '<div class="decidr-section-header">Version History</div>';
         if (!versions.length) {
           html += '<div style="color:var(--text-tertiary);font-size:var(--text-small);">No saved versions yet.</div>';
@@ -575,18 +631,22 @@
 
       function renderPreview() {
         var cols = state.preview.selectedColumns.length ? state.preview.selectedColumns : state.draft.selectedColumns;
-        var html = '<div class="decidr-section" style="padding:0;overflow:hidden;">';
+        var html = '<div class="decidr-section audit-preview-card" style="padding:0;overflow:hidden;">';
         html += '<div style="display:flex;justify-content:space-between;align-items:center;padding:var(--space-4);border-bottom:1px solid var(--border-subtle);">'
-          + '<div class="decidr-section-header" style="margin:0;">Preview <span class="decidr-section-count">(' + state.preview.total + ')</span></div>'
+          + '<div><div class="decidr-section-header" style="margin:0;">Preview <span class="decidr-section-count">(' + state.preview.total + ')</span></div>'
+          + '<div style="color:var(--text-tertiary);font-size:var(--text-xs);margin-top:3px;">Audit Events</div></div>'
+          + '<div style="display:flex;align-items:center;gap:var(--space-2);">'
           + (state.running ? '<div style="color:var(--text-tertiary);font-size:var(--text-small);">Running...</div>' : '')
+          + '<button id="audit-report-run-preview" style="' + smallButtonStyle(false) + '">' + (state.running ? 'Running...' : (state.previewDirty ? 'Refresh Preview' : 'Run Preview')) + '</button></div>'
           + '</div>';
+        html += '<div id="audit-preview-dirty-note" style="display:' + (state.previewDirty ? 'block' : 'none') + ';padding:9px var(--space-4);border-bottom:1px solid var(--border-subtle);background:var(--bg-surface);color:var(--text-secondary);font-size:var(--text-small);">Preview is showing the last run. Refresh Preview to apply builder edits.</div>';
         if (state.error) {
           html += '<div style="padding:var(--space-4);color:var(--color-error-text);font-size:var(--text-small);">' + UI.escapeHtml(state.error.message || 'Something went wrong') + '</div>';
         }
         if (!state.preview.rows.length && !state.running) {
           html += UI.emptyState('No audit events match this report.');
         } else {
-          html += '<div style="overflow:auto;max-height:620px;"><table style="width:100%;border-collapse:collapse;font-size:var(--text-small);">';
+          html += '<div class="audit-preview-table-wrap"><table style="width:100%;border-collapse:collapse;font-size:var(--text-small);">';
           html += '<thead><tr><th style="' + thStyle() + '">Event</th>';
           for (var c = 0; c < cols.length; c++) html += '<th style="' + thStyle() + '">' + UI.escapeHtml(cols[c].label || cols[c].field) + '</th>';
           html += '</tr></thead><tbody>';
@@ -638,11 +698,10 @@
         var html = renderStyles() + '<div class="audit-reports-shell">';
         html += renderHeader();
         html += renderTopControls();
-        html += renderScope();
-        html += '<div class="audit-reports-main">';
-        html += renderFieldPalette();
+        html += '<div class="audit-builder-workspace">';
+        html += renderBuilderPanel();
         html += renderPreview();
-        html += '<div class="audit-reports-side">' + renderRules() + renderColumnsAndShare() + '</div>';
+        html += '<div class="audit-report-side">' + renderReportSide() + '</div>';
         html += '</div></div>';
         container.innerHTML = html;
         wire();
@@ -708,6 +767,14 @@
         return value;
       }
 
+      function setPreviewDirty(dirty) {
+        state.previewDirty = !!dirty;
+        var note = container.querySelector('#audit-preview-dirty-note');
+        if (note) note.style.display = state.previewDirty ? 'block' : 'none';
+        var runPreview = container.querySelector('#audit-report-run-preview');
+        if (runPreview && !state.running) runPreview.textContent = state.previewDirty ? 'Refresh Preview' : 'Run Preview';
+      }
+
       function addRule(fieldPath) {
         syncDraftFromControls();
         state.draft.logic.rules = Array.isArray(state.draft.logic.rules) ? state.draft.logic.rules : [];
@@ -715,6 +782,8 @@
           if: { field: fieldPath || (state.fields[0] && state.fields[0].fieldPath) || 'status', op: 'equals', value: '' },
           then: { include: true }
         });
+        state.builderTab = 'filters';
+        state.previewDirty = true;
         render();
       }
 
@@ -723,6 +792,7 @@
         if (!fieldPath) return;
         if (state.draft.selectedColumns.some(function(col) { return col.field === fieldPath; })) return;
         state.draft.selectedColumns.push({ field: fieldPath, label: fieldLabel(fieldPath) });
+        state.previewDirty = true;
         render();
       }
 
@@ -740,13 +810,15 @@
           }
         });
         var run = container.querySelector('#audit-report-run');
-        if (run) run.addEventListener('click', function() { syncDraftFromControls(); loadFields(false).then(runReport); });
+        if (run) run.addEventListener('click', function() { syncDraftFromControls(); runReport(); });
+        var runPreview = container.querySelector('#audit-report-run-preview');
+        if (runPreview) runPreview.addEventListener('click', function() { syncDraftFromControls(); runReport(); });
         var save = container.querySelector('#audit-report-save');
         if (save) save.addEventListener('click', saveReport);
         var fresh = container.querySelector('#audit-report-refresh-fields');
         if (fresh) fresh.addEventListener('click', function() { syncDraftFromControls(); loadFields(true); });
         var newBtn = container.querySelector('#audit-report-new');
-        if (newBtn) newBtn.addEventListener('click', function() { state.selectedReportId = ''; state.currentReport = null; state.draft = defaultDraft(data); render(); runReport(); });
+        if (newBtn) newBtn.addEventListener('click', function() { state.selectedReportId = ''; state.currentReport = null; state.builderTab = 'outline'; state.draft = defaultDraft(data); render(); runReport(); });
         var exportBtn = container.querySelector('#audit-report-export');
         if (exportBtn) exportBtn.addEventListener('click', exportCsv);
         var shareBtn = container.querySelector('#audit-report-share');
@@ -769,20 +841,35 @@
         });
         var addRuleBtn = container.querySelector('#audit-report-add-rule');
         if (addRuleBtn) addRuleBtn.addEventListener('click', function() { addRule(); });
+        var tabBtns = container.querySelectorAll('[data-builder-tab]');
+        for (var tb = 0; tb < tabBtns.length; tb++) tabBtns[tb].addEventListener('click', function(e) {
+          syncDraftFromControls();
+          state.builderTab = e.currentTarget.getAttribute('data-builder-tab') || 'outline';
+          render();
+        });
 
         wireFieldPaletteButtons(container);
         var removeRuleBtns = container.querySelectorAll('[data-remove-rule]');
         for (var rr = 0; rr < removeRuleBtns.length; rr++) removeRuleBtns[rr].addEventListener('click', function(e) {
           syncDraftFromControls();
           state.draft.logic.rules.splice(Number(e.currentTarget.getAttribute('data-remove-rule')), 1);
+          state.previewDirty = true;
           render();
         });
         var removeColumnBtns = container.querySelectorAll('[data-remove-column]');
         for (var rc = 0; rc < removeColumnBtns.length; rc++) removeColumnBtns[rc].addEventListener('click', function(e) {
           syncDraftFromControls();
           state.draft.selectedColumns.splice(Number(e.currentTarget.getAttribute('data-remove-column')), 1);
+          state.previewDirty = true;
           render();
         });
+        var dirtyControls = container.querySelectorAll('#audit-report-projects,#audit-report-status,#audit-report-category,#audit-report-from,#audit-report-to,#audit-report-search,[data-rule-field],[data-rule-op],[data-rule-value],[data-rule-action],[data-rule-label],[data-column-label]');
+        for (var dc = 0; dc < dirtyControls.length; dc++) {
+          if (dirtyControls[dc]._auditReportsDirtyWired) continue;
+          dirtyControls[dc]._auditReportsDirtyWired = true;
+          dirtyControls[dc].addEventListener('change', function() { setPreviewDirty(true); });
+          dirtyControls[dc].addEventListener('input', function() { setPreviewDirty(true); });
+        }
         var unshareBtns = container.querySelectorAll('[data-unshare-user]');
         for (var us = 0; us < unshareBtns.length; us++) unshareBtns[us].addEventListener('click', function(e) {
           unshareReport(e.currentTarget.getAttribute('data-unshare-user'));
