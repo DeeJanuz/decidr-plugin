@@ -73,4 +73,18 @@ cd ..
 # Clean up
 rm -rf "${BUILD_DIR}"
 
+# Copy the local preview harness into the release dir so the launchd server
+# serves it at http://localhost:8765/preview/. The bundled per-renderer JS
+# files live one level up at /renderers/*.js, which the harness references.
+if [ -d "local-preview" ]; then
+  cp -R local-preview "${RELEASE_DIR}/preview"
+  # Mirror the freshly bundled renderer files alongside the preview so
+  # `<script src="../renderers/decidr-dashboard.js">` resolves correctly.
+  mkdir -p "${RELEASE_DIR}/renderers"
+  # Extract just the renderer JS files from the zip back into release/renderers
+  # for the preview to load directly (avoids re-bundling logic).
+  unzip -q -o "${RELEASE_DIR}/${ZIP_NAME}" "renderers/*" -d "${RELEASE_DIR}"
+  echo "Preview harness available at http://localhost:8765/preview/"
+fi
+
 echo "Built ${RELEASE_DIR}/${ZIP_NAME} ($(du -h "${RELEASE_DIR}/${ZIP_NAME}" | cut -f1))"
