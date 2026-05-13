@@ -334,6 +334,87 @@
         return ops.map(function(row) { return option(row[0], row[1], selected); }).join('');
       }
 
+      function formatRuleValue(value) {
+        if (value === null || value === undefined) return '';
+        if (value instanceof Date) return value.toISOString();
+        if (typeof value === 'object') {
+          try {
+            return JSON.stringify(value);
+          } catch (err) {
+            return String(value);
+          }
+        }
+        return String(value);
+      }
+
+      function splitRuleValues(value) {
+        return String(value || '').split(',').map(function(part) {
+          return part.trim();
+        }).filter(function(part) { return part !== ''; });
+      }
+
+      function uniqueRuleValues(values) {
+        var seen = Object.create(null);
+        var output = [];
+        for (var i = 0; i < values.length; i++) {
+          var value = formatRuleValue(values[i]).trim();
+          if (value === '' || seen[value]) continue;
+          seen[value] = true;
+          output.push(value);
+        }
+        return output;
+      }
+
+      function normalizedRuleValues(value) {
+        if (Array.isArray(value)) return uniqueRuleValues(value);
+        if (value === null || value === undefined || value === '') return [];
+        return uniqueRuleValues([value]);
+      }
+
+      function usesMultiValueControl(fieldMeta, op) {
+        var type = String((fieldMeta && fieldMeta.valueType) || '').toUpperCase();
+        return type !== 'DATE' && type !== 'NUMBER' && (op === 'equals' || op === 'not_equals');
+      }
+
+      function renderRuleValueControl(index, cond, fieldMeta) {
+        var op = cond.op || 'equals';
+        if (usesMultiValueControl(fieldMeta, op)) {
+          var selected = normalizedRuleValues(cond.value);
+          var selectedMap = Object.create(null);
+          for (var sv = 0; sv < selected.length; sv++) selectedMap[selected[sv]] = true;
+          var distinct = uniqueRuleValues(Array.isArray(fieldMeta.distinctValues) ? fieldMeta.distinctValues : []);
+          var distinctMap = Object.create(null);
+          for (var dv = 0; dv < distinct.length; dv++) distinctMap[distinct[dv]] = true;
+          var extras = selected.filter(function(value) { return !distinctMap[value]; });
+          var html = '<div class="audit-rule-value-stack">';
+          if (distinct.length) {
+            html += '<div class="audit-rule-value-list" data-rule-values="' + index + '">';
+            for (var i = 0; i < distinct.length; i++) {
+              html += '<label class="audit-rule-value-option"><input type="checkbox" data-rule-value-option="' + index + '" value="' + UI.escapeHtml(distinct[i]) + '"' + (selectedMap[distinct[i]] ? ' checked' : '') + '><span>' + UI.escapeHtml(distinct[i]) + '</span></label>';
+            }
+            html += '</div>';
+          } else {
+            html += '<div class="audit-rule-empty-values">No cached values yet.</div>';
+          }
+          html += '<input data-rule-value-extra="' + index + '" value="' + UI.escapeHtml(extras.join(', ')) + '" placeholder="' + (distinct.length ? 'Add extra values, comma separated' : 'Values separated by commas') + '" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" style="' + controlStyle() + '">';
+          html += '<div class="audit-rule-value-help">' + (selected.length ? UI.escapeHtml(String(selected.length)) + ' selected' : 'Select one or more values') + '</div>';
+          html += '</div>';
+          return html;
+        }
+
+        var rawValue = cond.value == null ? '' : (Array.isArray(cond.value) ? normalizedRuleValues(cond.value).join(', ') : formatRuleValue(cond.value));
+        var input = '<input data-rule-value="' + index + '" list="audit-rule-values-' + index + '" value="' + UI.escapeHtml(rawValue) + '" placeholder="Value" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" style="' + controlStyle() + '">';
+        if (Array.isArray(fieldMeta.distinctValues) && fieldMeta.distinctValues.length) {
+          input += '<datalist id="audit-rule-values-' + index + '">';
+          var values = uniqueRuleValues(fieldMeta.distinctValues);
+          for (var v = 0; v < values.length; v++) {
+            input += '<option value="' + UI.escapeHtml(values[v]) + '"></option>';
+          }
+          input += '</datalist>';
+        }
+        return input;
+      }
+
       function fieldLabel(fieldPath) {
         for (var i = 0; i < state.fields.length; i++) {
           if (state.fields[i].fieldPath === fieldPath) return fieldPath;
@@ -402,7 +483,7 @@
         var op = cond.op || 'equals';
         var needsValue = op !== 'is_empty' && op !== 'is_not_empty';
         var value = cond.value;
-        if (Array.isArray(value)) value = value.join(', ');
+        if (Array.isArray(value)) value = '[' + normalizedRuleValues(value).join(', ') + ']';
         if (value === true) value = 'true';
         if (value === false) value = 'false';
         if (value == null || value === '') value = needsValue ? '[value]' : '';
@@ -483,7 +564,15 @@
           + '.audit-add-filter-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end;margin-bottom:var(--space-3);}'
           + '.audit-add-filter-row button:disabled{opacity:.45;cursor:not-allowed;}'
           + '.audit-rule-card{border:1px solid var(--border-subtle);border-radius:var(--border-radius-md);padding:10px;display:flex;flex-direction:column;gap:8px;margin-bottom:10px;background:var(--bg-surface);}'
-          + '.audit-rule-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(104px,128px);gap:8px;align-items:end;}'
+          + '.audit-rule-row{display:grid;grid-template-columns:minmax(112px,132px) minmax(0,1fr);gap:8px;align-items:start;}'
+          + '.audit-rule-value-stack{display:grid;gap:6px;min-width:0;}'
+          + '.audit-rule-value-list{max-height:150px;overflow:auto;border:1px solid var(--border-default);border-radius:var(--border-radius-md);background:var(--bg-surface);padding:5px;}'
+          + '.audit-rule-value-option{display:grid;grid-template-columns:16px minmax(0,1fr);gap:7px;align-items:start;min-height:26px;padding:4px;border-radius:var(--border-radius-sm);font-size:var(--text-small);color:var(--text-primary);cursor:pointer;}'
+          + '.audit-rule-value-option:hover{background:var(--bg-secondary);}'
+          + '.audit-rule-value-option input{margin:2px 0 0 0;}'
+          + '.audit-rule-value-option span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+          + '.audit-rule-value-help{color:var(--text-tertiary);font-size:var(--text-xs);}'
+          + '.audit-rule-empty-values{min-height:42px;border:1px dashed var(--border-default);border-radius:var(--border-radius-md);display:flex;align-items:center;padding:7px 9px;color:var(--text-tertiary);font-size:var(--text-small);}'
           + '.audit-rule-action-row{display:grid;grid-template-columns:minmax(112px,136px) minmax(0,1fr) 34px;gap:8px;align-items:end;}'
           + '.audit-column-row{display:grid;grid-template-columns:28px minmax(0,1fr) 34px;gap:8px;align-items:start;margin-bottom:8px;}'
           + '.audit-column-handle{width:28px;height:34px;display:flex;align-items:center;justify-content:center;color:var(--text-tertiary);}'
@@ -621,14 +710,7 @@
           html += '<select data-rule-field="' + i + '" style="' + controlStyle() + '">' + ruleFieldOptions(field) + '</select>';
           html += '<div class="audit-rule-row">';
           html += '<select data-rule-op="' + i + '" style="' + controlStyle() + '">' + operatorOptions(fieldMeta.valueType, cond.op || 'equals') + '</select>';
-          html += '<input data-rule-value="' + i + '" list="audit-rule-values-' + i + '" value="' + UI.escapeHtml(cond.value == null ? '' : String(cond.value)) + '" placeholder="Value" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" style="' + controlStyle() + '">';
-          if (Array.isArray(fieldMeta.distinctValues) && fieldMeta.distinctValues.length) {
-            html += '<datalist id="audit-rule-values-' + i + '">';
-            for (var dv = 0; dv < fieldMeta.distinctValues.length; dv++) {
-              html += '<option value="' + UI.escapeHtml(String(fieldMeta.distinctValues[dv])) + '"></option>';
-            }
-            html += '</datalist>';
-          }
+          html += renderRuleValueControl(i, cond, fieldMeta);
           html += '</div>';
           html += '<div class="audit-rule-action-row">';
           html += '<select data-rule-action="' + i + '" style="' + controlStyle() + '">'
@@ -854,9 +936,15 @@
           var f = container.querySelector('[data-rule-field="' + i + '"]');
           var op = container.querySelector('[data-rule-op="' + i + '"]');
           var val = container.querySelector('[data-rule-value="' + i + '"]');
+          var multi = container.querySelector('[data-rule-values="' + i + '"]');
+          var extra = container.querySelector('[data-rule-value-extra="' + i + '"]');
           var action = container.querySelector('[data-rule-action="' + i + '"]');
           var lbl = container.querySelector('[data-rule-label="' + i + '"]');
-          rules[i].if = { field: f ? f.value : ((rules[i].if && rules[i].if.field) || ''), op: op ? op.value : 'equals', value: coerceRuleValue(val ? val.value : '', op ? op.value : 'equals') };
+          var rawValue = val ? val.value : '';
+          if (multi || extra) {
+            rawValue = readMultiRuleValue(i);
+          }
+          rules[i].if = { field: f ? f.value : ((rules[i].if && rules[i].if.field) || ''), op: op ? op.value : 'equals', value: coerceRuleValue(rawValue, op ? op.value : 'equals') };
           rules[i].then = {};
           if (action && action.value === 'exclude') rules[i].then.include = false;
           else if (action && action.value === 'label') {
@@ -875,16 +963,38 @@
       }
 
       function coerceRuleValue(value, op) {
+        if (Array.isArray(value)) {
+          return value.map(function(item) {
+            return coerceScalarRuleValue(item);
+          }).filter(function(item) { return item !== ''; });
+        }
         if (op === 'between') {
           return String(value || '').split(',').map(function(part) {
             var trimmed = part.trim();
             return trimmed !== '' && !Number.isNaN(Number(trimmed)) ? Number(trimmed) : trimmed;
           }).filter(function(part) { return part !== ''; });
         }
+        return coerceScalarRuleValue(value);
+      }
+
+      function coerceScalarRuleValue(value) {
+        if (value === true || value === false) return value;
+        if (typeof value === 'number') return value;
         if (value === 'true') return true;
         if (value === 'false') return false;
         if (value !== '' && !Number.isNaN(Number(value))) return Number(value);
         return value;
+      }
+
+      function readMultiRuleValue(index) {
+        var values = [];
+        var options = container.querySelectorAll('[data-rule-value-option="' + index + '"]');
+        for (var i = 0; i < options.length; i++) {
+          if (options[i].checked) values.push(options[i].value);
+        }
+        var extra = container.querySelector('[data-rule-value-extra="' + index + '"]');
+        if (extra) values = values.concat(splitRuleValues(extra.value));
+        return uniqueRuleValues(values);
       }
 
       function setPreviewDirty(dirty) {
@@ -1006,7 +1116,7 @@
           state.previewDirty = true;
           render();
         });
-        var dirtyControls = container.querySelectorAll('#audit-report-projects,#audit-report-status,#audit-report-category,#audit-report-from,#audit-report-to,#audit-report-search,[data-rule-field],[data-rule-op],[data-rule-value],[data-rule-action],[data-rule-label],[data-column-label]');
+        var dirtyControls = container.querySelectorAll('#audit-report-projects,#audit-report-status,#audit-report-category,#audit-report-from,#audit-report-to,#audit-report-search,[data-rule-field],[data-rule-op],[data-rule-value],[data-rule-value-option],[data-rule-value-extra],[data-rule-action],[data-rule-label],[data-column-label]');
         for (var dc = 0; dc < dirtyControls.length; dc++) {
           if (dirtyControls[dc]._auditReportsDirtyWired) continue;
           dirtyControls[dc]._auditReportsDirtyWired = true;

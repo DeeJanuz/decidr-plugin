@@ -1,5 +1,9 @@
 # Unreleased
 
+# 0.1.27
+
+- **feat**: Add checkbox-based multi-value advanced filters for non-date and non-number audit report fields. `equals` and `not equals` filters can now store arrays of selected values, and users can add custom comma-separated values when the cached field catalog does not include the value they need.
+
 # 0.1.23
 
 - **feat**: Add the standalone `decidr_audit_reports` renderer and routing guidance for custom audit reporting, Salesforce-like payload filtering, saved report definitions, sharing, version history, and CSV export. The shared API client now includes audit-report endpoints, field catalog loading, text-response CSV export support, and member lookup for report sharing.
