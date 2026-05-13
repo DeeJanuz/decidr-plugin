@@ -316,7 +316,7 @@
           + '>' + UI.escapeHtml(text || value || '') + '</option>';
       }
 
-      function operatorOptions(type, selected) {
+      function operatorChoices(type) {
         var base = [
           ['equals', 'equals'],
           ['not_equals', 'not equals'],
@@ -331,7 +331,21 @@
         if (type === 'NUMBER') ops = base.concat(numberOps);
         if (type === 'DATE') ops = base.concat(dateOps);
         if (type === 'BOOLEAN') ops = [['equals', 'is'], ['not_equals', 'is not'], ['is_empty', 'is empty'], ['is_not_empty', 'is not empty']];
+        return ops;
+      }
+
+      function operatorOptions(type, selected) {
+        var ops = operatorChoices(type);
         return ops.map(function(row) { return option(row[0], row[1], selected); }).join('');
+      }
+
+      function normalizeOperatorForField(fieldMeta, op) {
+        var type = String((fieldMeta && fieldMeta.valueType) || '').toUpperCase();
+        var ops = operatorChoices(type);
+        for (var i = 0; i < ops.length; i++) {
+          if (ops[i][0] === op) return op;
+        }
+        return 'equals';
       }
 
       function formatRuleValue(value) {
@@ -435,6 +449,13 @@
           html = option(selectedField, selectedField + ' (saved field)', selectedField) + html;
         }
         return html;
+      }
+
+      function fieldMetaForPath(fieldPath) {
+        for (var i = 0; i < state.fields.length; i++) {
+          if (state.fields[i].fieldPath === fieldPath) return state.fields[i];
+        }
+        return {};
       }
 
       function projectName(projectId) {
@@ -702,7 +723,7 @@
           var cond = rule.if || {};
           var then = rule.then || {};
           var field = cond.field || '';
-          var fieldMeta = state.fields.filter(function(f) { return f.fieldPath === field; })[0] || {};
+          var fieldMeta = fieldMetaForPath(field);
           var action = then.include === false ? 'exclude' : (then.include === true ? 'include' : 'label');
           var labelValue = then.label || (Array.isArray(then.labels) ? then.labels[0] : '') || '';
           html += '<div class="audit-rule-card">';
@@ -940,11 +961,18 @@
           var extra = container.querySelector('[data-rule-value-extra="' + i + '"]');
           var action = container.querySelector('[data-rule-action="' + i + '"]');
           var lbl = container.querySelector('[data-rule-label="' + i + '"]');
-          var rawValue = val ? val.value : '';
-          if (multi || extra) {
-            rawValue = readMultiRuleValue(i);
+          var previousIf = rules[i].if || {};
+          var nextField = f ? f.value : (previousIf.field || '');
+          var fieldChanged = nextField !== (previousIf.field || '');
+          var nextOp = normalizeOperatorForField(fieldMetaForPath(nextField), op ? op.value : (previousIf.op || 'equals'));
+          var rawValue = '';
+          if (!fieldChanged) {
+            rawValue = val ? val.value : '';
+            if (multi || extra) {
+              rawValue = readMultiRuleValue(i);
+            }
           }
-          rules[i].if = { field: f ? f.value : ((rules[i].if && rules[i].if.field) || ''), op: op ? op.value : 'equals', value: coerceRuleValue(rawValue, op ? op.value : 'equals') };
+          rules[i].if = { field: nextField, op: nextOp, value: coerceRuleValue(rawValue, nextOp) };
           rules[i].then = {};
           if (action && action.value === 'exclude') rules[i].then.include = false;
           else if (action && action.value === 'label') {

@@ -1,5 +1,9 @@
 # Unreleased
 
+# 0.1.28
+
+- **fix**: Reset advanced filter values when changing a rule to a different field type, so category multi-select values do not leak into numeric/date filters.
+
 # 0.1.27
 
 - **feat**: Add checkbox-based multi-value advanced filters for non-date and non-number audit report fields. `equals` and `not equals` filters can now store arrays of selected values, and users can add custom comma-separated values when the cached field catalog does not include the value they need.
