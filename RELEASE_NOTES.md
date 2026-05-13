@@ -1,1 +1,3 @@
 # Unreleased
+
+- **feat**: Add a dismissible welcome banner above the dashboard stats with a plain-English explainer of DecidR plus inline definitions for the six top-level metrics (Initiatives, Projects, Decisions, Tasks, Audit Events, Needs Action). Banner state is remembered across sessions via `localStorage`; a compact "What is this dashboard?" pill restores it on demand. New `UI.welcomeBanner` and `UI.welcomeBannerPill` components live in `renderers/shared/02-components.js` with matching styles in `01-theme.js`. Intro paragraph now flows full-width on wide screens (removed the 720px max-width that was causing premature line wraps).

@@ -587,10 +587,24 @@
       ? '<div class="decidr-card-desc">' + UI.escapeHtml(UI.truncate(event.summary, 120)) + '</div>'
       : '';
 
+    var occurredRaw = event.occurredAt || event.createdAt;
+    var headerLabel = 'Audit Event';
+    if (occurredRaw) {
+      var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      var d = new Date(occurredRaw);
+      if (!isNaN(d.getTime())) {
+        var hours = d.getHours();
+        var meridiem = hours >= 12 ? 'PM' : 'AM';
+        var displayHour = hours % 12 || 12;
+        var minutes = String(d.getMinutes()).padStart(2, '0');
+        headerLabel = months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear()
+          + ' \u00b7 ' + displayHour + ':' + minutes + ' ' + meridiem;
+      }
+    }
+
     var metaParts = [];
     if (category) metaParts.push(category);
-    if (event.occurredAt) metaParts.push(UI.formatDate(event.occurredAt));
-    else if (event.createdAt) metaParts.push(UI.timeAgo(event.createdAt));
     if (event.createdByClient) metaParts.push(event.createdByClient);
     var metaHtml = metaParts.length > 0
       ? '<div class="decidr-card-meta">' + UI.escapeHtml(metaParts.join(' \u00b7 ')) + '</div>'
@@ -602,7 +616,7 @@
       + '<div class="decidr-card-icon">' + entityIcon('audit_event') + '</div>'
       + '<div class="decidr-card-body">'
       + '<div class="decidr-card-header">'
-      + '<span class="decidr-card-type-label">Audit Event</span>'
+      + '<span class="decidr-card-type-label">' + UI.escapeHtml(headerLabel) + '</span>'
       + UI.statusBadge(event.status || 'OPEN')
       + '</div>'
       + '<div class="decidr-card-title">' + UI.escapeHtml(event.title || 'Untitled event') + '</div>'
@@ -1075,6 +1089,53 @@
       + '</div>'
       + UI.statusBadge(decision.status)
       + '</div>';
+  };
+
+  // ─── Welcome Banner ───────────────────────────────────────────────
+
+  // UI.welcomeBanner({ title, intro, definitions, dismissId })
+  //   title       — heading text
+  //   intro       — short paragraph (HTML-escaped automatically)
+  //   definitions — array of { term, description } rows
+  //   dismissId   — string used as data-dismiss-id attribute on the close button
+  UI.welcomeBanner = function(opts) {
+    var o = opts || {};
+    var title = o.title || 'Welcome';
+    var intro = o.intro || '';
+    var defs = o.definitions || [];
+    var dismissId = o.dismissId || 'welcome';
+
+    var defsHtml = '';
+    if (defs.length) {
+      defsHtml += '<ul class="decidr-welcome-defs">';
+      for (var i = 0; i < defs.length; i++) {
+        var d = defs[i];
+        defsHtml += '<li class="decidr-welcome-def">'
+          + '<span class="decidr-welcome-term">' + UI.escapeHtml(d.term) + '</span>'
+          + '<span class="decidr-welcome-sep">—</span>'
+          + '<span class="decidr-welcome-desc">' + UI.escapeHtml(d.description) + '</span>'
+          + '</li>';
+      }
+      defsHtml += '</ul>';
+    }
+
+    return '<section class="decidr-welcome-banner" data-decidr-welcome="' + UI.escapeHtml(dismissId) + '">'
+      + '<button class="decidr-welcome-dismiss" data-welcome-dismiss="' + UI.escapeHtml(dismissId) + '" aria-label="Dismiss intro">×</button>'
+      + '<div class="decidr-welcome-title">' + UI.escapeHtml(title) + '</div>'
+      + (intro ? '<p class="decidr-welcome-intro">' + UI.escapeHtml(intro) + '</p>' : '')
+      + defsHtml
+      + '</section>';
+  };
+
+  // Small re-open pill shown when the banner has been dismissed.
+  UI.welcomeBannerPill = function(opts) {
+    var o = opts || {};
+    var label = o.label || 'What is this?';
+    var dismissId = o.dismissId || 'welcome';
+    return '<button class="decidr-welcome-pill" data-welcome-restore="' + UI.escapeHtml(dismissId) + '" type="button">'
+      + '<span class="decidr-welcome-pill-icon" aria-hidden="true">?</span>'
+      + '<span>' + UI.escapeHtml(label) + '</span>'
+      + '</button>';
   };
 
   // ─── Stat Components ──────────────────────────────────────────────
