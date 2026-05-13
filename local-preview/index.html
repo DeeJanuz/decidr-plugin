@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DecidR Dashboard — Local Preview</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      background: #0f1117;
+      color: rgba(255,255,255,0.95);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    #preview-toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      padding: 8px 16px;
+      background: rgba(20, 20, 30, 0.92);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      font-size: 12px;
+    }
+    #preview-toolbar button {
+      background: rgba(255,255,255,0.10);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: #fff;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    #preview-toolbar button:hover {
+      background: rgba(255,255,255,0.18);
+    }
+    .preview-tag {
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: rgba(129,140,248,0.22);
+      color: #b9b6ff;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .preview-spacer { flex: 1; }
+    .preview-hint { opacity: 0.55; }
+    select.preview-select {
+      background: rgba(255,255,255,0.10);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: #fff;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: inherit;
+    }
+  </style>
+</head>
+<body>
+  <div id="preview-toolbar">
+    <span class="preview-tag">Preview</span>
+    <span class="preview-hint">Mocked data — no MCPViews, no backend</span>
+    <label class="preview-hint" for="preview-mode">Dataset:</label>
+    <select id="preview-mode" class="preview-select">
+      <option value="full">Full demo (8/24/55/20/20)</option>
+      <option value="empty">Empty org (0/0/0/0/0)</option>
+      <option value="solo">Solo builder (1/2/4/3/2)</option>
+    </select>
+    <button id="reset-welcome-btn" title="Clears the localStorage flag so the welcome banner reappears">Reset welcome banner</button>
+    <button id="rerender-btn" title="Re-runs the renderer with current code">Re-render</button>
+    <button id="hard-reload-btn" title="Hard reload — picks up code changes after bash build.sh">Reload bundle</button>
+    <span class="preview-spacer"></span>
+    <span class="preview-hint" id="built-at"></span>
+  </div>
+  <div id="root"></div>
+
+  <!-- Load the bundled dashboard renderer (defines window.__decidrAPI, __decidrUI, __renderers) -->
+  <script src="../renderers/decidr-dashboard.js"></script>
+
+  <script>
+    (function() {
+      'use strict';
+
+      // ─── Fixtures ────────────────────────────────────────────────
+      var ORGS = [
+        { id: 'org_1', name: "Brandon Janis's Organization", role: 'OWNER', has_mcpviews_token: true },
+        { id: 'org_2', name: 'Acme Team',                   role: 'MEMBER', has_mcpviews_token: true }
+      ];
+
+      function repeat(n, fn) { var a = []; for (var i = 0; i < n; i++) a.push(fn(i)); return a; }
+      function pick(arr, i)  { return arr[i % arr.length]; }
+
+      var INITIATIVE_NAMES = [
+        'Onboarding Revamp','Q3 Performance','New Pricing','Compliance Track',
+        'AI Search','Mobile App','Data Warehouse','Partner Portal'
+      ];
+      var INITIATIVE_STATUSES = ['ACTIVE','ACTIVE','PLANNING','ACTIVE','ACTIVE','ON_HOLD','ACTIVE','PLANNING'];
+
+      function buildDataset(profile) {
+        var counts;
+        if (profile === 'empty') {
+          counts = { init: 0, proj: 0, dec: 0, task: 0, audit: 0, action: 0 };
+        } else if (profile === 'solo') {
+          counts = { init: 1, proj: 2, dec: 4, task: 3, audit: 2, action: 1 };
+        } else {
+          counts = { init: 8, proj: 24, dec: 55, task: 20, audit: 20, action: 0 };
+        }
+
+        var initiatives = repeat(counts.init, function(i) {
+          return {
+            id: 'init_' + i,
+            name: pick(INITIATIVE_NAMES, i),
+            status: pick(INITIATIVE_STATUSES, i),
+            description: 'A focused initiative driving a specific outcome.',
+            createdAt: '2026-04-' + (10 + (i % 18)) + 'T10:00:00Z'
+          };
+        });
+
+        var projects = repeat(counts.proj, function(i) {
+          return {
+            id: 'proj_' + i,
+            name: 'Project ' + (i + 1),
+            status: pick(['ACTIVE','ACTIVE','PLANNING','ACTIVE','ON_HOLD','COMPLETED'], i),
+            initiativeId: counts.init > 0 ? 'init_' + (i % counts.init) : null,
+            ownerId: 'user_1',
+            createdById: 'user_1',
+            createdAt: '2026-04-' + (10 + (i % 18)) + 'T10:00:00Z'
+          };
+        });
+
+        var decisions = repeat(counts.dec, function(i) {
+          return {
+            id: 'dec_' + i,
+            title: 'Decision #' + (i + 1) + ' — choose an approach',
+            status: pick(['DRAFT','PROPOSED','IN_PROGRESS','APPROVED','IMPLEMENTED','REJECTED'], i),
+            projectId: counts.proj > 0 ? 'proj_' + (i % counts.proj) : null,
+            entityType: 'project',
+            entityId: counts.proj > 0 ? 'proj_' + (i % counts.proj) : null,
+            reviewers: ['user_1'],
+            createdAt: '2026-04-' + (10 + (i % 18)) + 'T10:00:00Z'
+          };
+        });
+
+        var tasks = repeat(counts.task, function(i) {
+          return {
+            id: 'task_' + i,
+            title: 'Task #' + (i + 1),
+            status: pick(['TODO','IN_PROGRESS','DONE','BLOCKED'], i),
+            projectId: counts.proj > 0 ? 'proj_' + (i % counts.proj) : null,
+            createdAt: '2026-04-' + (10 + (i % 18)) + 'T10:00:00Z'
+          };
+        });
+
+        var auditEvents = repeat(counts.audit, function(i) {
+          return {
+            id: 'audit_' + i,
+            title: 'Audit event #' + (i + 1),
+            status: pick(['OPEN','ACKNOWLEDGED','RESOLVED'], i),
+            category: 'GENERAL',
+            projectId: counts.proj > 0 ? 'proj_' + (i % counts.proj) : null,
+            occurredAt: '2026-05-' + (1 + (i % 11)) + 'T12:00:00Z',
+            createdAt:  '2026-05-' + (1 + (i % 11)) + 'T12:00:00Z'
+          };
+        });
+
+        var actionItems = repeat(counts.action, function(i) {
+          return {
+            entityType: 'DECISION',
+            entityId: 'dec_' + i,
+            id: 'dec_' + i,
+            title: 'Pending decision needing review',
+            status: 'PROPOSED',
+            reason: 'Open decision needs attention',
+            createdAt: '2026-05-01T12:00:00Z'
+          };
+        });
+
+        return {
+          orgs: ORGS,
+          initiatives: initiatives,
+          projects: projects,
+          decisions: decisions,
+          tasks: tasks,
+          bridges: [],
+          auditEvents: auditEvents,
+          issues: [],
+          prs: [],
+          actionItems: actionItems,
+          timeline: []
+        };
+      }
+
+      // ─── API mock wiring ─────────────────────────────────────────
+      var API = window.__decidrAPI;
+      if (!API) {
+        document.body.innerHTML = '<div style="padding:24px;color:#f88;font-family:monospace;">'
+          + 'Could not find window.__decidrAPI. Make sure <code>bash build.sh</code> has run '
+          + 'and ../renderers/decidr-dashboard.js exists.</div>';
+        return;
+      }
+
+      var dataset = buildDataset('full');
+
+      API._currentUserId = 'user_1';
+      API._baseUrl = 'http://mock.local/api';
+      API._initialized = true;
+
+      function ok(arr)  { return Promise.resolve({ data: arr }); }
+      function none()   { return Promise.resolve({}); }
+
+      API.autoInit = function() { return Promise.resolve(); };
+      API.withReady = function(container, meta, renderFn) {
+        renderFn(window.__decidrUI, API);
+      };
+      API.getActiveOrgId  = function() { return dataset.orgs[0].id; };
+      API.resolveAndBindTargetOrg = function() {
+        return Promise.resolve({ organizations: dataset.orgs, defaultOrgId: dataset.orgs[0].id });
+      };
+      API.switchOrg          = function() { return Promise.resolve(); };
+      API.setDefaultOrg      = function() { return Promise.resolve(); };
+      API.clearDefaultOrg    = function() { return Promise.resolve(); };
+      API.getUserPreferences = function() { return Promise.resolve({ defaultOrganizationId: dataset.orgs[0].id }); };
+
+      API.listInitiatives       = function() { return ok(dataset.initiatives); };
+      API.listProjects          = function() { return ok(dataset.projects); };
+      API.listDecisions         = function() { return ok(dataset.decisions); };
+      API.listTasks             = function() { return ok(dataset.tasks); };
+      API.listBridges           = function() { return ok(dataset.bridges); };
+      API.listAuditEvents       = function() { return ok(dataset.auditEvents); };
+      API.listIssues            = function() { return ok(dataset.issues); };
+      API.listPRs               = function() { return ok(dataset.prs); };
+      API.getActionItems        = function() { return ok(dataset.actionItems); };
+      API.getTimeline           = function() { return ok(dataset.timeline); };
+      API.getEntityGithubCounts = function() { return Promise.resolve({}); };
+
+      // ─── Boot ─────────────────────────────────────────────────────
+      var root = document.getElementById('root');
+      function render() {
+        root.innerHTML = '';
+        window.__renderers.decidr_dashboard(root, { organization_id: dataset.orgs[0].id }, {}, {}, false, function() {});
+      }
+
+      document.getElementById('preview-mode').addEventListener('change', function(e) {
+        dataset = buildDataset(e.target.value);
+        render();
+      });
+      document.getElementById('reset-welcome-btn').addEventListener('click', function() {
+        try { window.localStorage.removeItem('decidr.dashboard.welcome.dismissed.v1'); } catch (e) {}
+        render();
+      });
+      document.getElementById('rerender-btn').addEventListener('click', render);
+      document.getElementById('hard-reload-btn').addEventListener('click', function() {
+        window.location.reload();
+      });
+      document.getElementById('built-at').textContent = 'Page loaded: ' + new Date().toLocaleTimeString();
+
+      render();
+    })();
+  </script>
+</body>
+</html>

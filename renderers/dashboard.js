@@ -12,6 +12,28 @@
 
     // ── State ──────────────────────────────────────────────
 
+    var WELCOME_STORAGE_KEY = 'decidr.dashboard.welcome.dismissed.v1';
+    var WELCOME_BANNER_ID = 'dashboard-intro';
+
+    function readWelcomeDismissed() {
+      try {
+        return window.localStorage && window.localStorage.getItem(WELCOME_STORAGE_KEY) === '1';
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function writeWelcomeDismissed(dismissed) {
+      try {
+        if (!window.localStorage) return;
+        if (dismissed) {
+          window.localStorage.setItem(WELCOME_STORAGE_KEY, '1');
+        } else {
+          window.localStorage.removeItem(WELCOME_STORAGE_KEY);
+        }
+      } catch (e) { /* storage may be unavailable in some webviews */ }
+    }
+
     var dashState = {
       collapsedInitiatives: {},
       showAllNextSteps: false,
@@ -33,10 +55,13 @@
       nextStepsExpanded: false,
       nextStepsGroupExpanded: {},
       decisionsExpanded: false,
+      auditTrailExpanded: false,
       // Org picker
       organizations: [],
       activeOrgId: null,
-      defaultOrgId: null
+      defaultOrgId: null,
+      // Onboarding intro banner
+      welcomeDismissed: readWelcomeDismissed()
     };
 
     // ── Show loading ───────────────────────────────────────
@@ -355,6 +380,28 @@
 
     // ── Section Renderers ──────────────────────────────────
 
+    function renderWelcomeSection() {
+      if (dashState.welcomeDismissed) {
+        return UI.welcomeBannerPill({
+          label: 'What is this dashboard?',
+          dismissId: WELCOME_BANNER_ID
+        });
+      }
+      return UI.welcomeBanner({
+        title: 'Welcome to DecidR',
+        intro: 'DecidR keeps your important decisions — and the projects, tasks, and audit trail around them — in one place, whether you’re working solo, with a team, or both.',
+        definitions: [
+          { term: 'Initiatives',  description: 'Top-level goals that group related work.' },
+          { term: 'Projects',     description: 'Work streams that sit under an initiative.' },
+          { term: 'Decisions',    description: 'Recorded choices with status, reviewers, and linked docs.' },
+          { term: 'Tasks',        description: 'Concrete to-dos attached to a project.' },
+          { term: 'Audit Events', description: 'A factual ledger of what happened on each project.' },
+          { term: 'Needs Action', description: 'Items waiting on you — approvals, tasks, or blockers.' }
+        ],
+        dismissId: WELCOME_BANNER_ID
+      });
+    }
+
     function renderStatsSection() {
       var allProjects = getAllProjects();
       var actionCount = dashState.actionItems.length;
@@ -501,21 +548,37 @@
         '<div id="decidr-next-steps-container">' + renderNextStepsContent() + '</div>');
     }
 
-    function renderAuditTrailSection() {
-      var events = getRecentAuditEvents(8);
-      var content = '';
-
-      if (events.length === 0) {
-        content = UI.emptyState('No audit events found.');
-      } else {
-        content += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:var(--space-4);">';
-        for (var i = 0; i < events.length; i++) {
-          content += UI.auditEventCard(events[i], { animDelay: 0.05 + i * 0.04 });
-        }
-        content += '</div>';
+    function renderAuditTrailContent() {
+      var total = dashState.allAuditEvents.length;
+      if (total === 0) {
+        return UI.emptyState('No audit events found.');
       }
 
-      return UI.section('Recent Audit Trail', dashState.allAuditEvents.length, content);
+      var initialCap = 8;
+      var limit = dashState.auditTrailExpanded ? total : initialCap;
+      var events = getRecentAuditEvents(limit);
+      var remaining = total - events.length;
+
+      var html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:var(--space-4);">';
+      for (var i = 0; i < events.length; i++) {
+        html += UI.auditEventCard(events[i], { animDelay: 0.05 + i * 0.04 });
+      }
+      html += '</div>';
+
+      if (remaining > 0 && !dashState.auditTrailExpanded) {
+        html += '<button class="decidr-dash-show-more" id="decidr-audit-trail-show-more">'
+          + 'Show ' + remaining + ' more</button>';
+      } else if (dashState.auditTrailExpanded && total > initialCap) {
+        html += '<button class="decidr-dash-show-more" id="decidr-audit-trail-show-less">'
+          + 'Show less</button>';
+      }
+
+      return html;
+    }
+
+    function renderAuditTrailSection() {
+      return UI.section('Recent Audit Trail', dashState.allAuditEvents.length,
+        '<div id="decidr-audit-trail-container">' + renderAuditTrailContent() + '</div>');
     }
 
     function renderActiveDecisionsContent() {
@@ -706,6 +769,9 @@
         + UI.orgPicker(dashState.organizations, dashState.activeOrgId, { defaultOrgId: dashState.defaultOrgId })
         + '</div>';
 
+      // Welcome / orientation banner (dismissible, remembered via localStorage)
+      html += '<div id="decidr-welcome-container">' + renderWelcomeSection() + '</div>';
+
       // Stats
       html += renderStatsSection();
 
@@ -752,12 +818,39 @@
     // ── Event Wiring ───────────────────────────────────────
 
     function wireInteractions() {
+      wireWelcomeBanner();
       wireNextStepsShowMore();
       wireDecisionStatusPills();
       wireDecisionsShowMore();
+      wireAuditTrailShowMore();
       wireInitiativeToggle();
       wireEntityClicks(container);
       wireOrgPicker();
+    }
+
+    function wireWelcomeBanner() {
+      var welcomeContainer = container.querySelector('#decidr-welcome-container');
+      if (!welcomeContainer) return;
+
+      var dismiss = welcomeContainer.querySelector('[data-welcome-dismiss]');
+      if (dismiss) {
+        dismiss.addEventListener('click', function() {
+          dashState.welcomeDismissed = true;
+          writeWelcomeDismissed(true);
+          welcomeContainer.innerHTML = renderWelcomeSection();
+          wireWelcomeBanner();
+        });
+      }
+
+      var restore = welcomeContainer.querySelector('[data-welcome-restore]');
+      if (restore) {
+        restore.addEventListener('click', function() {
+          dashState.welcomeDismissed = false;
+          writeWelcomeDismissed(false);
+          welcomeContainer.innerHTML = renderWelcomeSection();
+          wireWelcomeBanner();
+        });
+      }
     }
 
     function wireOrgPicker() {
@@ -926,6 +1019,35 @@
           if (cont) {
             cont.innerHTML = renderActiveDecisionsContent();
             wireDecisionsShowMore();
+            wireEntityClicks(cont);
+          }
+        });
+      }
+    }
+
+    function wireAuditTrailShowMore() {
+      var moreBtn = container.querySelector('#decidr-audit-trail-show-more');
+      var lessBtn = container.querySelector('#decidr-audit-trail-show-less');
+
+      if (moreBtn) {
+        moreBtn.addEventListener('click', function() {
+          dashState.auditTrailExpanded = true;
+          var cont = container.querySelector('#decidr-audit-trail-container');
+          if (cont) {
+            cont.innerHTML = renderAuditTrailContent();
+            wireAuditTrailShowMore();
+            wireEntityClicks(cont);
+          }
+        });
+      }
+
+      if (lessBtn) {
+        lessBtn.addEventListener('click', function() {
+          dashState.auditTrailExpanded = false;
+          var cont = container.querySelector('#decidr-audit-trail-container');
+          if (cont) {
+            cont.innerHTML = renderAuditTrailContent();
+            wireAuditTrailShowMore();
             wireEntityClicks(cont);
           }
         });
