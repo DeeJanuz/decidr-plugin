@@ -356,6 +356,110 @@
         return html;
       }
 
+      function projectName(projectId) {
+        for (var i = 0; i < state.projects.length; i++) {
+          if (state.projects[i].id === projectId) return state.projects[i].name || projectId;
+        }
+        return projectId;
+      }
+
+      function categoryName(categoryId) {
+        for (var i = 0; i < state.categories.length; i++) {
+          if (state.categories[i].id === categoryId) return state.categories[i].name || categoryId;
+        }
+        return categoryId;
+      }
+
+      function statusName(status) {
+        var map = { OPEN: 'Open', ACKNOWLEDGED: 'Acknowledged', RESOLVED: 'Resolved', ARCHIVED: 'Archived' };
+        return map[status] || status;
+      }
+
+      function operatorName(op) {
+        var map = {
+          equals: 'equals',
+          not_equals: 'not equals',
+          contains: 'contains',
+          not_contains: 'does not contain',
+          is_empty: 'is empty',
+          is_not_empty: 'is not empty',
+          gt: '>',
+          gte: '>=',
+          lt: '<',
+          lte: '<=',
+          between: 'between',
+          before: 'before',
+          after: 'after',
+          on: 'on',
+          within_last_days: 'within last days'
+        };
+        return map[op] || op || 'equals';
+      }
+
+      function ruleSummary(rule) {
+        var cond = (rule && rule.if) || {};
+        var then = (rule && rule.then) || {};
+        var op = cond.op || 'equals';
+        var needsValue = op !== 'is_empty' && op !== 'is_not_empty';
+        var value = cond.value;
+        if (Array.isArray(value)) value = value.join(', ');
+        if (value === true) value = 'true';
+        if (value === false) value = 'false';
+        if (value == null || value === '') value = needsValue ? '[value]' : '';
+        var action = then.include === false ? 'Exclude' : (then.label || (Array.isArray(then.labels) && then.labels[0]) ? 'Label' : 'Include');
+        return action + ' where ' + (cond.field || 'field') + ' ' + operatorName(op) + (needsValue ? ' ' + value : '');
+      }
+
+      function activeFilterItems() {
+        var items = [];
+        var projectIds = state.draft.projectIds || [];
+        if (projectIds.length) {
+          var projectLabel = projectIds.length === 1 ? projectName(projectIds[0]) : projectIds.length + ' projects';
+          items.push({ type: 'Project', value: projectLabel, locked: true });
+        }
+        if (state.filters.status) items.push({ type: 'Status', value: statusName(state.filters.status), clear: 'status' });
+        if (state.filters.categoryId) items.push({ type: 'Category', value: categoryName(state.filters.categoryId), clear: 'category' });
+        if (state.filters.occurredFrom || state.filters.occurredTo) {
+          items.push({
+            type: 'Date',
+            value: (state.filters.occurredFrom || 'Any') + ' to ' + (state.filters.occurredTo || 'Any'),
+            clear: 'date'
+          });
+        }
+        if (state.filters.search) items.push({ type: 'Search', value: state.filters.search, clear: 'search' });
+        var rules = Array.isArray(state.draft.logic.rules) ? state.draft.logic.rules : [];
+        for (var r = 0; r < rules.length; r++) {
+          items.push({ type: 'Advanced', value: ruleSummary(rules[r]), ruleIndex: r });
+        }
+        return items;
+      }
+
+      function renderAppliedFilters() {
+        var items = activeFilterItems();
+        var html = '<div class="audit-filter-summary">';
+        html += '<div class="audit-filter-summary-head">'
+          + '<div class="decidr-section-header" style="margin:0;">Applied Filters</div>'
+          + '<div class="decidr-badge">' + UI.escapeHtml(String(items.length)) + '</div></div>';
+        html += '<div class="audit-filter-chip-row">';
+        if (!items.length) {
+          html += '<div style="color:var(--text-tertiary);font-size:var(--text-small);">None</div>';
+        }
+        for (var i = 0; i < items.length; i++) {
+          var item = items[i];
+          html += '<div class="audit-filter-chip">'
+            + '<span class="audit-filter-chip-type">' + UI.escapeHtml(item.type) + '</span>'
+            + '<span class="audit-filter-chip-value">' + UI.escapeHtml(item.value) + '</span>';
+          if (item.clear) {
+            html += '<button class="audit-filter-chip-remove" data-clear-filter="' + UI.escapeHtml(item.clear) + '">×</button>';
+          } else if (typeof item.ruleIndex === 'number') {
+            html += '<button class="audit-filter-chip-remove" data-remove-rule="' + item.ruleIndex + '">×</button>';
+          }
+          html += '</div>';
+        }
+        html += '</div></div>';
+        return html;
+      }
+
       function renderStyles() {
         return '<style>'
           + '.audit-reports-shell{height:100%;max-width:1600px;margin:0 auto;padding:var(--space-5) var(--space-4);font-family:var(--font-sans);color:var(--text-primary);}'
@@ -369,6 +473,15 @@
           + '.audit-builder-pane{padding:var(--space-4);overflow:auto;}'
           + '.audit-report-side{display:flex;flex-direction:column;gap:var(--space-4);}'
           + '.audit-report-scope-grid{display:grid;grid-template-columns:1fr;gap:var(--space-3);}'
+          + '.audit-filter-summary{border:1px solid var(--border-subtle);border-radius:var(--border-radius-md);background:var(--bg-surface);padding:10px;margin-bottom:var(--space-4);}'
+          + '.audit-filter-summary-head{display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);margin-bottom:8px;}'
+          + '.audit-filter-chip-row{display:flex;flex-wrap:wrap;gap:6px;}'
+          + '.audit-filter-chip{display:inline-flex;align-items:center;gap:6px;max-width:100%;border:1px solid var(--border-default);border-radius:var(--border-radius-md);background:var(--bg-primary);padding:5px 7px;font-size:var(--text-xs);}'
+          + '.audit-filter-chip-type{color:var(--text-tertiary);font-weight:var(--weight-semibold);text-transform:uppercase;}'
+          + '.audit-filter-chip-value{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+          + '.audit-filter-chip-remove{width:18px;height:18px;border:0;border-radius:var(--border-radius-sm);background:transparent;color:var(--text-tertiary);font:inherit;font-weight:var(--weight-bold);line-height:16px;cursor:pointer;}'
+          + '.audit-add-filter-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end;margin-bottom:var(--space-3);}'
+          + '.audit-add-filter-row button:disabled{opacity:.45;cursor:not-allowed;}'
           + '.audit-rule-card{border:1px solid var(--border-subtle);border-radius:var(--border-radius-md);padding:10px;display:flex;flex-direction:column;gap:8px;margin-bottom:10px;background:var(--bg-surface);}'
           + '.audit-rule-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(104px,128px);gap:8px;align-items:end;}'
           + '.audit-rule-action-row{display:grid;grid-template-columns:minmax(112px,136px) minmax(0,1fr) 34px;gap:8px;align-items:end;}'
@@ -485,8 +598,13 @@
         var rules = Array.isArray(state.draft.logic.rules) ? state.draft.logic.rules : [];
         var html = '<div style="margin-top:var(--space-4);">';
         html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:var(--space-2);">'
-          + '<div class="decidr-section-header" style="margin:0;">Advanced Filters</div>'
-          + '<button id="audit-report-add-rule" style="' + smallButtonStyle(false) + '">Add Filter</button></div>';
+          + '<div class="decidr-section-header" style="margin:0;">Advanced Filters</div></div>';
+        html += '<div class="audit-add-filter-row">'
+          + '<select id="audit-report-new-rule-field" style="' + controlStyle() + '">'
+          + option('', 'Choose field', '')
+          + ruleFieldOptions('')
+          + '</select>'
+          + '<button id="audit-report-add-selected-rule" style="' + smallButtonStyle(false) + '" disabled>Add Filter</button></div>';
         if (!rules.length) {
           html += '<div style="color:var(--text-tertiary);font-size:var(--text-small);padding:var(--space-3) 0;">No advanced filters.</div>';
         }
@@ -548,6 +666,7 @@
 
       function renderFiltersPane() {
         var html = '<div class="decidr-section-header">Filters</div>';
+        html += renderAppliedFilters();
         html += renderScope();
         html += renderRules();
         return html;
@@ -555,10 +674,11 @@
 
       function renderBuilderPanel() {
         var active = state.builderTab || 'outline';
+        var filterCount = activeFilterItems().length;
         var html = '<div class="decidr-section audit-builder-panel">';
         html += '<div class="audit-builder-tabs">'
           + '<button class="audit-builder-tab' + (active === 'outline' ? ' active' : '') + '" data-builder-tab="outline">Outline</button>'
-          + '<button class="audit-builder-tab' + (active === 'filters' ? ' active' : '') + '" data-builder-tab="filters">Filters</button>'
+          + '<button class="audit-builder-tab' + (active === 'filters' ? ' active' : '') + '" data-builder-tab="filters">Filters' + (filterCount ? ' (' + filterCount + ')' : '') + '</button>'
           + '<button class="audit-builder-tab' + (active === 'fields' ? ' active' : '') + '" data-builder-tab="fields">Fields</button>'
           + '</div>';
         html += '<div class="audit-builder-pane">';
@@ -796,6 +916,19 @@
         render();
       }
 
+      function clearFilter(kind) {
+        syncDraftFromControls();
+        if (kind === 'status') state.filters.status = '';
+        if (kind === 'category') state.filters.categoryId = '';
+        if (kind === 'date') {
+          state.filters.occurredFrom = '';
+          state.filters.occurredTo = '';
+        }
+        if (kind === 'search') state.filters.search = '';
+        state.previewDirty = true;
+        render();
+      }
+
       function wire() {
         var select = container.querySelector('#audit-report-select');
         if (select) select.addEventListener('change', function() {
@@ -841,6 +974,16 @@
         });
         var addRuleBtn = container.querySelector('#audit-report-add-rule');
         if (addRuleBtn) addRuleBtn.addEventListener('click', function() { addRule(); });
+        var addSelectedRuleBtn = container.querySelector('#audit-report-add-selected-rule');
+        if (addSelectedRuleBtn) addSelectedRuleBtn.addEventListener('click', function() {
+          var fieldSelect = container.querySelector('#audit-report-new-rule-field');
+          if (!fieldSelect || !fieldSelect.value) return;
+          addRule(fieldSelect.value);
+        });
+        var newRuleField = container.querySelector('#audit-report-new-rule-field');
+        if (newRuleField && addSelectedRuleBtn) newRuleField.addEventListener('change', function() {
+          addSelectedRuleBtn.disabled = !newRuleField.value;
+        });
         var tabBtns = container.querySelectorAll('[data-builder-tab]');
         for (var tb = 0; tb < tabBtns.length; tb++) tabBtns[tb].addEventListener('click', function(e) {
           syncDraftFromControls();
@@ -867,9 +1010,17 @@
         for (var dc = 0; dc < dirtyControls.length; dc++) {
           if (dirtyControls[dc]._auditReportsDirtyWired) continue;
           dirtyControls[dc]._auditReportsDirtyWired = true;
-          dirtyControls[dc].addEventListener('change', function() { setPreviewDirty(true); });
+          dirtyControls[dc].addEventListener('change', function() {
+            syncDraftFromControls();
+            setPreviewDirty(true);
+            if (state.builderTab === 'filters') render();
+          });
           dirtyControls[dc].addEventListener('input', function() { setPreviewDirty(true); });
         }
+        var clearFilterBtns = container.querySelectorAll('[data-clear-filter]');
+        for (var cf = 0; cf < clearFilterBtns.length; cf++) clearFilterBtns[cf].addEventListener('click', function(e) {
+          clearFilter(e.currentTarget.getAttribute('data-clear-filter'));
+        });
         var unshareBtns = container.querySelectorAll('[data-unshare-user]');
         for (var us = 0; us < unshareBtns.length; us++) unshareBtns[us].addEventListener('click', function(e) {
           unshareReport(e.currentTarget.getAttribute('data-unshare-user'));
