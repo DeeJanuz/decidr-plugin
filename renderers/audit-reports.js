@@ -25,7 +25,8 @@
         reports: [],
         fields: [],
         currentReport: null,
-        builderTab: 'outline',
+        mode: (data && data.mode) || ((data && (data.report_id || data.reportId)) ? 'view' : 'gallery'),
+        builderTab: 'scope',
         fieldSearch: '',
         selectedReportId: (data && (data.report_id || data.reportId)) || '',
         previewDirty: false,
@@ -53,10 +54,17 @@
         return loadReferenceData();
       }).then(function() {
         state.loading = false;
-        return loadFields(false);
-      }).then(function() {
-        if (state.selectedReportId) return loadReport(state.selectedReportId);
-        return runReport();
+        if (state.selectedReportId) {
+          state.mode = 'view';
+          return loadReport(state.selectedReportId);
+        }
+        if (state.mode === 'builder') {
+          if (state.draft.projectIds.length) return loadFields(false).then(runReport);
+          render();
+          return Promise.resolve();
+        }
+        render();
+        return Promise.resolve();
       }).catch(function(err) {
         state.loading = false;
         state.error = err;
@@ -101,9 +109,6 @@
           state.categories = results[1] || [];
           state.reports = results[2] || [];
           state.members = results[3] || [];
-          if (!state.draft.projectIds.length && state.projects.length) {
-            state.draft.projectIds = [state.projects[0].id];
-          }
         });
       }
 
@@ -232,6 +237,7 @@
           : API.createAuditReport(payload);
         op.then(function(result) {
           state.selectedReportId = result.id || state.selectedReportId;
+          state.mode = 'view';
           return loadReferenceData();
         }).then(function() {
           state.saving = false;
@@ -290,22 +296,22 @@
       }
 
       function controlStyle(extra) {
-        return 'width:100%;min-height:34px;border:1px solid var(--border-default);'
+        return 'width:100%;min-height:38px;border:1px solid var(--border-default);'
           + 'border-radius:var(--border-radius-md);background:var(--bg-surface);'
-          + 'color:var(--text-primary);font:inherit;padding:7px 9px;' + (extra || '');
+          + 'color:var(--text-primary);font:inherit;padding:8px 10px;' + (extra || '');
       }
 
       function smallButtonStyle(primary) {
-        return 'min-height:32px;padding:0 11px;border:1px solid '
+        return 'min-height:38px;padding:0 14px;border:1px solid '
           + (primary ? 'var(--accent-primary)' : 'var(--border-default)')
           + ';border-radius:var(--border-radius-md);background:'
           + (primary ? 'var(--accent-primary)' : 'var(--bg-surface)')
           + ';color:' + (primary ? '#fff' : 'var(--text-primary)')
-          + ';font-weight:var(--weight-semibold);font-size:var(--text-small);cursor:pointer;';
+          + ';font-weight:var(--weight-semibold);font-size:var(--text-small);cursor:pointer;white-space:nowrap;';
       }
 
       function label(text) {
-        return '<label style="display:flex;flex-direction:column;gap:4px;font-size:var(--text-xs);'
+        return '<label style="display:flex;flex-direction:column;gap:var(--space-1);font-size:var(--text-xs);'
           + 'font-weight:var(--weight-semibold);color:var(--text-secondary);text-transform:uppercase;">'
           + UI.escapeHtml(text);
       }
@@ -431,9 +437,30 @@
 
       function fieldLabel(fieldPath) {
         for (var i = 0; i < state.fields.length; i++) {
-          if (state.fields[i].fieldPath === fieldPath) return fieldPath;
+          if (state.fields[i].fieldPath === fieldPath) {
+            return state.fields[i].label || state.fields[i].displayName || state.fields[i].name || titleizeFieldPath(fieldPath);
+          }
         }
-        return fieldPath;
+        return titleizeFieldPath(fieldPath);
+      }
+
+      function titleizeFieldPath(fieldPath) {
+        var raw = String(fieldPath || '');
+        if (!raw) return '';
+        var last = raw.split('.').pop();
+        return last.replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+          .replace(/[_-]+/g, ' ')
+          .replace(/\b\w/g, function(ch) { return ch.toUpperCase(); });
+      }
+
+      function fieldGroupLabel(field) {
+        var source = String((field && field.source) || '').toLowerCase();
+        var path = String((field && field.fieldPath) || '').toLowerCase();
+        if (path.indexOf('decision') !== -1) return 'Decision links';
+        if (path.indexOf('project') !== -1) return 'Project';
+        if (path.indexOf('source') !== -1 || source.indexOf('source') !== -1) return 'Source';
+        if (path.indexOf('payload') === 0 || source.indexOf('payload') !== -1) return 'Payload fields';
+        return 'Event basics';
       }
 
       function ruleFieldOptions(selectedField) {
@@ -443,10 +470,10 @@
           var fieldPath = state.fields[i].fieldPath || '';
           if (!fieldPath) continue;
           if (fieldPath === selectedField) foundSelected = true;
-          html += option(fieldPath, fieldPath, selectedField);
+          html += option(fieldPath, fieldLabel(fieldPath), selectedField);
         }
         if (selectedField && !foundSelected) {
-          html = option(selectedField, selectedField + ' (saved field)', selectedField) + html;
+          html = option(selectedField, fieldLabel(selectedField) + ' (saved field)', selectedField) + html;
         }
         return html;
       }
@@ -509,7 +536,7 @@
         if (value === false) value = 'false';
         if (value == null || value === '') value = needsValue ? '[value]' : '';
         var action = then.include === false ? 'Exclude' : (then.label || (Array.isArray(then.labels) && then.labels[0]) ? 'Label' : 'Include');
-        return action + ' where ' + (cond.field || 'field') + ' ' + operatorName(op) + (needsValue ? ' ' + value : '');
+        return action + ' where ' + fieldLabel(cond.field || 'field') + ' ' + operatorName(op) + (needsValue ? ' ' + value : '');
       }
 
       function activeFilterItems() {
@@ -517,13 +544,13 @@
         var projectIds = state.draft.projectIds || [];
         if (projectIds.length) {
           var projectLabel = projectIds.length === 1 ? projectName(projectIds[0]) : projectIds.length + ' projects';
-          items.push({ type: 'Project', value: projectLabel, locked: true });
+          items.push({ type: 'Project scope', value: projectLabel, locked: true });
         }
         if (state.filters.status) items.push({ type: 'Status', value: statusName(state.filters.status), clear: 'status' });
         if (state.filters.categoryId) items.push({ type: 'Category', value: categoryName(state.filters.categoryId), clear: 'category' });
         if (state.filters.occurredFrom || state.filters.occurredTo) {
           items.push({
-            type: 'Date',
+            type: 'Date range',
             value: (state.filters.occurredFrom || 'Any') + ' to ' + (state.filters.occurredTo || 'Any'),
             clear: 'date'
           });
@@ -544,7 +571,7 @@
           + '<div class="decidr-badge">' + UI.escapeHtml(String(items.length)) + '</div></div>';
         html += '<div class="audit-filter-chip-row">';
         if (!items.length) {
-          html += '<div style="color:var(--text-tertiary);font-size:var(--text-small);">None</div>';
+          html += '<div style="color:var(--text-tertiary);font-size:var(--text-small);">None yet</div>';
         }
         for (var i = 0; i < items.length; i++) {
           var item = items[i];
@@ -566,7 +593,8 @@
         return '<style>'
           + '.audit-reports-shell{height:100%;max-width:1600px;margin:0 auto;padding:var(--space-5) var(--space-4);font-family:var(--font-sans);color:var(--text-primary);}'
           + '.audit-report-titlebar{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-4);margin-bottom:var(--space-3);}'
-          + '.audit-report-toolbar{display:grid;grid-template-columns:minmax(190px,1fr) minmax(260px,1.5fr) minmax(130px,.7fr) repeat(4,auto);gap:var(--space-3);align-items:end;padding:var(--space-3) var(--space-4);margin-bottom:var(--space-4);}'
+          + '.audit-report-toolbar{display:grid;grid-template-columns:minmax(190px,1fr) minmax(260px,1.5fr) minmax(130px,.7fr);gap:var(--space-3);align-items:end;padding:var(--space-3) var(--space-4);margin-bottom:var(--space-4);}'
+          + '.audit-report-toolbar-actions{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:var(--space-2);justify-content:flex-end;align-items:center;border-top:1px solid var(--border-subtle);padding-top:var(--space-3);}'
           + '.audit-builder-workspace{display:grid;grid-template-columns:360px minmax(0,1fr) 310px;gap:var(--space-4);align-items:start;}'
           + '.audit-builder-panel{min-height:720px;max-height:calc(100vh - 230px);overflow:hidden;display:flex;flex-direction:column;}'
           + '.audit-builder-tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;padding:var(--space-3);border-bottom:1px solid var(--border-subtle);}'
@@ -574,6 +602,13 @@
           + '.audit-builder-tab.active{background:var(--bg-surface);border-color:var(--border-default);color:var(--text-primary);}'
           + '.audit-builder-pane{padding:var(--space-4);overflow:auto;}'
           + '.audit-report-side{display:flex;flex-direction:column;gap:var(--space-4);}'
+          + '.audit-report-gallery{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:var(--space-4);align-items:start;}'
+          + '.audit-report-gallery-list{display:grid;gap:var(--space-3);}'
+          + '.audit-report-gallery-card{border:1px solid var(--border-subtle);border-radius:var(--border-radius-md);background:var(--bg-primary);padding:var(--space-4);display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--space-3);align-items:center;}'
+          + '.audit-report-stepper{display:grid;grid-template-columns:1fr;gap:6px;padding:var(--space-3);border-bottom:1px solid var(--border-subtle);}'
+          + '.audit-report-step{min-height:34px;border:1px solid transparent;border-radius:var(--border-radius-md);background:transparent;color:var(--text-secondary);font:inherit;font-size:var(--text-small);font-weight:var(--weight-semibold);cursor:pointer;text-align:left;padding:0 10px;}'
+          + '.audit-report-step.active{background:var(--bg-surface);border-color:var(--border-default);color:var(--text-primary);}'
+          + '.audit-report-mode-actions{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center;}'
           + '.audit-report-scope-grid{display:grid;grid-template-columns:1fr;gap:var(--space-3);}'
           + '.audit-filter-summary{border:1px solid var(--border-subtle);border-radius:var(--border-radius-md);background:var(--bg-surface);padding:10px;margin-bottom:var(--space-4);}'
           + '.audit-filter-summary-head{display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);margin-bottom:8px;}'
@@ -600,16 +635,19 @@
           + '.audit-column-path{color:var(--text-tertiary);font-size:var(--text-xs);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:4px;}'
           + '.audit-preview-card{min-height:720px;}'
           + '.audit-preview-table-wrap{overflow:auto;max-height:calc(100vh - 330px);min-height:520px;}'
-          + '@media (max-width:1280px){.audit-builder-workspace{grid-template-columns:340px minmax(0,1fr);}.audit-report-side{grid-column:1 / -1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);}.audit-report-toolbar{grid-template-columns:minmax(180px,1fr) minmax(240px,1.6fr) minmax(120px,.8fr) repeat(4,auto);}.audit-preview-table-wrap{max-height:620px;}}'
-          + '@media (max-width:920px){.audit-report-titlebar{flex-direction:column;}.audit-report-toolbar,.audit-builder-workspace,.audit-report-side{grid-template-columns:1fr;}.audit-report-toolbar button{width:100%;}.audit-builder-panel,.audit-preview-card{min-height:auto;max-height:none;}.audit-preview-table-wrap{min-height:360px;max-height:520px;}.audit-rule-row,.audit-rule-action-row{grid-template-columns:1fr;}.audit-column-row{grid-template-columns:minmax(0,1fr) 34px;}.audit-column-handle{display:none;}}'
+          + '@media (max-width:1280px){.audit-builder-workspace{grid-template-columns:340px minmax(0,1fr);}.audit-report-side{grid-column:1 / -1;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);}.audit-report-toolbar{grid-template-columns:repeat(3,minmax(0,1fr));}.audit-preview-table-wrap{max-height:620px;}}'
+          + '@media (max-width:920px){.audit-report-titlebar{flex-direction:column;}.audit-report-toolbar,.audit-builder-workspace,.audit-report-side,.audit-report-gallery{grid-template-columns:1fr;}.audit-report-toolbar-actions{justify-content:stretch;}.audit-report-toolbar-actions button{flex:1;}.audit-builder-panel,.audit-preview-card{min-height:auto;max-height:none;}.audit-preview-table-wrap{min-height:360px;max-height:520px;}.audit-rule-row,.audit-rule-action-row{grid-template-columns:1fr;}.audit-column-row{grid-template-columns:minmax(0,1fr) 34px;}.audit-column-handle{display:none;}}'
           + '</style>';
       }
 
       function renderHeader() {
+        var subtitle = 'Choose a saved report or start a new stakeholder-ready audit export.';
+        if (state.mode === 'view') subtitle = state.draft.name || 'Saved audit report';
+        if (state.mode === 'builder') subtitle = 'Build the report by choosing scope, focus, columns, preview, then publish.';
         var html = '<div class="audit-report-titlebar">';
-        html += '<div style="min-width:0;"><div style="color:var(--text-tertiary);font-size:var(--text-xs);font-weight:var(--weight-semibold);text-transform:uppercase;margin-bottom:4px;">Report Builder</div>'
-          + '<h1 style="font-size:var(--text-h1);font-weight:var(--weight-bold);margin:0;">Audit Events</h1>'
-          + '<div style="color:var(--text-secondary);font-size:var(--text-small);margin-top:4px;">' + UI.escapeHtml(state.draft.name || 'New audit report') + '</div></div>';
+        html += '<div style="min-width:0;"><div style="color:var(--text-tertiary);font-size:var(--text-xs);font-weight:var(--weight-semibold);text-transform:uppercase;margin-bottom:4px;">Audit Reporting</div>'
+          + '<h1 style="font-size:var(--text-h1);font-weight:var(--weight-bold);margin:0;">Audit Reports</h1>'
+          + '<div style="color:var(--text-secondary);font-size:var(--text-small);margin-top:4px;">' + UI.escapeHtml(subtitle) + '</div></div>';
         html += UI.orgPicker(state.organizations, state.activeOrgId, { defaultOrgId: state.defaultOrgId });
         html += '</div>';
         return html;
@@ -628,16 +666,20 @@
           + option('PRIVATE', 'Private', state.draft.visibility)
           + option('PUBLIC', 'Public to org', state.draft.visibility)
           + '</select></label>';
-        html += '<button id="audit-report-new" style="' + smallButtonStyle(false) + '">New</button>';
-        html += '<button id="audit-report-run" style="' + smallButtonStyle(true) + '">' + (state.running ? 'Running...' : 'Run') + '</button>';
-        html += '<button id="audit-report-save" style="' + smallButtonStyle(false) + '">' + (state.saving ? 'Saving...' : 'Save') + '</button>';
-        html += '<button id="audit-report-export" style="' + smallButtonStyle(false) + '">Export CSV</button>';
+        html += '<div class="audit-report-toolbar-actions">'
+          + '<button id="audit-report-gallery" style="' + smallButtonStyle(false) + '">Reports</button>'
+          + '<button id="audit-report-new" style="' + smallButtonStyle(false) + '">New</button>'
+          + '<button id="audit-report-run" style="' + smallButtonStyle(true) + '">' + (state.running ? 'Running...' : 'Refresh Preview') + '</button>'
+          + '<button id="audit-report-save" style="' + smallButtonStyle(false) + '">' + (state.saving ? 'Saving...' : 'Save') + '</button>'
+          + '<button id="audit-report-export" style="' + smallButtonStyle(false) + '">Export CSV</button>'
+          + '</div>';
         html += '</div>';
         return html;
       }
 
       function renderScope() {
         var html = '<div class="audit-report-scope-grid">';
+        html += '<div style="color:var(--text-secondary);font-size:var(--text-small);line-height:1.45;">Choose the projects that define the report boundary. No project is selected automatically.</div>';
         html += label('Projects') + '<select id="audit-report-projects" multiple size="4" style="' + controlStyle('min-height:92px;') + '">';
         for (var p = 0; p < state.projects.length; p++) {
           var selected = state.draft.projectIds.indexOf(state.projects[p].id) !== -1;
@@ -645,19 +687,29 @@
             + UI.escapeHtml(state.projects[p].name || state.projects[p].id) + '</option>';
         }
         html += '</select></label>';
+        if (!state.draft.projectIds.length) {
+          html += '<div style="border:1px dashed var(--border-default);border-radius:var(--border-radius-md);padding:var(--space-3);color:var(--text-tertiary);font-size:var(--text-small);">Select one or more projects to unlock field discovery and preview results.</div>';
+        }
+        html += '</div>';
+        return html;
+      }
+
+      function renderFocusControls() {
+        var html = '<div class="audit-report-scope-grid">';
+        html += '<div style="color:var(--text-secondary);font-size:var(--text-small);line-height:1.45;">Narrow the selected project scope to the events stakeholders need to review.</div>';
         html += label('Status') + '<select id="audit-report-status" style="' + controlStyle() + '">'
-          + option('', 'All', state.filters.status)
+          + option('', 'All statuses', state.filters.status)
           + option('OPEN', 'Open', state.filters.status)
           + option('ACKNOWLEDGED', 'Acknowledged', state.filters.status)
           + option('RESOLVED', 'Resolved', state.filters.status)
           + option('ARCHIVED', 'Archived', state.filters.status)
           + '</select></label>';
         html += label('Category') + '<select id="audit-report-category" style="' + controlStyle() + '">'
-          + option('', 'All', state.filters.categoryId);
+          + option('', 'All categories', state.filters.categoryId);
         for (var c = 0; c < state.categories.length; c++) html += option(state.categories[c].id, state.categories[c].name, state.filters.categoryId);
         html += '</select></label>';
-        html += label('From') + '<input id="audit-report-from" inputmode="numeric" placeholder="YYYY-MM-DD" value="' + UI.escapeHtml(state.filters.occurredFrom) + '" style="' + controlStyle() + '"></label>';
-        html += label('To') + '<input id="audit-report-to" inputmode="numeric" placeholder="YYYY-MM-DD" value="' + UI.escapeHtml(state.filters.occurredTo) + '" style="' + controlStyle() + '"></label>';
+        html += label('From date') + '<input id="audit-report-from" type="text" value="' + UI.escapeHtml(state.filters.occurredFrom) + '" placeholder="YYYY-MM-DD" autocomplete="off" inputmode="numeric" style="' + controlStyle() + '"></label>';
+        html += label('To date') + '<input id="audit-report-to" type="text" value="' + UI.escapeHtml(state.filters.occurredTo) + '" placeholder="YYYY-MM-DD" autocomplete="off" inputmode="numeric" style="' + controlStyle() + '"></label>';
         html += label('Search') + '<input id="audit-report-search" type="search" value="' + UI.escapeHtml(state.filters.search) + '" placeholder="Title or summary" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" style="' + controlStyle() + '"></label>';
         html += '</div>';
         return html;
@@ -667,9 +719,14 @@
         var search = state.fieldSearch.toLowerCase();
         var fields = state.fields.filter(function(field) {
           var fieldPath = String(field.fieldPath || '').toLowerCase();
-          return !search || fieldPath.indexOf(search) !== -1 || String(field.source || '').toLowerCase().indexOf(search) !== -1;
+          return !search || fieldPath.indexOf(search) !== -1 || fieldLabel(field.fieldPath || '').toLowerCase().indexOf(search) !== -1 || String(field.source || '').toLowerCase().indexOf(search) !== -1;
+        }).sort(function(a, b) {
+          var groupDiff = fieldGroupLabel(a).localeCompare(fieldGroupLabel(b));
+          if (groupDiff !== 0) return groupDiff;
+          return fieldLabel(a.fieldPath).localeCompare(fieldLabel(b.fieldPath));
         }).slice(0, 80);
-        var html = '<div class="decidr-section-header">Fields</div>';
+        var html = '<div class="decidr-section-header">Field Catalog</div>';
+        html += '<div style="color:var(--text-secondary);font-size:var(--text-small);line-height:1.45;margin-bottom:var(--space-3);">Use friendly columns first. Payload fields are available for deeper evidence reports.</div>';
         html += '<div style="display:flex;gap:var(--space-2);margin-bottom:var(--space-3);">'
           + '<input id="audit-report-field-search" type="search" value="' + UI.escapeHtml(state.fieldSearch) + '" placeholder="Search fields" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" style="' + controlStyle() + '">'
           + '<button id="audit-report-refresh-fields" style="' + smallButtonStyle(false) + '">Refresh</button></div>';
@@ -684,11 +741,18 @@
         if (!fields.length) {
           html += '<div style="color:var(--text-tertiary);font-size:var(--text-small);">No fields found for this scope.</div>';
         }
+        var lastGroup = '';
         for (var i = 0; i < fields.length; i++) {
           var f = fields[i];
+          var group = fieldGroupLabel(f);
+          if (group !== lastGroup) {
+            lastGroup = group;
+            html += '<div style="margin-top:' + (i ? 'var(--space-3)' : '0') + ';color:var(--text-tertiary);font-size:var(--text-xs);font-weight:var(--weight-semibold);text-transform:uppercase;">' + UI.escapeHtml(group) + '</div>';
+          }
           html += '<div style="border-top:1px solid var(--border-subtle);padding:8px 0;">'
             + '<div style="display:flex;justify-content:space-between;gap:var(--space-2);align-items:start;">'
-            + '<div style="min-width:0;"><div style="font-size:var(--text-small);font-weight:var(--weight-semibold);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + UI.escapeHtml(f.fieldPath) + '</div>'
+            + '<div style="min-width:0;"><div style="font-size:var(--text-small);font-weight:var(--weight-semibold);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + UI.escapeHtml(fieldLabel(f.fieldPath)) + '</div>'
+            + '<div style="color:var(--text-tertiary);font-size:var(--text-xs);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + UI.escapeHtml(f.fieldPath || '') + '</div>'
             + '<div style="color:var(--text-tertiary);font-size:var(--text-xs);">' + UI.escapeHtml((f.source || '') + ' · ' + (f.valueType || '')) + '</div></div>'
             + '<div style="display:flex;gap:4px;flex-shrink:0;">'
             + '<button data-add-column="' + UI.escapeHtml(f.fieldPath) + '" style="' + smallButtonStyle(false) + '">Add</button>'
@@ -708,15 +772,16 @@
         var rules = Array.isArray(state.draft.logic.rules) ? state.draft.logic.rules : [];
         var html = '<div style="margin-top:var(--space-4);">';
         html += '<div style="display:flex;justify-content:space-between;align-items:center;gap:var(--space-2);">'
-          + '<div class="decidr-section-header" style="margin:0;">Advanced Filters</div></div>';
+          + '<div><div class="decidr-section-header" style="margin:0;">Field Filters</div>'
+          + '<div style="color:var(--text-tertiary);font-size:var(--text-xs);line-height:1.4;margin-top:3px;">Use payload or linked-record fields when basic filters are not specific enough.</div></div></div>';
         html += '<div class="audit-add-filter-row">'
           + '<select id="audit-report-new-rule-field" style="' + controlStyle() + '">'
-          + option('', 'Choose field', '')
+          + option('', 'Choose a field to filter', '')
           + ruleFieldOptions('')
           + '</select>'
           + '<button id="audit-report-add-selected-rule" style="' + smallButtonStyle(false) + '" disabled>Add Filter</button></div>';
         if (!rules.length) {
-          html += '<div style="color:var(--text-tertiary);font-size:var(--text-small);padding:var(--space-3) 0;">No advanced filters.</div>';
+          html += '<div style="color:var(--text-tertiary);font-size:var(--text-small);padding:var(--space-3) 0;">No field filters yet.</div>';
         }
         for (var i = 0; i < rules.length; i++) {
           var rule = rules[i];
@@ -749,45 +814,56 @@
       }
 
       function renderOutline() {
-        var html = '<div class="decidr-section-header">Outline</div>';
+        var html = '<div class="decidr-section-header">Columns</div>';
+        html += '<div style="color:var(--text-secondary);font-size:var(--text-small);line-height:1.45;margin-bottom:var(--space-3);">Choose what appears in the export. Keep the first columns readable for stakeholders.</div>';
         html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-2);margin-bottom:var(--space-3);">'
           + '<div style="color:var(--text-secondary);font-size:var(--text-small);font-weight:var(--weight-semibold);">Columns</div>'
           + '<button data-builder-tab="fields" style="' + smallButtonStyle(false) + '">Add Column</button></div>';
         for (var i = 0; i < state.draft.selectedColumns.length; i++) {
           var col = state.draft.selectedColumns[i];
           html += '<div class="audit-column-row">'
-            + '<div class="audit-column-handle">⋮</div>'
+            + '<div class="audit-column-handle">' + (i + 1) + '</div>'
             + '<div><input data-column-label="' + i + '" value="' + UI.escapeHtml(col.label || col.field) + '" style="' + controlStyle() + '">'
             + '<div class="audit-column-path">' + UI.escapeHtml(col.field) + '</div></div>'
             + '<button data-remove-column="' + i + '" style="' + smallButtonStyle(false) + '">×</button></div>';
         }
-        html += '<div style="border-top:1px solid var(--border-subtle);margin-top:var(--space-4);padding-top:var(--space-4);">';
-        html += '<div style="color:var(--text-secondary);font-size:var(--text-small);font-weight:var(--weight-semibold);margin-bottom:var(--space-2);">Groups</div>';
-        html += '<div class="decidr-badge">None</div></div>';
         return html;
       }
 
       function renderFiltersPane() {
-        var html = '<div class="decidr-section-header">Filters</div>';
+        var html = '<div class="decidr-section-header">Focus</div>';
         html += renderAppliedFilters();
-        html += renderScope();
+        html += renderFocusControls();
         html += renderRules();
         return html;
       }
 
       function renderBuilderPanel() {
-        var active = state.builderTab || 'outline';
+        var active = state.builderTab || 'scope';
         var filterCount = activeFilterItems().length;
         var html = '<div class="decidr-section audit-builder-panel">';
-        html += '<div class="audit-builder-tabs">'
-          + '<button class="audit-builder-tab' + (active === 'outline' ? ' active' : '') + '" data-builder-tab="outline">Outline</button>'
-          + '<button class="audit-builder-tab' + (active === 'filters' ? ' active' : '') + '" data-builder-tab="filters">Filters' + (filterCount ? ' (' + filterCount + ')' : '') + '</button>'
-          + '<button class="audit-builder-tab' + (active === 'fields' ? ' active' : '') + '" data-builder-tab="fields">Fields</button>'
+        html += '<div class="audit-report-stepper">'
+          + '<button class="audit-report-step' + (active === 'scope' ? ' active' : '') + '" data-builder-tab="scope">1. Scope</button>'
+          + '<button class="audit-report-step' + (active === 'focus' || active === 'filters' ? ' active' : '') + '" data-builder-tab="focus">2. Focus' + (filterCount ? ' (' + filterCount + ')' : '') + '</button>'
+          + '<button class="audit-report-step' + (active === 'columns' || active === 'outline' || active === 'fields' ? ' active' : '') + '" data-builder-tab="columns">3. Columns</button>'
+          + '<button class="audit-report-step' + (active === 'preview' ? ' active' : '') + '" data-builder-tab="preview">4. Preview</button>'
+          + '<button class="audit-report-step' + (active === 'publish' ? ' active' : '') + '" data-builder-tab="publish">5. Publish</button>'
           + '</div>';
         html += '<div class="audit-builder-pane">';
-        if (active === 'filters') html += renderFiltersPane();
-        else if (active === 'fields') html += renderFieldPalette();
-        else html += renderOutline();
+        if (active === 'scope') html += '<div class="decidr-section-header">Scope</div>' + renderScope();
+        else if (active === 'focus' || active === 'filters') html += renderFiltersPane();
+        else if (active === 'preview') {
+          html += '<div class="decidr-section-header">Preview</div>';
+          html += renderAppliedFilters();
+          html += '<div style="color:var(--text-secondary);font-size:var(--text-small);line-height:1.45;">Review the table on the right, then refresh the preview if the filter or column summary says it is stale.</div>';
+        } else if (active === 'publish') {
+          html += '<div class="decidr-section-header">Publish</div>';
+          html += '<div style="color:var(--text-secondary);font-size:var(--text-small);line-height:1.45;margin-bottom:var(--space-3);">Save the definition, export the CSV, or share a saved report with teammates.</div>';
+          html += renderReportSide();
+        } else {
+          html += renderOutline();
+          html += '<div style="margin-top:var(--space-5);">' + renderFieldPalette() + '</div>';
+        }
         html += '</div></div>';
         return html;
       }
@@ -866,7 +942,9 @@
         if (state.error) {
           html += '<div style="padding:var(--space-4);color:var(--color-error-text);font-size:var(--text-small);">' + UI.escapeHtml(state.error.message || 'Something went wrong') + '</div>';
         }
-        if (!state.preview.rows.length && !state.running) {
+        if (!state.draft.projectIds.length && !state.running) {
+          html += UI.emptyState('Choose one or more projects to preview this report.');
+        } else if (!state.preview.rows.length && !state.running) {
           html += UI.emptyState('No audit events match this report.');
         } else {
           html += '<div class="audit-preview-table-wrap"><table style="width:100%;border-collapse:collapse;font-size:var(--text-small);">';
@@ -891,6 +969,75 @@
         return html;
       }
 
+      function reportProjectSummary(projectIds) {
+        var ids = projectIds || [];
+        if (!ids.length) return 'No project scope';
+        if (ids.length === 1) return projectName(ids[0]);
+        return ids.length + ' projects';
+      }
+
+      function renderGallery() {
+        var html = '<div class="audit-report-gallery">';
+        html += '<div class="decidr-section" style="padding:var(--space-4);">';
+        html += '<div class="decidr-section-header">Saved Reports <span class="decidr-section-count">(' + state.reports.length + ')</span></div>';
+        if (!state.reports.length) {
+          html += UI.emptyState('No saved audit reports yet.');
+        } else {
+          html += '<div class="audit-report-gallery-list">';
+          for (var i = 0; i < state.reports.length; i++) {
+            var report = state.reports[i];
+            html += '<div class="audit-report-gallery-card">'
+              + '<div style="min-width:0;">'
+              + '<div style="font-weight:var(--weight-semibold);font-size:var(--text-body);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + UI.escapeHtml(report.name || 'Untitled report') + '</div>'
+              + '<div style="color:var(--text-secondary);font-size:var(--text-small);line-height:1.4;margin-top:4px;">' + UI.escapeHtml(report.description || reportProjectSummary(report.projectIds || [])) + '</div>'
+              + '<div style="display:flex;gap:var(--space-2);flex-wrap:wrap;margin-top:var(--space-2);">'
+              + '<span class="decidr-badge">' + UI.escapeHtml(report.visibility || 'PRIVATE') + '</span>'
+              + '<span class="decidr-badge">' + UI.escapeHtml(reportProjectSummary(report.projectIds || [])) + '</span>'
+              + '</div></div>'
+              + '<button data-open-report="' + UI.escapeHtml(report.id) + '" style="' + smallButtonStyle(true) + '">Open</button>'
+              + '</div>';
+          }
+          html += '</div>';
+        }
+        html += '</div>';
+
+        html += '<div class="decidr-section" style="padding:var(--space-4);">';
+        html += '<div class="decidr-section-header">Start New</div>';
+        html += '<div style="display:grid;gap:var(--space-3);">';
+        html += '<div style="border:1px solid var(--border-subtle);border-radius:var(--border-radius-md);padding:var(--space-3);background:var(--bg-surface);">'
+          + '<div style="font-weight:var(--weight-semibold);">Audit evidence report</div>'
+          + '<div style="color:var(--text-secondary);font-size:var(--text-small);line-height:1.45;margin-top:4px;">Build a CSV-ready report from audit events, linked decisions, projects, and selected payload fields.</div>'
+          + '<button id="audit-report-start-builder" style="' + smallButtonStyle(true) + 'margin-top:var(--space-3);">Build Report</button>'
+          + '</div>';
+        html += '<div style="color:var(--text-tertiary);font-size:var(--text-small);line-height:1.45;">Reports now start with an explicit project scope so stakeholders can see exactly what evidence is included.</div>';
+        html += '</div></div>';
+        html += '</div>';
+        return html;
+      }
+
+      function renderReadView() {
+        var html = '<div class="decidr-section" style="padding:var(--space-4);margin-bottom:var(--space-4);">';
+        html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);flex-wrap:wrap;">';
+        html += '<div style="min-width:0;">'
+          + '<div style="font-size:var(--text-h2);font-weight:var(--weight-bold);line-height:1.2;">' + UI.escapeHtml(state.draft.name || 'Audit report') + '</div>'
+          + '<div style="color:var(--text-secondary);font-size:var(--text-small);margin-top:4px;">' + UI.escapeHtml(state.draft.description || reportProjectSummary(state.draft.projectIds)) + '</div>'
+          + '</div>';
+        html += '<div class="audit-report-mode-actions">'
+          + '<button id="audit-report-gallery" style="' + smallButtonStyle(false) + '">Reports</button>'
+          + '<button id="audit-report-edit-mode" style="' + smallButtonStyle(false) + '">Edit Report</button>'
+          + '<button id="audit-report-run" style="' + smallButtonStyle(true) + '">' + (state.running ? 'Running...' : 'Refresh') + '</button>'
+          + '<button id="audit-report-export" style="' + smallButtonStyle(false) + '">Export CSV</button>'
+          + '</div>';
+        html += '</div>';
+        html += '<div style="margin-top:var(--space-3);">' + renderAppliedFilters() + '</div>';
+        html += '</div>';
+        html += '<div class="audit-builder-workspace" style="grid-template-columns:minmax(0,1fr) 310px;">';
+        html += renderPreview();
+        html += '<div class="audit-report-side">' + renderReportSide() + '</div>';
+        html += '</div>';
+        return html;
+      }
+
       function thStyle() {
         return 'text-align:left;padding:9px 10px;color:var(--text-secondary);font-size:var(--text-xs);text-transform:uppercase;border-bottom:1px solid var(--border-subtle);background:var(--bg-surface);position:sticky;top:0;';
       }
@@ -901,8 +1048,17 @@
 
       function formatValue(value) {
         if (value === undefined || value === null) return '';
-        if (Array.isArray(value)) return value.join(', ');
-        if (typeof value === 'object') return JSON.stringify(value);
+        if (Array.isArray(value)) {
+          if (!value.length) return '';
+          return value.map(function(item) { return formatValue(item); }).slice(0, 4).join(', ')
+            + (value.length > 4 ? ' +' + (value.length - 4) : '');
+        }
+        if (typeof value === 'object') {
+          var keys = Object.keys(value);
+          if (!keys.length) return '';
+          return keys.length + ' field' + (keys.length === 1 ? '' : 's') + ': ' + keys.slice(0, 4).join(', ');
+        }
+        if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value)) return formatDateTime(value);
         return String(value);
       }
 
@@ -920,12 +1076,19 @@
         }
         var html = renderStyles() + '<div class="audit-reports-shell">';
         html += renderHeader();
-        html += renderTopControls();
-        html += '<div class="audit-builder-workspace">';
-        html += renderBuilderPanel();
-        html += renderPreview();
-        html += '<div class="audit-report-side">' + renderReportSide() + '</div>';
-        html += '</div></div>';
+        if (state.mode === 'gallery') {
+          html += renderGallery();
+        } else if (state.mode === 'view') {
+          html += renderReadView();
+        } else {
+          html += renderTopControls();
+          html += '<div class="audit-builder-workspace">';
+          html += renderBuilderPanel();
+          html += renderPreview();
+          if (state.builderTab !== 'publish') html += '<div class="audit-report-side">' + renderReportSide() + '</div>';
+          html += '</div>';
+        }
+        html += '</div>';
         container.innerHTML = html;
         wire();
       }
@@ -1040,7 +1203,7 @@
           if: { field: fieldPath || (state.fields[0] && state.fields[0].fieldPath) || 'status', op: 'equals', value: '' },
           then: { include: true }
         });
-        state.builderTab = 'filters';
+        state.builderTab = 'focus';
         state.previewDirty = true;
         render();
       }
@@ -1067,16 +1230,50 @@
         render();
       }
 
+      function beginNewReport() {
+        state.mode = 'builder';
+        state.selectedReportId = '';
+        state.currentReport = null;
+        state.builderTab = 'scope';
+        state.fieldSearch = '';
+        state.fields = [];
+        state.draft = defaultDraft(data);
+        state.filters = { status: '', categoryId: '', occurredFrom: '', occurredTo: '', search: '' };
+        state.preview = { rows: [], total: 0, selectedColumns: state.draft.selectedColumns };
+        state.previewDirty = false;
+        render();
+      }
+
       function wire() {
+        var galleryBtn = container.querySelector('#audit-report-gallery');
+        if (galleryBtn) galleryBtn.addEventListener('click', function() {
+          state.mode = 'gallery';
+          state.error = null;
+          render();
+        });
+        var startBuilder = container.querySelector('#audit-report-start-builder');
+        if (startBuilder) startBuilder.addEventListener('click', beginNewReport);
+        var openReportBtns = container.querySelectorAll('[data-open-report]');
+        for (var ob = 0; ob < openReportBtns.length; ob++) openReportBtns[ob].addEventListener('click', function(e) {
+          state.mode = 'view';
+          loadReport(e.currentTarget.getAttribute('data-open-report'));
+        });
+        var editMode = container.querySelector('#audit-report-edit-mode');
+        if (editMode) editMode.addEventListener('click', function() {
+          state.mode = 'builder';
+          state.builderTab = 'scope';
+          if (state.draft.projectIds.length && !state.fields.length) {
+            loadFields(false);
+          } else {
+            render();
+          }
+        });
         var select = container.querySelector('#audit-report-select');
         if (select) select.addEventListener('change', function() {
           if (!select.value) {
-            state.selectedReportId = '';
-            state.currentReport = null;
-            state.draft = defaultDraft(data);
-            render();
-            runReport();
+            beginNewReport();
           } else {
+            state.mode = 'view';
             loadReport(select.value);
           }
         });
@@ -1089,7 +1286,7 @@
         var fresh = container.querySelector('#audit-report-refresh-fields');
         if (fresh) fresh.addEventListener('click', function() { syncDraftFromControls(); loadFields(true); });
         var newBtn = container.querySelector('#audit-report-new');
-        if (newBtn) newBtn.addEventListener('click', function() { state.selectedReportId = ''; state.currentReport = null; state.builderTab = 'outline'; state.draft = defaultDraft(data); render(); runReport(); });
+        if (newBtn) newBtn.addEventListener('click', beginNewReport);
         var exportBtn = container.querySelector('#audit-report-export');
         if (exportBtn) exportBtn.addEventListener('click', exportCsv);
         var shareBtn = container.querySelector('#audit-report-share');
@@ -1105,7 +1302,11 @@
           var search = state.fieldSearch.toLowerCase();
           var fields = state.fields.filter(function(field) {
             var fieldPath = String(field.fieldPath || '').toLowerCase();
-            return !search || fieldPath.indexOf(search) !== -1 || String(field.source || '').toLowerCase().indexOf(search) !== -1;
+            return !search || fieldPath.indexOf(search) !== -1 || fieldLabel(field.fieldPath || '').toLowerCase().indexOf(search) !== -1 || String(field.source || '').toLowerCase().indexOf(search) !== -1;
+          }).sort(function(a, b) {
+            var groupDiff = fieldGroupLabel(a).localeCompare(fieldGroupLabel(b));
+            if (groupDiff !== 0) return groupDiff;
+            return fieldLabel(a.fieldPath).localeCompare(fieldLabel(b.fieldPath));
           }).slice(0, 80);
           list.innerHTML = renderFieldListItems(fields);
           wireFieldPaletteButtons(list);
@@ -1126,7 +1327,11 @@
         for (var tb = 0; tb < tabBtns.length; tb++) tabBtns[tb].addEventListener('click', function(e) {
           syncDraftFromControls();
           state.builderTab = e.currentTarget.getAttribute('data-builder-tab') || 'outline';
-          render();
+          if (state.builderTab === 'columns' && state.draft.projectIds.length && !state.fields.length) {
+            loadFields(false);
+          } else {
+            render();
+          }
         });
 
         wireFieldPaletteButtons(container);
@@ -1151,7 +1356,14 @@
           dirtyControls[dc].addEventListener('change', function() {
             syncDraftFromControls();
             setPreviewDirty(true);
-            if (state.builderTab === 'filters') render();
+            if (this.id === 'audit-report-projects') {
+              state.fields = [];
+              if (state.draft.projectIds.length) {
+                loadFields(false);
+                return;
+              }
+            }
+            if (state.builderTab === 'focus' || state.builderTab === 'filters' || state.builderTab === 'scope') render();
           });
           dirtyControls[dc].addEventListener('input', function() { setPreviewDirty(true); });
         }
@@ -1189,14 +1401,17 @@
       }
 
       function reloadForActiveOrg() {
+        state.mode = 'gallery';
+        state.builderTab = 'scope';
         state.selectedReportId = '';
         state.currentReport = null;
         state.draft = defaultDraft(data);
+        state.fields = [];
         state.preview = { rows: [], total: 0, selectedColumns: state.draft.selectedColumns };
         container.innerHTML = UI.loadingSpinner('Switching organization...');
         return loadReferenceData().then(function() {
-          return loadFields(false);
-        }).then(runReport).catch(function(err) {
+          render();
+        }).catch(function(err) {
           state.error = err;
           render();
         });

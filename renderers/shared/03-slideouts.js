@@ -241,65 +241,156 @@
     return html;
   };
 
-  UI.slideOutAuditEvent = function(event) {
-    var state = UI.SlideOut._auditEventPanelState;
-    var enriched = event._enriched || {};
-    var category = '';
-    if (event.category && event.category.name) {
-      category = event.category.name;
-    } else if (typeof event.category === 'string') {
-      category = event.category;
-    }
-    var links = Array.isArray(event.links) ? event.links : [];
-    var decisionLinks = event.decisionLinks || [];
-    var revisions = event.revisions || [];
-    var html = '<div class="decidr-so-detail">';
+  function auditCategoryLabel(event) {
+    if (event.category && event.category.name) return event.category.name;
+    if (typeof event.category === 'string') return event.category;
+    return '';
+  }
 
-    html += '<div class="decidr-so-action-bar">';
-    html += '<button class="decidr-so-btn" id="decidr-so-btn-audit-edit">'
-      + ICON_EDIT + ' ' + (state.editMode ? 'Cancel Edit' : 'Edit') + '</button>';
+  function auditDateTime(value) {
+    if (!value) return '';
+    var date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleString([], {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  }
+
+  function auditValuePreview(value) {
+    if (value === null || value === undefined || value === '') return 'Not provided';
+    if (Array.isArray(value)) {
+      if (!value.length) return 'Empty list';
+      return value.slice(0, 4).map(function(item) { return auditValuePreview(item); }).join(', ')
+        + (value.length > 4 ? ' +' + (value.length - 4) : '');
+    }
+    if (typeof value === 'object') {
+      var keys = Object.keys(value);
+      if (!keys.length) return 'Empty object';
+      return keys.length + ' field' + (keys.length === 1 ? '' : 's') + ': ' + keys.slice(0, 4).join(', ');
+    }
+    return String(value);
+  }
+
+  function auditFactGrid(items) {
+    var html = '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:var(--space-2);margin-top:var(--space-3);">';
+    for (var i = 0; i < items.length; i++) {
+      if (!items[i].value) continue;
+      html += '<div style="border:1px solid var(--border-subtle);border-radius:var(--border-radius-md);background:var(--bg-surface);padding:var(--space-3);min-width:0;">'
+        + '<div style="color:var(--text-tertiary);font-size:var(--text-xs);font-weight:var(--weight-semibold);text-transform:uppercase;margin-bottom:4px;">' + UI.escapeHtml(items[i].label) + '</div>'
+        + '<div style="color:var(--text-primary);font-size:var(--text-small);font-weight:var(--weight-semibold);line-height:1.35;overflow:hidden;text-overflow:ellipsis;">' + items[i].value + '</div>'
+        + '</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function auditObjectPreviewSection(title, obj) {
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj) || !Object.keys(obj).length) return '';
+    var keys = Object.keys(obj).slice(0, 8);
+    var html = '<div class="decidr-so-section">';
+    html += UI.SlideOut._renderSectionHeader(title);
+    html += '<div style="display:grid;gap:6px;">';
+    for (var i = 0; i < keys.length; i++) {
+      html += '<div style="display:grid;grid-template-columns:minmax(110px,.7fr) minmax(0,1.3fr);gap:var(--space-2);align-items:start;border-top:1px solid var(--border-subtle);padding-top:6px;">'
+        + '<div style="color:var(--text-tertiary);font-size:var(--text-xs);font-weight:var(--weight-semibold);overflow:hidden;text-overflow:ellipsis;">' + UI.escapeHtml(keys[i]) + '</div>'
+        + '<div style="color:var(--text-secondary);font-size:var(--text-small);line-height:1.35;word-break:break-word;">' + UI.escapeHtml(auditValuePreview(obj[keys[i]])) + '</div>'
+        + '</div>';
+    }
+    if (Object.keys(obj).length > keys.length) {
+      html += '<div class="decidr-so-empty-hint">+' + (Object.keys(obj).length - keys.length) + ' more fields in technical details</div>';
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  function auditRevisionFields(rev) {
+    var before = rev.previousValues || {};
+    var after = rev.nextValues || {};
+    var seen = {};
+    var fields = [];
+    var keys = Object.keys(before).concat(Object.keys(after));
+    for (var i = 0; i < keys.length; i++) {
+      if (!seen[keys[i]]) {
+        seen[keys[i]] = true;
+        fields.push(keys[i]);
+      }
+    }
+    return fields;
+  }
+
+  function renderAuditEditForm(event, category, links) {
+    var html = '<div class="decidr-so-action-bar">';
+    html += '<button class="decidr-so-btn" id="decidr-so-btn-audit-edit">' + ICON_EDIT + ' Cancel Edit</button>';
     html += '<span class="decidr-so-spacer"></span>';
     html += '<button class="decidr-so-btn decidr-so-btn-danger decidr-so-btn-sm" id="decidr-so-btn-audit-archive">' + ICON_TRASH + ' Archive</button>';
     html += '</div>';
+    html += '<input type="text" class="decidr-so-edit-input" id="decidr-so-audit-title" value="' + UI.escapeHtml(event.title || '') + '">';
+    html += '<textarea class="decidr-so-edit-textarea" id="decidr-so-audit-summary" rows="3">' + UI.escapeHtml(event.summary || '') + '</textarea>';
+    html += '<div class="decidr-so-form-row" style="display:flex;gap:var(--space-2);margin-bottom:var(--space-2);">';
+    html += '<select class="decidr-so-edit-input" id="decidr-so-audit-status" style="flex:1;">';
+    var statuses = ['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'ARCHIVED'];
+    for (var si = 0; si < statuses.length; si++) {
+      html += '<option value="' + statuses[si] + '"' + (statuses[si] === event.status ? ' selected' : '') + '>'
+        + UI.escapeHtml(STATUS_LABELS[statuses[si]] || statuses[si]) + '</option>';
+    }
+    html += '</select>';
+    html += '<input type="text" class="decidr-so-edit-input" id="decidr-so-audit-category" placeholder="Category" value="' + UI.escapeHtml(category) + '" style="flex:1;">';
+    html += '</div>';
+    html += '<textarea class="decidr-so-edit-textarea" id="decidr-so-audit-links" rows="2" placeholder="One URL per line">' + UI.escapeHtml(links.join('\n')) + '</textarea>';
+    html += '<textarea class="decidr-so-edit-textarea" id="decidr-so-audit-payload" rows="5">' + UI.escapeHtml(JSON.stringify(event.payload || {}, null, 2)) + '</textarea>';
+    html += '<textarea class="decidr-so-edit-textarea" id="decidr-so-audit-source-context" rows="4">' + UI.escapeHtml(JSON.stringify(event.sourceContext || {}, null, 2)) + '</textarea>';
+    html += '<input type="text" class="decidr-so-edit-input" id="decidr-so-audit-edit-reason" placeholder="Edit reason (optional)">';
+    html += '<div class="decidr-so-form-actions">'
+      + '<button class="decidr-so-btn" id="decidr-so-btn-cancel-audit-edit">Cancel</button>'
+      + '<button class="decidr-so-btn decidr-so-btn-primary" id="decidr-so-btn-save-audit-edit">Save</button>'
+      + '</div>';
+    return html;
+  }
 
-    var metaItems = [
-      { html: UI.statusBadge(event.status || 'OPEN') }
-    ];
-    if (category) metaItems.push({ html: '<strong>Category:</strong> ' + UI.escapeHtml(category) });
-    if (event.occurredAt) metaItems.push({ html: ICON_CALENDAR + ' ' + UI.formatDate(event.occurredAt) });
-    if (event.createdByClient) metaItems.push({ html: '<strong>Source:</strong> ' + UI.escapeHtml(event.createdByClient) });
-    if (event.createdBy && event.createdBy.name) metaItems.push({ html: UI.userChip(event.createdBy) });
-    html += UI.SlideOut._renderMeta(metaItems);
+  UI.slideOutAuditEvent = function(event) {
+    var state = UI.SlideOut._auditEventPanelState;
+    var enriched = event._enriched || {};
+    var category = auditCategoryLabel(event);
+    var links = Array.isArray(event.links) ? event.links : [];
+    var decisionLinks = event.decisionLinks || [];
+    var revisions = event.revisions || [];
+    var project = event.project || enriched.project;
+    var html = '<div class="decidr-so-detail">';
 
     if (state.editMode) {
-      html += '<input type="text" class="decidr-so-edit-input" id="decidr-so-audit-title" value="' + UI.escapeHtml(event.title || '') + '">';
-      html += '<textarea class="decidr-so-edit-textarea" id="decidr-so-audit-summary" rows="3">' + UI.escapeHtml(event.summary || '') + '</textarea>';
-      html += '<div class="decidr-so-form-row" style="display:flex;gap:var(--space-2);margin-bottom:var(--space-2);">';
-      html += '<select class="decidr-so-edit-input" id="decidr-so-audit-status" style="flex:1;">';
-      var statuses = ['OPEN', 'ACKNOWLEDGED', 'RESOLVED', 'ARCHIVED'];
-      for (var si = 0; si < statuses.length; si++) {
-        html += '<option value="' + statuses[si] + '"' + (statuses[si] === event.status ? ' selected' : '') + '>'
-          + UI.escapeHtml(STATUS_LABELS[statuses[si]] || statuses[si]) + '</option>';
-      }
-      html += '</select>';
-      html += '<input type="text" class="decidr-so-edit-input" id="decidr-so-audit-category" placeholder="Category" value="' + UI.escapeHtml(category) + '" style="flex:1;">';
+      html += renderAuditEditForm(event, category, links);
       html += '</div>';
-      html += '<textarea class="decidr-so-edit-textarea" id="decidr-so-audit-links" rows="2" placeholder="One URL per line">' + UI.escapeHtml(links.join('\n')) + '</textarea>';
-      html += '<textarea class="decidr-so-edit-textarea" id="decidr-so-audit-payload" rows="5">' + UI.escapeHtml(JSON.stringify(event.payload || {}, null, 2)) + '</textarea>';
-      html += '<textarea class="decidr-so-edit-textarea" id="decidr-so-audit-source-context" rows="4">' + UI.escapeHtml(JSON.stringify(event.sourceContext || {}, null, 2)) + '</textarea>';
-      html += '<input type="text" class="decidr-so-edit-input" id="decidr-so-audit-edit-reason" placeholder="Edit reason (optional)">';
-      html += '<div class="decidr-so-form-actions">'
-        + '<button class="decidr-so-btn" id="decidr-so-btn-cancel-audit-edit">Cancel</button>'
-        + '<button class="decidr-so-btn decidr-so-btn-primary" id="decidr-so-btn-save-audit-edit">Save</button>'
-        + '</div>';
-    } else {
-      html += '<h3 class="decidr-so-detail-title">' + UI.escapeHtml(event.title || 'Untitled event') + '</h3>';
-      if (event.summary) {
-        html += '<p class="decidr-so-description">' + UI.escapeHtml(event.summary) + '</p>';
-      }
+      return html;
     }
 
-    var project = event.project || enriched.project;
+    html += '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:var(--space-3);margin-bottom:var(--space-3);">';
+    html += '<div style="min-width:0;"><div style="display:flex;align-items:center;gap:var(--space-2);margin-bottom:6px;">'
+      + UI.statusBadge(event.status || 'OPEN')
+      + (category ? '<span class="decidr-so-doc-type-badge">' + UI.escapeHtml(category) + '</span>' : '')
+      + '</div>'
+      + '<h3 class="decidr-so-detail-title" style="margin-bottom:0;">' + UI.escapeHtml(event.title || 'Untitled event') + '</h3></div>';
+    html += '</div>';
+
+    if (event.summary) {
+      html += '<p class="decidr-so-description">' + UI.escapeHtml(event.summary) + '</p>';
+    }
+
+    html += '<div class="decidr-so-section">';
+    html += UI.SlideOut._renderSectionHeader('Summary');
+    html += auditFactGrid([
+      { label: 'Occurred', value: event.occurredAt ? UI.escapeHtml(auditDateTime(event.occurredAt)) : '' },
+      { label: 'Source', value: event.createdByClient ? UI.escapeHtml(event.createdByClient) : '' },
+      { label: 'Actor', value: event.createdBy && event.createdBy.name ? UI.escapeHtml(event.createdBy.name) : '' },
+      { label: 'Project', value: project ? UI.escapeHtml(project.name || project.title || project.id) : '' },
+      { label: 'Linked decisions', value: UI.escapeHtml(String(decisionLinks.length)) },
+      { label: 'Evidence links', value: UI.escapeHtml(String(links.length)) }
+    ]);
+    html += '</div>';
+
     if (project) {
       html += UI.SlideOut._renderParentLink(ENTITY_ICONS.project, 'Project', 'project', project);
     }
@@ -307,7 +398,7 @@
     html += '<div class="decidr-so-section">';
     html += UI.SlideOut._renderSectionHeader('Linked Decisions', decisionLinks.length);
     if (decisionLinks.length === 0) {
-      html += '<div class="decidr-so-empty-hint">No linked decisions</div>';
+      html += '<div class="decidr-so-empty-hint">No linked decisions. This event may need a decision link before it can support governance review.</div>';
     } else {
       var decisions = [];
       for (var dl = 0; dl < decisionLinks.length; dl++) {
@@ -317,54 +408,67 @@
     }
     html += '</div>';
 
-    if (links.length > 0) {
-      html += '<div class="decidr-so-section">';
-      html += UI.SlideOut._renderSectionHeader('Links', links.length);
-      for (var li = 0; li < links.length; li++) {
-        html += '<div class="decidr-so-doc-item">';
-        html += '<a class="decidr-so-doc-link" href="' + UI.escapeHtml(links[li]) + '" target="_blank">'
-          + UI.escapeHtml(links[li]) + '</a>';
-        html += '</div>';
-      }
+    html += '<div class="decidr-so-section">';
+    html += UI.SlideOut._renderSectionHeader('Evidence', links.length);
+    if (!links.length && !event.sourceContext && !event.payload) {
+      html += '<div class="decidr-so-empty-hint">No supporting evidence attached.</div>';
+    }
+    for (var li = 0; li < links.length; li++) {
+      html += '<div class="decidr-so-doc-item">';
+      html += '<a class="decidr-so-doc-link" href="' + UI.escapeHtml(links[li]) + '" target="_blank">'
+        + UI.escapeHtml(links[li]) + '</a>';
       html += '</div>';
     }
-
-    html += '<div class="decidr-so-section">';
-    html += UI.SlideOut._renderSectionHeader('Payload');
-    html += '<pre style="white-space:pre-wrap;word-break:break-word;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:var(--border-radius-md);padding:var(--space-3);font-size:12px;">'
-      + UI.escapeHtml(JSON.stringify(event.payload || {}, null, 2)) + '</pre>';
     html += '</div>';
 
-    if (event.sourceContext) {
-      html += '<div class="decidr-so-section">';
-      html += UI.SlideOut._renderSectionHeader('Source Context');
-      html += '<pre style="white-space:pre-wrap;word-break:break-word;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:var(--border-radius-md);padding:var(--space-3);font-size:12px;">'
-        + UI.escapeHtml(JSON.stringify(event.sourceContext || {}, null, 2)) + '</pre>';
-      html += '</div>';
-    }
+    html += auditObjectPreviewSection('Source Context', event.sourceContext);
+    html += auditObjectPreviewSection('Payload Summary', event.payload);
 
     html += '<div class="decidr-so-section">';
-    html += UI.SlideOut._renderSectionHeader('Revision History', revisions.length);
+    html += UI.SlideOut._renderSectionHeader('Changes', revisions.length);
     if (revisions.length === 0) {
-      html += '<div class="decidr-so-empty-hint">No revisions</div>';
+      html += '<div class="decidr-so-empty-hint">No revisions recorded.</div>';
     } else {
       for (var ri = 0; ri < revisions.length; ri++) {
         var rev = revisions[ri];
         var editor = rev.editedBy && rev.editedBy.name ? rev.editedBy.name : rev.editedById;
+        var fields = auditRevisionFields(rev);
         html += '<div class="decidr-so-doc-item" style="display:block;">';
         html += '<div style="display:flex;justify-content:space-between;gap:var(--space-2);margin-bottom:4px;">';
-        html += '<strong>' + UI.escapeHtml(editor || 'Unknown') + '</strong>';
-        html += '<span class="decidr-so-empty-hint">' + UI.escapeHtml(UI.timeAgo(rev.createdAt)) + '</span>';
+        html += '<strong>' + UI.escapeHtml(editor || 'Unknown editor') + '</strong>';
+        html += '<span class="decidr-so-empty-hint">' + UI.escapeHtml(rev.createdAt ? auditDateTime(rev.createdAt) : '') + '</span>';
         html += '</div>';
-        if (rev.editReason) {
-          html += '<div class="decidr-so-empty-hint">' + UI.escapeHtml(rev.editReason) + '</div>';
+        if (rev.editReason) html += '<div style="color:var(--text-secondary);font-size:var(--text-small);margin-bottom:6px;">' + UI.escapeHtml(rev.editReason) + '</div>';
+        if (!fields.length) {
+          html += '<div class="decidr-so-empty-hint">Revision details were recorded without field-level changes.</div>';
+        } else {
+          html += '<div style="display:grid;gap:5px;">';
+          for (var f = 0; f < fields.length; f++) {
+            var beforeValue = rev.previousValues ? rev.previousValues[fields[f]] : undefined;
+            var afterValue = rev.nextValues ? rev.nextValues[fields[f]] : undefined;
+            html += '<div style="display:grid;grid-template-columns:minmax(90px,.5fr) minmax(0,1fr);gap:var(--space-2);font-size:var(--text-small);">'
+              + '<div style="color:var(--text-tertiary);font-weight:var(--weight-semibold);overflow:hidden;text-overflow:ellipsis;">' + UI.escapeHtml(fields[f]) + '</div>'
+              + '<div style="color:var(--text-secondary);word-break:break-word;">'
+              + UI.escapeHtml(auditValuePreview(beforeValue)) + ' → ' + UI.escapeHtml(auditValuePreview(afterValue))
+              + '</div></div>';
+          }
+          html += '</div>';
         }
-        html += '<pre style="white-space:pre-wrap;word-break:break-word;margin-top:6px;font-size:11px;color:var(--text-secondary);">'
-          + UI.escapeHtml(JSON.stringify({ before: rev.previousValues, after: rev.nextValues }, null, 2))
-          + '</pre>';
         html += '</div>';
       }
     }
+    html += '</div>';
+
+    html += '<details class="decidr-so-section" style="display:block;">';
+    html += '<summary style="cursor:pointer;font-weight:var(--weight-semibold);color:var(--text-secondary);">Technical details</summary>';
+    html += '<pre style="white-space:pre-wrap;word-break:break-word;background:var(--bg-surface);border:1px solid var(--border-subtle);border-radius:var(--border-radius-md);padding:var(--space-3);font-size:12px;margin-top:var(--space-3);">'
+      + UI.escapeHtml(JSON.stringify({ payload: event.payload || {}, sourceContext: event.sourceContext || {} }, null, 2)) + '</pre>';
+    html += '</details>';
+
+    html += '<div class="decidr-so-action-bar" style="margin-top:var(--space-4);">';
+    html += '<button class="decidr-so-btn" id="decidr-so-btn-audit-edit">' + ICON_EDIT + ' Edit</button>';
+    html += '<span class="decidr-so-spacer"></span>';
+    html += '<button class="decidr-so-btn decidr-so-btn-danger decidr-so-btn-sm" id="decidr-so-btn-audit-archive">' + ICON_TRASH + ' Archive</button>';
     html += '</div>';
 
     html += '</div>';

@@ -432,11 +432,11 @@
     },
     {
       "name": "decidr_audit_dashboard",
-      "description": "Auditability dashboard with status, category, project, decision, search, and date filters plus audit-event drilldowns",
+      "description": "Auditability dashboard with status, category, project, decision, search, date filters, custom date windows, and audit-event drilldowns",
       "scope": "universal",
       "rule": "Push directly when the user asks for an auditability dashboard, audit dashboard, audit overview, manager review of audit events, or high-level audit trail view. Do NOT call list_audit_events first. The renderer fetches its own audit data and supports drilldown through audit event slideouts.",
-      "invoke_schema": "{ \"type\": \"object\", \"properties\": { \"organization_id\": { \"type\": \"string\" }, \"project_id\": { \"type\": \"string\" }, \"decision_id\": { \"type\": \"string\" }, \"status\": { \"type\": \"string\", \"enum\": [\"OPEN\", \"ACKNOWLEDGED\", \"RESOLVED\", \"ARCHIVED\"] }, \"range\": { \"type\": \"string\", \"enum\": [\"7\", \"30\", \"90\", \"all\", \"custom\"] }, \"search\": { \"type\": \"string\" } } }",
-      "data_hint": "{ organization_id?: string, project_id?: string, decision_id?: string, status?: \"OPEN\"|\"ACKNOWLEDGED\"|\"RESOLVED\"|\"ARCHIVED\", range?: \"7\"|\"30\"|\"90\"|\"all\"|\"custom\", search?: string }",
+      "invoke_schema": "{ \"type\": \"object\", \"properties\": { \"organization_id\": { \"type\": \"string\" }, \"project_id\": { \"type\": \"string\" }, \"decision_id\": { \"type\": \"string\" }, \"status\": { \"type\": \"string\", \"enum\": [\"OPEN\", \"ACKNOWLEDGED\", \"RESOLVED\", \"ARCHIVED\"] }, \"range\": { \"type\": \"string\", \"enum\": [\"7\", \"30\", \"90\", \"all\", \"custom\"] }, \"occurred_from\": { \"type\": \"string\", \"description\": \"YYYY-MM-DD start date used when range is custom\" }, \"occurred_to\": { \"type\": \"string\", \"description\": \"YYYY-MM-DD end date used when range is custom\" }, \"search\": { \"type\": \"string\" } } }",
+      "data_hint": "{ organization_id?: string, project_id?: string, decision_id?: string, status?: \"OPEN\"|\"ACKNOWLEDGED\"|\"RESOLVED\"|\"ARCHIVED\", range?: \"7\"|\"30\"|\"90\"|\"all\"|\"custom\", occurred_from?: \"YYYY-MM-DD\", occurred_to?: \"YYYY-MM-DD\", search?: string }",
       "standalone": true,
       "standalone_label": "Audit Dashboard"
     },
