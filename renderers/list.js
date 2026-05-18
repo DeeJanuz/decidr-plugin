@@ -74,6 +74,14 @@
     return entity.name || entity.title || entity.id || '';
   }
 
+  function unwrapListResponse(resp) {
+    if (Array.isArray(resp)) return resp;
+    if (resp && resp.data && Array.isArray(resp.data)) return resp.data;
+    if (resp && resp.items && Array.isArray(resp.items)) return resp.items;
+    if (resp && resp.results && Array.isArray(resp.results)) return resp.results;
+    return [];
+  }
+
   // ─── Helper: render a single entity card by type ──────────────────
 
   var CARD_RENDERERS = {
@@ -202,14 +210,21 @@
   function fetchProjectStats(projects, API) {
     for (var i = 0; i < projects.length; i++) {
       (function(proj) {
-        API.getProject(proj.id).then(function(fullProj) {
+        Promise.all([
+          API.getProject(proj.id),
+          API.listDecisions({ projectId: proj.id }),
+          API.listTasks({ projectId: proj.id }),
+          API.listBridges({ projectId: proj.id })
+        ]).then(function(results) {
+          var fullProj = results[0] || proj;
           var cardEl = document.querySelector(
             '[data-entity-type="project"][data-entity-id="' + proj.id + '"]'
           );
           if (cardEl && fullProj) {
-            var decisions = fullProj.decisions || [];
-            var tasks = fullProj.tasks || [];
-            cardEl.outerHTML = UI.projectCard(fullProj, { decisions: decisions, tasks: tasks });
+            var decisions = unwrapListResponse(results[1]);
+            var tasks = unwrapListResponse(results[2]);
+            var bridges = unwrapListResponse(results[3]);
+            cardEl.outerHTML = UI.projectCard(fullProj, { decisions: decisions, tasks: tasks, bridges: bridges });
             // Re-wire the replaced element
             var newCard = document.querySelector(
               '[data-entity-type="project"][data-entity-id="' + proj.id + '"]'
@@ -367,10 +382,7 @@
 
     // Description
     if (entity.description) {
-      html += '<p style="color:var(--text-secondary);font-size:var(--text-body);'
-        + 'line-height:var(--leading-normal);margin:0 0 var(--space-6) 0;">'
-        + UI.escapeHtml(entity.description)
-        + '</p>';
+      html += UI.richDescription(entity.description, { className: 'decidr-detail-description' });
     }
 
     // Metadata
@@ -424,11 +436,17 @@
   }
 
   function fetchProjectRelated(relatedEl, project, API) {
-    API.getProject(project.id).then(function(fullProject) {
+    Promise.all([
+      API.getProject(project.id),
+      API.listDecisions({ projectId: project.id }),
+      API.listTasks({ projectId: project.id }),
+      API.listBridges({ projectId: project.id })
+    ]).then(function(results) {
+      var fullProject = results[0] || project;
       var html = '';
-      var decisions = fullProject.decisions || project.decisions || [];
-      var tasks = fullProject.tasks || project.tasks || [];
-      var bridges = fullProject.bridges || project.bridges || [];
+      var decisions = unwrapListResponse(results[1]);
+      var tasks = unwrapListResponse(results[2]);
+      var bridges = unwrapListResponse(results[3]);
 
       if (decisions.length > 0) {
         html += UI.section('Decisions', decisions.length,
@@ -472,9 +490,14 @@
   }
 
   function fetchDecisionRelated(relatedEl, decision, API) {
-    API.getDecision(decision.id).then(function(fullDecision) {
+    Promise.all([
+      API.getDecision(decision.id),
+      API.listBridges({ decisionId: decision.id })
+    ]).then(function(results) {
+      var fullDecision = results[0] || decision;
       var html = '';
       var tasks = fullDecision.tasks || decision.tasks || [];
+      var bridges = unwrapListResponse(results[1]);
 
       if (tasks.length > 0) {
         html += UI.section('Tasks', tasks.length,
@@ -503,6 +526,16 @@
         html += UI.section('Alternatives', alternatives.length, altHtml);
       }
 
+      if (bridges.length > 0) {
+        html += UI.section('Decision Bridges', bridges.length,
+          cardGridOpen()
+          + bridges.map(function(b, i) {
+            return UI.bridgeCard(b, { animDelay: i * 0.05 });
+          }).join('')
+          + cardGridClose()
+        );
+      }
+
       if (!html) {
         html = UI.emptyState('No related entities found.');
       }
@@ -517,7 +550,13 @@
   function renderBridgeRelated(relatedEl, bridge) {
     var html = '';
 
-    if (bridge.fromProject) {
+    if (bridge.fromDecision) {
+      html += UI.section('From Decision', null,
+        cardGridOpen()
+        + UI.decisionCard(bridge.fromDecision)
+        + cardGridClose()
+      );
+    } else if (bridge.fromProject) {
       html += UI.section('From Project', null,
         cardGridOpen()
         + UI.projectCard(bridge.fromProject)
@@ -525,7 +564,13 @@
       );
     }
 
-    if (bridge.toProject) {
+    if (bridge.toDecision) {
+      html += UI.section('To Decision', null,
+        cardGridOpen()
+        + UI.decisionCard(bridge.toDecision)
+        + cardGridClose()
+      );
+    } else if (bridge.toProject) {
       html += UI.section('To Project', null,
         cardGridOpen()
         + UI.projectCard(bridge.toProject)

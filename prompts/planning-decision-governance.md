@@ -8,7 +8,8 @@ You are an agent creating or implementing a plan that appears related to DecidR-
 2. **Do not guess the organization.** Use available org/token context and `decidr_list_organizations` to identify the correct organization. If the correct org or context is unclear, ask the user for pointers.
 3. **Search before creating.** Look for existing initiatives, projects, decisions, tasks, and LudFlow documents before creating new DecidR records.
 4. **Prefer continuity.** Update existing decisions and linked docs when the plan refines, implements, supersedes, or documents prior work. Create new decisions and supporting docs only when no suitable existing record exists.
-5. **Review batch mutations.** For 2 or more DecidR/LudFlow mutations, present the planned create/update/link actions for review before executing them, following the MCPViews bulk action review rule.
+5. **Preserve implemented records.** When a linked LudFlow document is already published or its DecidR decision is already implemented, fetch the current content first and append new information as a dated addendum. Do not replace or restructure the implemented record unless the user explicitly asks for a rewrite.
+6. **Review batch mutations.** For 2 or more DecidR/LudFlow mutations, present the planned create/update/link actions for review before executing them, following the MCPViews bulk action review rule.
 
 ## Trigger
 
@@ -60,6 +61,7 @@ For each logged plan, ensure there is supporting documentation:
 - If no relevant folder structure exists, create or use a folder named after the best matching DecidR project.
 - If no project context is identifiable, ask the user where the document should live before creating it.
 - If document creation tooling is available, create or update the supporting document before linking it, then move the document into the selected folder if the write tool created it elsewhere.
+- If the supporting document is already `PUBLISHED`, or if the linked DecidR decision is already `IMPLEMENTED`, treat the existing document as the historical implementation record. Fetch the current content with `ludflow_get_document`, preserve that content, and append new findings, validation notes, follow-up decisions, or corrections as a dated addendum. If the document was published before the update, publish the appended version after the required review flow.
 - If no document can be created from the current toolset, ask the user for the document URL or LudFlow document to link.
 - Link supporting documents to the DecidR decision or parent entity with `decidr_link_document`.
 

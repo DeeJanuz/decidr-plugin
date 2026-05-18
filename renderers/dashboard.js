@@ -263,6 +263,19 @@
       return results;
     }
 
+    function getBridgesForProject(projectId) {
+      var results = [];
+      for (var i = 0; i < dashState.allBridges.length; i++) {
+        var bridge = dashState.allBridges[i];
+        var fromProjectId = UI.bridgeEndpointProjectId ? UI.bridgeEndpointProjectId(bridge, 'from') : bridge.fromProjectId;
+        var toProjectId = UI.bridgeEndpointProjectId ? UI.bridgeEndpointProjectId(bridge, 'to') : bridge.toProjectId;
+        if (fromProjectId === projectId || toProjectId === projectId) {
+          results.push(bridge);
+        }
+      }
+      return results;
+    }
+
     function getDecisionsForInitiative(initiativeId) {
       var projects = dashState.projectsByInitiative[initiativeId] || [];
       var projectIds = {};
@@ -590,6 +603,7 @@
           var proj = initProjects[p];
           var projDecisions = getDecisionsForProject(proj.id);
           var projTasks = getTasksForProject(proj.id);
+          var projBridges = getBridgesForProject(proj.id);
           // Count pending decisions and ones needing user's review
           var pendingCount = 0;
           var needsReviewCount = 0;
@@ -614,6 +628,7 @@
           cards += UI.dashboardProjectCard(proj, {
             decisions: projDecisions,
             tasks: projTasks,
+            bridges: projBridges,
             isOwner: isOwner,
             pendingDecisions: pendingCount,
             needsYourReview: needsReviewCount,

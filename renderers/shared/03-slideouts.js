@@ -80,6 +80,57 @@
     return html;
   }
 
+  function bridgeIsDecisionBridge(bridge) {
+    return !!(
+      bridge &&
+      (bridge.fromDecision || bridge.toDecision || bridge.fromDecisionId || bridge.toDecisionId ||
+       bridge.from_decision_id || bridge.to_decision_id)
+    );
+  }
+
+  function renderBridgeSection(title, bridges, opts) {
+    opts = opts || {};
+    var prefix = opts.prefix || 'bridge';
+    if (!Array.isArray(bridges)) return '';
+
+    var html = '<div class="decidr-so-section">';
+    html += UI.SlideOut._renderSectionHeader(title, bridges.length);
+    if (bridges.length === 0) {
+      html += '<div class="decidr-so-empty-hint">No bridges</div>';
+    } else {
+      for (var b = 0; b < bridges.length; b++) {
+        var br = bridges[b];
+        var bridgeKey = prefix + '-' + b;
+        var summary = UI.bridgeEndpointSummary(br) || br.name || 'Bridge';
+        var scopeLabel = bridgeIsDecisionBridge(br) ? 'Decision bridge' : 'Project bridge';
+        var fromProjectName = UI.bridgeEndpointProjectName(br, 'from');
+        var toProjectName = UI.bridgeEndpointProjectName(br, 'to');
+
+        html += '<div class="decidr-so-bridge-item">';
+        html += '<div class="decidr-so-bridge-header" data-bridge-toggle="' + UI.escapeHtml(bridgeKey) + '">';
+        html += '<span class="decidr-so-bridge-name">' + UI.escapeHtml(summary) + '</span>';
+        html += '<span class="decidr-so-doc-type-badge">' + UI.escapeHtml(scopeLabel) + '</span>';
+        html += UI.statusBadge(br.status);
+        html += '</div>';
+        html += '<div class="decidr-so-bridge-expand" id="decidr-so-bridge-expand-' + UI.escapeHtml(bridgeKey) + '">';
+        html += '<div class="decidr-so-bridge-expand-inner">';
+        if (fromProjectName || toProjectName) {
+          html += '<div class="decidr-so-empty-hint">Projects: '
+            + UI.escapeHtml(fromProjectName || 'Source') + ' \u2192 '
+            + UI.escapeHtml(toProjectName || 'Target') + '</div>';
+        }
+        if (br.description) {
+          html += UI.richDescription(br.description, { className: 'decidr-so-description decidr-so-description-compact' });
+        }
+        html += '<a class="decidr-so-nav-link" data-entity-type="bridge" data-entity-id="' + UI.escapeHtml(br.id) + '">View Bridge</a>';
+        html += '</div></div>';
+        html += '</div>';
+      }
+    }
+    html += '</div>';
+    return html;
+  }
+
   /**
    * Render issue slide-out detail panel.
    * @param {Object} issue - Issue data with _enriched sub-objects
@@ -698,7 +749,7 @@
 
     // Description
     if (project.description) {
-      html += '<p class="decidr-so-description">' + UI.escapeHtml(project.description) + '</p>';
+      html += UI.richDescription(project.description, { className: 'decidr-so-description' });
     }
 
     var decisionsForTab = (enriched.decisions && enriched.decisions.data) || enriched.decisions || [];
@@ -825,37 +876,7 @@
     // Bridges
     var bridges = (enriched.bridges && enriched.bridges.data) || enriched.bridges || [];
     if (Array.isArray(bridges)) {
-      html += '<div class="decidr-so-section">';
-      html += UI.SlideOut._renderSectionHeader('Bridges', bridges.length);
-      if (bridges.length === 0) {
-        html += '<div class="decidr-so-empty-hint">No bridges</div>';
-      } else {
-        for (var b = 0; b < bridges.length; b++) {
-          var br = bridges[b];
-          var linkedName = '';
-          if (br.fromProject && br.fromProject.id !== project.id) {
-            linkedName = br.fromProject.name || '';
-          } else if (br.toProject) {
-            linkedName = br.toProject.name || '';
-          }
-          html += '<div class="decidr-so-bridge-item">';
-          html += '<div class="decidr-so-bridge-header" data-bridge-toggle="' + b + '">';
-          html += '<span class="decidr-so-bridge-name">'
-            + UI.escapeHtml(project.name) + ' \u2192 ' + UI.escapeHtml(linkedName || br.name)
-            + '</span>';
-          html += UI.statusBadge(br.status);
-          html += '</div>';
-          html += '<div class="decidr-so-bridge-expand" id="decidr-so-bridge-expand-' + b + '">';
-          html += '<div class="decidr-so-bridge-expand-inner">';
-          if (br.description) {
-            html += '<p style="margin:0 0 6px 0;">' + UI.escapeHtml(br.description) + '</p>';
-          }
-          html += '<a class="decidr-so-nav-link" data-entity-type="bridge" data-entity-id="' + UI.escapeHtml(br.id) + '">View Bridge</a>';
-          html += '</div></div>';
-          html += '</div>';
-        }
-      }
-      html += '</div>';
+      html += renderBridgeSection('Bridges', bridges, { prefix: 'project-bridge' });
     } else if (!enriched.bridges) {
       html += '<div class="decidr-so-loading-section"><div class="decidr-spinner"></div> Loading bridges...</div>';
     }
@@ -1065,7 +1086,7 @@
     } else {
       html += '<h3 class="decidr-so-detail-title">' + UI.escapeHtml(decision.title) + '</h3>';
       if (decision.description) {
-        html += '<p class="decidr-so-description">' + UI.escapeHtml(decision.description) + '</p>';
+        html += UI.richDescription(decision.description, { className: 'decidr-so-description' });
       }
     }
 
@@ -1080,6 +1101,23 @@
     // Parent decision link
     if (enriched.parentDecision) {
       html += UI.SlideOut._renderParentLink(ENTITY_ICONS.decision, 'Parent Decision', 'decision', enriched.parentDecision);
+    }
+
+    var decisionBridges = (enriched.bridges && enriched.bridges.data) || enriched.bridges
+      || decision.decisionBridges || [];
+    if ((!decisionBridges || !decisionBridges.length) && (decision.bridgesFrom || decision.bridgesTo)) {
+      decisionBridges = [];
+      if (Array.isArray(decision.bridgesFrom)) {
+        for (var dbf = 0; dbf < decision.bridgesFrom.length; dbf++) decisionBridges.push(decision.bridgesFrom[dbf]);
+      }
+      if (Array.isArray(decision.bridgesTo)) {
+        for (var dbt = 0; dbt < decision.bridgesTo.length; dbt++) decisionBridges.push(decision.bridgesTo[dbt]);
+      }
+    }
+    if (Array.isArray(decisionBridges)) {
+      html += renderBridgeSection('Decision Bridges', decisionBridges, { prefix: 'decision-bridge' });
+    } else if (!enriched.bridges) {
+      html += '<div class="decidr-so-loading-section"><div class="decidr-spinner"></div> Loading bridges...</div>';
     }
 
     // Tasks section — compact checkbox rows (same as project panel)
@@ -1235,7 +1273,7 @@
     } else {
       html += '<h3 class="decidr-so-detail-title">' + UI.escapeHtml(task.title) + '</h3>';
       if (task.description) {
-        html += '<p class="decidr-so-description">' + UI.escapeHtml(task.description) + '</p>';
+        html += UI.richDescription(task.description, { className: 'decidr-so-description' });
       }
     }
 
@@ -1343,11 +1381,21 @@
 
     // Description
     if (bridge.description) {
-      html += '<p class="decidr-so-description">' + UI.escapeHtml(bridge.description) + '</p>';
+      html += UI.richDescription(bridge.description, { className: 'decidr-so-description' });
     }
 
-    // Source Project
-    if (bridge.fromProject) {
+    // Source endpoint
+    if (bridge.fromDecision) {
+      html += '<div class="decidr-so-section">';
+      html += UI.SlideOut._renderSectionHeader('Source Decision');
+      html += '<div class="decidr-so-list-item" data-entity-type="decision" data-entity-id="' + UI.escapeHtml(bridge.fromDecision.id) + '" style="cursor:pointer;">';
+      html += UI.statusBadge(bridge.fromDecision.status);
+      html += '<span class="decidr-so-list-title">' + UI.escapeHtml(bridge.fromDecision.title || bridge.fromDecision.id) + '</span>';
+      if (bridge.fromDecision.project && bridge.fromDecision.project.name) {
+        html += '<span class="decidr-so-doc-type-badge">' + UI.escapeHtml(bridge.fromDecision.project.name) + '</span>';
+      }
+      html += '</div></div>';
+    } else if (bridge.fromProject) {
       html += '<div class="decidr-so-section">';
       html += UI.SlideOut._renderSectionHeader('Source Project');
       html += '<div class="decidr-so-list-item" data-entity-type="project" data-entity-id="' + UI.escapeHtml(bridge.fromProject.id) + '" style="cursor:pointer;">';
@@ -1357,8 +1405,18 @@
       html += '</div></div>';
     }
 
-    // Target Project
-    if (bridge.toProject) {
+    // Target endpoint
+    if (bridge.toDecision) {
+      html += '<div class="decidr-so-section">';
+      html += UI.SlideOut._renderSectionHeader('Target Decision');
+      html += '<div class="decidr-so-list-item" data-entity-type="decision" data-entity-id="' + UI.escapeHtml(bridge.toDecision.id) + '" style="cursor:pointer;">';
+      html += UI.statusBadge(bridge.toDecision.status);
+      html += '<span class="decidr-so-list-title">' + UI.escapeHtml(bridge.toDecision.title || bridge.toDecision.id) + '</span>';
+      if (bridge.toDecision.project && bridge.toDecision.project.name) {
+        html += '<span class="decidr-so-doc-type-badge">' + UI.escapeHtml(bridge.toDecision.project.name) + '</span>';
+      }
+      html += '</div></div>';
+    } else if (bridge.toProject) {
       html += '<div class="decidr-so-section">';
       html += UI.SlideOut._renderSectionHeader('Target Project');
       html += '<div class="decidr-so-list-item" data-entity-type="project" data-entity-id="' + UI.escapeHtml(bridge.toProject.id) + '" style="cursor:pointer;">';
@@ -1423,7 +1481,7 @@
 
     // Description
     if (initiative.description) {
-      html += '<p class="decidr-so-description">' + UI.escapeHtml(initiative.description) + '</p>';
+      html += UI.richDescription(initiative.description, { className: 'decidr-so-description' });
     }
 
     // Projects

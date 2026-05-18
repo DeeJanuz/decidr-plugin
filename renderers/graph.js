@@ -166,6 +166,7 @@
           projectsByInit: projectsByInit,
           bridges: allBridges,
           decisions: allDecisions,
+          projects: allProjects,
           userMap: userMap
         };
       });
@@ -261,6 +262,51 @@
     }
 
     // ── Layout computation ────────────────────────────────────
+
+    function _bridgeSourceProjectId(bridge) {
+      if (UI.bridgeEndpointProjectId) return UI.bridgeEndpointProjectId(bridge, 'from');
+      return bridge.fromProjectId || bridge.from_project_id || bridge.sourceProjectId || bridge.source_project_id;
+    }
+
+    function _bridgeTargetProjectId(bridge) {
+      if (UI.bridgeEndpointProjectId) return UI.bridgeEndpointProjectId(bridge, 'to');
+      return bridge.toProjectId || bridge.to_project_id || bridge.targetProjectId || bridge.target_project_id;
+    }
+
+    function _bridgeDisplayName(bridge) {
+      return bridge.name || (UI.bridgeEndpointSummary ? UI.bridgeEndpointSummary(bridge) : '') || 'Bridge';
+    }
+
+    function _dedupeBridgeEdges(edges) {
+      var edgePairMap = {};
+      for (var de = 0; de < edges.length; de++) {
+        var dedgeKey = [edges[de].sourceId, edges[de].targetId].sort().join('|');
+        if (!edgePairMap[dedgeKey]) edgePairMap[dedgeKey] = [];
+        edgePairMap[dedgeKey].push(edges[de]);
+      }
+      var dedupedEdges = [];
+      for (var pairKey in edgePairMap) {
+        if (!edgePairMap.hasOwnProperty(pairKey)) continue;
+        var pairEdges = edgePairMap[pairKey];
+        if (pairEdges.length === 1) {
+          dedupedEdges.push(pairEdges[0]);
+        } else {
+          var merged = {};
+          for (var mk in pairEdges[0]) {
+            if (pairEdges[0].hasOwnProperty(mk)) merged[mk] = pairEdges[0][mk];
+          }
+          var allIds = [];
+          for (var ai = 0; ai < pairEdges.length; ai++) {
+            allIds.push(pairEdges[ai].id);
+          }
+          merged.edgeIds = allIds;
+          merged.id = allIds[0];
+          merged.name = pairEdges.length + ' bridges';
+          dedupedEdges.push(merged);
+        }
+      }
+      return dedupedEdges;
+    }
 
     function _computeContainers(initiatives, projectsByInit, decisions, bridges, userMap) {
       var containers = [];
@@ -362,15 +408,15 @@
         var edges = [];
         for (var e = 0; e < bridges.length; e++) {
           var b = bridges[e];
-          var srcId = b.fromProjectId || b.from_project_id || b.sourceProjectId || b.source_project_id;
-          var tgtId = b.toProjectId || b.to_project_id || b.targetProjectId || b.target_project_id;
+          var srcId = _bridgeSourceProjectId(b);
+          var tgtId = _bridgeTargetProjectId(b);
           var src = projMap[srcId];
           var tgt = projMap[tgtId];
           if (!src || !tgt) continue;
 
           edges.push({
             id: b.id,
-            name: b.name,
+            name: _bridgeDisplayName(b),
             type: b.type || b.bridgeType || b.bridge_type,
             status: b.status,
             sourceId: srcId,
@@ -385,33 +431,7 @@
         }
 
         // Collapse duplicate edges between the same project pair
-        var edgePairMap = {};
-        for (var de = 0; de < edges.length; de++) {
-          var dedgeKey = [edges[de].sourceId, edges[de].targetId].sort().join('|');
-          if (!edgePairMap[dedgeKey]) edgePairMap[dedgeKey] = [];
-          edgePairMap[dedgeKey].push(edges[de]);
-        }
-        var dedupedEdges = [];
-        for (var pairKey in edgePairMap) {
-          if (!edgePairMap.hasOwnProperty(pairKey)) continue;
-          var pairEdges = edgePairMap[pairKey];
-          if (pairEdges.length === 1) {
-            dedupedEdges.push(pairEdges[0]);
-          } else {
-            var merged = {};
-            for (var mk in pairEdges[0]) {
-              if (pairEdges[0].hasOwnProperty(mk)) merged[mk] = pairEdges[0][mk];
-            }
-            var allIds = [];
-            for (var ai = 0; ai < pairEdges.length; ai++) {
-              allIds.push(pairEdges[ai].id);
-            }
-            merged.edgeIds = allIds;
-            merged.id = allIds[0];
-            merged.name = pairEdges.length + ' bridges';
-            dedupedEdges.push(merged);
-          }
-        }
+        var dedupedEdges = _dedupeBridgeEdges(edges);
 
         containers.push({
           initiativeId: init.id,
@@ -496,6 +516,42 @@
       return { nodes: allNodes, edges: allEdges };
     }
 
+    function _computeCrossContainerEdges(bridges, nodeMap) {
+      var edges = [];
+      for (var i = 0; i < bridges.length; i++) {
+        var bridge = bridges[i];
+        var srcId = _bridgeSourceProjectId(bridge);
+        var tgtId = _bridgeTargetProjectId(bridge);
+        var src = nodeMap[srcId];
+        var tgt = nodeMap[tgtId];
+        if (!src || !tgt) continue;
+        if (src.initiativeId === tgt.initiativeId) continue;
+
+        var sx = src.globalCX;
+        var sy = src.globalCY;
+        var tx = tgt.globalCX;
+        var ty = tgt.globalCY;
+        var midX = (sx + tx) / 2;
+        var midY = (sy + ty) / 2;
+        var lift = Math.max(90, Math.min(240, Math.abs(tx - sx) * 0.12));
+        var ctrlX = midX;
+        var ctrlY = midY - lift;
+
+        edges.push({
+          id: bridge.id,
+          name: _bridgeDisplayName(bridge),
+          type: bridge.type || bridge.bridgeType || bridge.bridge_type,
+          status: bridge.status,
+          sourceId: srcId,
+          targetId: tgtId,
+          path: 'M ' + sx + ' ' + sy + ' Q ' + ctrlX + ' ' + ctrlY + ' ' + tx + ' ' + ty,
+          labelX: ctrlX,
+          labelY: ctrlY - 8
+        });
+      }
+      return _dedupeBridgeEdges(edges);
+    }
+
     function _buildEdgeLookups(edges) {
       edgesBySource = {};
       edgesByTarget = {};
@@ -524,6 +580,14 @@
       );
       _positionContainers(containers);
       var positions = _computeGlobalPositions(containers);
+      var nodeMap = {};
+      for (var nm = 0; nm < positions.nodes.length; nm++) {
+        nodeMap[positions.nodes[nm].id] = positions.nodes[nm];
+      }
+      var crossEdges = _computeCrossContainerEdges(gd.bridges, nodeMap);
+      for (var ce = 0; ce < crossEdges.length; ce++) {
+        positions.edges.push(crossEdges[ce]);
+      }
 
       // Build edge lookup maps for O(1) highlighting
       _buildEdgeLookups(positions.edges);
@@ -1230,7 +1294,7 @@
           }
           if (hasError) return;
 
-          API.createBridge({ name: name, from_project_id: fromId, to_project_id: toId }).then(function() {
+          API.createBridge({ name: name, fromProjectId: fromId, toProjectId: toId }).then(function() {
             ov.remove();
             _refetchAndRerender();
           }).catch(function(err) {

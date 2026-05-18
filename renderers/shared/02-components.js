@@ -120,6 +120,190 @@
     return str.slice(0, max) + '...';
   };
 
+  function normalizeDescriptionText(str) {
+    return String(str || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  }
+
+  function stripMarkdownForPreview(str) {
+    var text = normalizeDescriptionText(str);
+    text = text.replace(/```[\s\S]*?```/g, function(block) {
+      return block.replace(/^\s*```[^\n]*\n?/, '').replace(/\n?\s*```\s*$/, '');
+    });
+    text = text.replace(/^\s{0,3}#{1,6}\s+/gm, '');
+    text = text.replace(/^\s{0,3}>\s?/gm, '');
+    text = text.replace(/^\s{0,3}(?:[-*+]|\d+[.)])\s+/gm, '');
+    text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1');
+    text = text.replace(/[*_`~]/g, '');
+    text = text.replace(/\s+/g, ' ').trim();
+    return text;
+  }
+
+  UI.descriptionPreview = function(str, max) {
+    return UI.truncate(stripMarkdownForPreview(str), max || 100);
+  };
+
+  function safeMarkdownUrl(url) {
+    var value = String(url || '').trim();
+    var lower = value.toLowerCase();
+    if (
+      lower.indexOf('http://') === 0 ||
+      lower.indexOf('https://') === 0 ||
+      lower.indexOf('mailto:') === 0
+    ) {
+      return value;
+    }
+    return '';
+  }
+
+  function renderInlineMarkdown(str) {
+    var placeholders = [];
+    var source = String(str || '');
+
+    function stash(html) {
+      placeholders.push(html);
+      return '\u0000' + (placeholders.length - 1) + '\u0000';
+    }
+
+    source = source.replace(/`([^`]+)`/g, function(match, code) {
+      return stash('<code>' + UI.escapeHtml(code) + '</code>');
+    });
+
+    source = source.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, function(match, label, url) {
+      var safeUrl = safeMarkdownUrl(url);
+      if (!safeUrl) return label;
+      return stash('<a href="' + UI.escapeHtml(safeUrl) + '" target="_blank" rel="noopener noreferrer">' + UI.escapeHtml(label) + '</a>');
+    });
+
+    var html = UI.escapeHtml(source);
+
+    html = html.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/__([^_\n]+)__/g, '<strong>$1</strong>');
+    html = html.replace(/(^|[\s(])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+    html = html.replace(/(^|[\s(])_([^_\n]+)_/g, '$1<em>$2</em>');
+
+    return html.replace(/\u0000(\d+)\u0000/g, function(match, index) {
+      return placeholders[Number(index)] || '';
+    });
+  }
+
+  function isBlankLine(line) {
+    return /^\s*$/.test(line || '');
+  }
+
+  function unorderedListMatch(line) {
+    return String(line || '').match(/^\s{0,3}[-*+]\s+(.+)$/);
+  }
+
+  function orderedListMatch(line) {
+    return String(line || '').match(/^\s{0,3}\d+[.)]\s+(.+)$/);
+  }
+
+  function headingMatch(line) {
+    return String(line || '').match(/^\s{0,3}(#{1,6})\s+(.+)$/);
+  }
+
+  function blockquoteMatch(line) {
+    return String(line || '').match(/^\s{0,3}>\s?(.*)$/);
+  }
+
+  function isBlockStart(line) {
+    return /^\s*```/.test(line || '') ||
+      unorderedListMatch(line) ||
+      orderedListMatch(line) ||
+      headingMatch(line) ||
+      blockquoteMatch(line);
+  }
+
+  function renderMarkdownLines(lines) {
+    var html = '';
+    var i = 0;
+
+    while (i < lines.length) {
+      var line = lines[i];
+
+      if (isBlankLine(line)) {
+        i++;
+        continue;
+      }
+
+      if (/^\s*```/.test(line)) {
+        var codeLines = [];
+        i++;
+        while (i < lines.length && !/^\s*```/.test(lines[i])) {
+          codeLines.push(lines[i]);
+          i++;
+        }
+        if (i < lines.length) i++;
+        html += '<pre><code>' + UI.escapeHtml(codeLines.join('\n')) + '</code></pre>';
+        continue;
+      }
+
+      var heading = headingMatch(line);
+      if (heading) {
+        html += '<p class="decidr-rich-heading">' + renderInlineMarkdown(heading[2]) + '</p>';
+        i++;
+        continue;
+      }
+
+      var quote = blockquoteMatch(line);
+      if (quote) {
+        var quoteLines = [];
+        while (i < lines.length) {
+          quote = blockquoteMatch(lines[i]);
+          if (!quote) break;
+          quoteLines.push(quote[1]);
+          i++;
+        }
+        html += '<blockquote>' + renderMarkdownLines(quoteLines) + '</blockquote>';
+        continue;
+      }
+
+      var unordered = unorderedListMatch(line);
+      var ordered = orderedListMatch(line);
+      if (unordered || ordered) {
+        var listTag = ordered ? 'ol' : 'ul';
+        var items = [];
+        while (i < lines.length) {
+          var match = listTag === 'ol' ? orderedListMatch(lines[i]) : unorderedListMatch(lines[i]);
+          if (match) {
+            items.push(match[1]);
+            i++;
+            continue;
+          }
+          if (!isBlankLine(lines[i]) && items.length > 0 && /^\s{2,}\S/.test(lines[i])) {
+            items[items.length - 1] += '\n' + lines[i].trim();
+            i++;
+            continue;
+          }
+          break;
+        }
+        html += '<' + listTag + '>';
+        for (var li = 0; li < items.length; li++) {
+          html += '<li>' + renderInlineMarkdown(items[li]).replace(/\n/g, '<br>') + '</li>';
+        }
+        html += '</' + listTag + '>';
+        continue;
+      }
+
+      var paragraphLines = [];
+      while (i < lines.length && !isBlankLine(lines[i]) && !isBlockStart(lines[i])) {
+        paragraphLines.push(lines[i]);
+        i++;
+      }
+      html += '<p>' + renderInlineMarkdown(paragraphLines.join('\n')).replace(/\n/g, '<br>') + '</p>';
+    }
+
+    return html;
+  }
+
+  UI.richDescription = function(str, opts) {
+    if (!str) return '';
+    opts = opts || {};
+    var className = 'decidr-rich-text';
+    if (opts.className) className += ' ' + UI.escapeHtml(opts.className);
+    return '<div class="' + className + '">' + renderMarkdownLines(normalizeDescriptionText(str).split('\n')) + '</div>';
+  };
+
   UI.timeAgo = function(dateStr) {
     if (!dateStr) return '';
     var now = new Date();
@@ -265,12 +449,58 @@
     return ENTITY_ICONS[type] || ENTITY_ICONS.project;
   }
 
+  UI.bridgeEndpointLabel = function(bridge, side) {
+    if (!bridge) return '';
+    var isFrom = side === 'from';
+    var decision = isFrom ? bridge.fromDecision : bridge.toDecision;
+    var project = isFrom ? bridge.fromProject : bridge.toProject;
+    var decisionId = isFrom
+      ? (bridge.fromDecisionId || bridge.from_decision_id)
+      : (bridge.toDecisionId || bridge.to_decision_id);
+    var projectId = isFrom
+      ? (bridge.fromProjectId || bridge.from_project_id || bridge.sourceProjectId || bridge.source_project_id)
+      : (bridge.toProjectId || bridge.to_project_id || bridge.targetProjectId || bridge.target_project_id);
+
+    if (decision) return decision.title || decision.name || decision.id || decisionId || '';
+    if (project) return project.name || project.title || project.id || projectId || '';
+    return decisionId || projectId || '';
+  };
+
+  UI.bridgeEndpointProjectId = function(bridge, side) {
+    if (!bridge) return '';
+    var isFrom = side === 'from';
+    var decision = isFrom ? bridge.fromDecision : bridge.toDecision;
+    if (decision && decision.projectId) return decision.projectId;
+    if (decision && decision.project_id) return decision.project_id;
+    return isFrom
+      ? (bridge.fromProjectId || bridge.from_project_id || bridge.sourceProjectId || bridge.source_project_id || '')
+      : (bridge.toProjectId || bridge.to_project_id || bridge.targetProjectId || bridge.target_project_id || '');
+  };
+
+  UI.bridgeEndpointProjectName = function(bridge, side) {
+    if (!bridge) return '';
+    var isFrom = side === 'from';
+    var decision = isFrom ? bridge.fromDecision : bridge.toDecision;
+    var project = isFrom ? bridge.fromProject : bridge.toProject;
+    if (decision && decision.project) return decision.project.name || decision.project.title || decision.project.id || '';
+    if (project) return project.name || project.title || project.id || '';
+    return '';
+  };
+
+  UI.bridgeEndpointSummary = function(bridge) {
+    var fromName = UI.bridgeEndpointLabel(bridge, 'from');
+    var toName = UI.bridgeEndpointLabel(bridge, 'to');
+    if (!fromName && !toName) return '';
+    return (fromName || 'Source') + ' \u2192 ' + (toName || 'Target');
+  };
+
   // ─── Card Components ──────────────────────────────────────────────
 
   UI.projectCard = function(project, opts) {
     var o = opts || {};
     var decisions = o.decisions || [];
     var tasks = o.tasks || [];
+    var bridges = o.bridges || [];
 
     var taskTotal = tasks.length;
     var taskDone = 0;
@@ -285,7 +515,7 @@
       ? ' style="animation-delay: ' + o.animDelay.toFixed(2) + 's;"' : '';
 
     var descHtml = project.description
-      ? '<div class="decidr-card-desc">' + UI.escapeHtml(UI.truncate(project.description, 120)) + '</div>'
+      ? '<div class="decidr-card-desc">' + UI.escapeHtml(UI.descriptionPreview(project.description, 120)) + '</div>'
       : '';
 
     var progressHtml = '';
@@ -304,6 +534,9 @@
     }
     if (taskTotal > 0) {
       metaParts.push(taskTotal + ' task' + (taskTotal !== 1 ? 's' : ''));
+    }
+    if (bridges.length > 0) {
+      metaParts.push(bridges.length + ' bridge' + (bridges.length !== 1 ? 's' : ''));
     }
     if (metaParts.length === 0 && project.createdAt) {
       metaParts.push('Created ' + UI.timeAgo(project.createdAt));
@@ -334,6 +567,7 @@
     var o = opts || {};
     var decisions = o.decisions || [];
     var tasks = o.tasks || [];
+    var bridges = o.bridges || [];
     var isOwner = o.isOwner || false;
     var pendingCount = o.pendingDecisions || 0;
     var needsYourReview = o.needsYourReview || 0;
@@ -387,6 +621,10 @@
     }
     if (taskTotal > 0) {
       statParts.push(taskDone + '/' + taskTotal + ' tasks');
+    }
+    if (bridges.length > 0) {
+      statParts.push('<span class="decidr-inline-icon">' + ENTITY_ICONS.bridge + '</span>'
+        + bridges.length + ' bridge' + (bridges.length !== 1 ? 's' : ''));
     }
     var statHtml = statParts.length > 0
       ? '<div class="decidr-dash-proj-stat">' + statParts.join(' &middot; ') + '</div>'
@@ -549,7 +787,7 @@
       ? ' style="animation-delay: ' + o.animDelay.toFixed(2) + 's;"' : '';
 
     var descHtml = decision.description
-      ? '<div class="decidr-card-desc">' + UI.escapeHtml(UI.truncate(decision.description, 120)) + '</div>'
+      ? '<div class="decidr-card-desc">' + UI.escapeHtml(UI.descriptionPreview(decision.description, 120)) + '</div>'
       : '';
 
     var metaParts = [];
@@ -619,7 +857,7 @@
       ? ' style="animation-delay: ' + o.animDelay.toFixed(2) + 's;"' : '';
 
     var descHtml = task.description
-      ? '<div class="decidr-card-desc">' + UI.escapeHtml(UI.truncate(task.description, 100)) + '</div>'
+      ? '<div class="decidr-card-desc">' + UI.escapeHtml(UI.descriptionPreview(task.description, 100)) + '</div>'
       : '';
 
     var metaParts = [];
@@ -655,14 +893,19 @@
       ? ' style="animation-delay: ' + o.animDelay.toFixed(2) + 's;"' : '';
 
     var descHtml = bridge.description
-      ? '<div class="decidr-card-desc">' + UI.escapeHtml(UI.truncate(bridge.description, 120)) + '</div>'
+      ? '<div class="decidr-card-desc">' + UI.escapeHtml(UI.descriptionPreview(bridge.description, 120)) + '</div>'
       : '';
 
     var metaParts = [];
-    if (o.fromProjectName || o.toProjectName) {
+    if (o.endpointSummary) {
+      metaParts.push(o.endpointSummary);
+    } else if (o.fromProjectName || o.toProjectName) {
       var fromName = o.fromProjectName || '?';
       var toName = o.toProjectName || '?';
       metaParts.push(fromName + ' \u2192 ' + toName);
+    } else {
+      var endpointSummary = UI.bridgeEndpointSummary(bridge);
+      if (endpointSummary) metaParts.push(endpointSummary);
     }
     if (bridge.status) metaParts.push(statusLabel(bridge.status));
     if (bridge.createdAt && metaParts.length < 2) metaParts.push(UI.timeAgo(bridge.createdAt));
@@ -710,7 +953,7 @@
         + '<div class="decidr-init-toggle">' + chevronSvg + '</div>'
         + '<div class="decidr-init-title-area">'
         + '<span class="decidr-init-name">' + UI.escapeHtml(initiative.name) + '</span>'
-        + (initiative.description ? '<span class="decidr-init-description">' + UI.escapeHtml(UI.truncate(initiative.description, 80)) + '</span>' : '')
+        + (initiative.description ? '<span class="decidr-init-description">' + UI.escapeHtml(UI.descriptionPreview(initiative.description, 80)) + '</span>' : '')
         + '</div>'
         + '<div class="decidr-init-stats">'
         + '<span class="decidr-init-stat">' + projectCount + ' project' + (projectCount !== 1 ? 's' : '') + '</span>'
@@ -726,7 +969,7 @@
 
     // Fallback: simple card (backward-compatible for list.js)
     var descHtml = initiative.description
-      ? '<div class="decidr-card-desc">' + UI.escapeHtml(UI.truncate(initiative.description, 100)) + '</div>'
+      ? '<div class="decidr-card-desc">' + UI.escapeHtml(UI.descriptionPreview(initiative.description, 100)) + '</div>'
       : '';
 
     var metaParts = [];
@@ -1552,6 +1795,7 @@
           fetches.push({ key: 'parentDecision', promise: API.getDecision(data.parentId) });
         }
         fetches.push({ key: 'auditEvents', promise: API.listAuditEvents({ decisionId: id, take: 50 }) });
+        fetches.push({ key: 'bridges', promise: API.listBridges({ decisionId: id }) });
         // GitHub summary
         fetches.push({ key: 'githubSummary', promise: API.getEntityGithubSummary('DECISION', id) });
       } else if (type === 'project') {
@@ -2171,9 +2415,25 @@
       }
     },
 
+    _wireBridgeToggles: function(panel) {
+      var bridgeHeaders = panel.querySelectorAll('[data-bridge-toggle]');
+      for (var i = 0; i < bridgeHeaders.length; i++) {
+        (function(header) {
+          header.onclick = function(e) {
+            e.stopPropagation();
+            var idx = header.getAttribute('data-bridge-toggle');
+            var expand = panel.querySelector('#decidr-so-bridge-expand-' + idx);
+            if (expand) expand.classList.toggle('open');
+          };
+        })(bridgeHeaders[i]);
+      }
+    },
+
     _wireDecisionEvents: function(panel, id, data) {
       var state = UI.SlideOut._decisionPanelState;
       var API = window.__decidrAPI;
+
+      UI.SlideOut._wireBridgeToggles(panel);
 
       // View All Activity
       var viewAllDecBtn = panel.querySelector('#decidr-so-btn-view-all-decision-timeline');
@@ -2625,18 +2885,7 @@
         };
       }
 
-      // Bridge expand/collapse
-      var bridgeHeaders = panel.querySelectorAll('[data-bridge-toggle]');
-      for (var i = 0; i < bridgeHeaders.length; i++) {
-        (function(header) {
-          header.onclick = function(e) {
-            e.stopPropagation();
-            var idx = header.getAttribute('data-bridge-toggle');
-            var expand = panel.querySelector('#decidr-so-bridge-expand-' + idx);
-            if (expand) expand.classList.toggle('open');
-          };
-        })(bridgeHeaders[i]);
-      }
+      UI.SlideOut._wireBridgeToggles(panel);
 
       // Task checkbox completion
       var checkboxes = panel.querySelectorAll('.decidr-so-task-checkbox');
