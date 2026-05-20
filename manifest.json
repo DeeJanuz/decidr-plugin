@@ -1,6 +1,6 @@
 {
   "name": "decidr",
-  "version": "0.1.30",
+  "version": "0.1.31",
   "prompt_definitions": [
     {
       "name": "initiative_planning",
@@ -59,6 +59,7 @@
     "Before taking any action on a GitHub issue or PR linked to DecidR (create_issue, create_pr, review_pr, merge_pr, or prompt generation), fetch the github_pr_lifecycle prompt and follow it. Inbound GitHub sync is automatic through Ludflow-backed metadata. Use get_repo_last_sync or refresh_repo_metadata when the user asks about freshness, and never reintroduce manual sync or reconciliation instructions.",
     "When creating a DecidR-looking implementation plan, ask the user whether it should be logged in DecidR; if yes, fetch planning_decision_governance and follow it before creating or updating decisions or documents.",
     "When committing code in any codebase and DecidR has registered/authenticated organizations, fetch planning_decision_governance, resolve the relevant organization, search for existing matching decisions, and update confident matches to STAGED after the commit. STAGED means implemented in a test/review environment; reserve IMPLEMENTED for work migrated into the deployment codebase.",
+    "When governed implementation work has no confident matching DecidR record, fetch planning_decision_governance and propose creating either a decision or, for lightweight work that did not need approval, a task under the relevant project or existing decision. Present the proposal through MCPViews review before creating records.",
     "When creating supporting LudFlow documents for DecidR work, place them in an existing relevant folder structure or, if none exists, in a folder named for the DecidR project; fetch planning_decision_governance for details.",
     "When updating a LudFlow document linked to an implemented DecidR decision, or a LudFlow document that is already published, preserve the existing implemented content and append new findings as a dated addendum unless the user explicitly asks for a rewrite.",
     "When a GitHub write tool fails with 'GitHub connection not found' or the user asks to connect a GitHub PAT for outbound writes, push the decidr_github_auth renderer \u2014 do not call connect_github with a PAT collected in chat. For org-level GitHub connection and metadata-sync settings, use the organization settings GitHub section backed by Ludflow, not the PAT flow.",
@@ -66,7 +67,7 @@
     "When the user asks for an auditability dashboard, audit dashboard, audit overview, or manager view of audit events, push decidr_audit_dashboard directly. The renderer fetches audit events, categories, projects, and decisions from the API and provides filters plus audit-event drilldowns.",
     "When the user asks for audit reports, custom audit reporting, a report builder over audit events, CSV export of audit events, or Salesforce-like filtering over audit payloads, push decidr_audit_reports directly. The renderer fetches reports, field catalogs, projects, categories, members, and preview rows from the API."
   ],
-  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.30/decidr.zip",
+  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.31/decidr.zip",
   "registry_index": {
     "summary": "Decision governance \u2014 initiatives, projects, decisions, tasks, and bridges with approval workflows",
     "tags": [
@@ -112,7 +113,7 @@
       },
       {
         "name": "Create & Update",
-        "hint": "Create and modify initiatives, projects, decisions, tasks, bridges, audit events, and audit categories. Commit-time implementation updates should move matching decisions to STAGED, not IMPLEMENTED.",
+        "hint": "Create and modify initiatives, projects, decisions, tasks, bridges, audit events, and audit categories. Commit-time implementation updates should move matching decisions to STAGED; missing governed records should be proposed through MCPViews review before creation.",
         "tools": [
           "create_initiative",
           "create_project",
@@ -213,9 +214,9 @@
     "search": "Use when user describes something by name or keyword. No auto-push: keep agent-discovery searches private. Push results to decidr_list only when the user explicitly asked to see/search/browse matching decisions or entities. Offer to drill into specific results with get_* tools.",
     "create_initiative": "Create a new initiative. Returns full created entity. Consider creating projects under it next.",
     "create_project": "Create a new project. Pass initiative_id to link to an initiative and member_ids to assign members. Returns full created entity. Consider adding decisions or tasks next.",
-    "create_decision": "Create a new decision. Requires entity_type and matching parent ID. Decisions default to DRAFT status. Link supporting documents with link_document, then transition to PROPOSED for review or directly to STAGED when recording already-built work that is in a test/review environment. Use IMPLEMENTED only after deployment-codebase migration.",
+    "create_decision": "Create a new decision. Requires entity_type and matching parent ID. Decisions default to DRAFT status. Link supporting documents with link_document, then transition to PROPOSED for review or directly to STAGED when recording already-built work that is in a test/review environment. Use IMPLEMENTED only after deployment-codebase migration. When creating a missing governance record from implementation discovery, propose it through MCPViews review before calling this tool.",
     "create_audit_event": "Create a factual project-ledger audit event. Admins may create new free-form categories. external_reference_id plus created_by_client is idempotent.",
-    "create_task": "Create a new task. Returns full created entity. Consider assigning with update_task or linking a document.",
+    "create_task": "Create a new task. Returns full created entity. Use for lightweight implementation follow-up that did not need a decision approval flow, under the relevant project or existing decision. When creating a missing task from implementation discovery, propose it through MCPViews review before calling this tool.",
     "create_bridge": "Create a bridge between two projects or two decisions. Returns full created entity.",
     "update_initiative": "Update initiative fields. Returns full updated entity.",
     "update_project": "Update project fields and/or transition status. Returns full updated entity.",

@@ -7,10 +7,11 @@ You are an agent creating or implementing a plan that appears related to DecidR-
 1. **Ask before logging.** Before creating or updating DecidR decisions, documents, or links for an implementation plan, ask the user whether this plan should be logged in DecidR. If they say no, do not perform DecidR logging for that plan.
 2. **Do not guess the organization.** Use available org/token context and `decidr_list_organizations` to identify the correct organization. If the correct org or context is unclear, ask the user for pointers.
 3. **Search before creating.** Look for existing initiatives, projects, decisions, tasks, and LudFlow documents before creating new DecidR records.
-4. **Prefer continuity.** Update existing decisions and linked docs when the plan refines, implements, supersedes, or documents prior work. Create new decisions and supporting docs only when no suitable existing record exists.
+4. **Prefer continuity.** Update existing decisions and linked docs when the plan refines, implements, supersedes, or documents prior work. Create new decisions, tasks, and supporting docs only when no suitable existing record exists.
 5. **Stage committed code, implement deployed code.** When committing code and DecidR has registered/authenticated organizations, search existing matching decisions and move confident matches to `STAGED` after the commit. `STAGED` means implemented in a test/review environment. Reserve `IMPLEMENTED` for work migrated into the deployment codebase.
-6. **Preserve implemented records.** When a linked LudFlow document is already published or its DecidR decision is already implemented, fetch the current content first and append new information as a dated addendum. Do not replace or restructure the implemented record unless the user explicitly asks for a rewrite.
-7. **Review batch mutations.** For 2 or more DecidR/LudFlow mutations, present the planned create/update/link actions for review before executing them, following the MCPViews bulk action review rule.
+6. **Propose missing records.** If governed implementation work has no confident matching decision, propose creating a new decision or, for lightweight work that did not require an approval flow, a task under the relevant project or existing decision. Present the proposal through MCPViews review before creating records.
+7. **Preserve implemented records.** When a linked LudFlow document is already published or its DecidR decision is already implemented, fetch the current content first and append new information as a dated addendum. Do not replace or restructure the implemented record unless the user explicitly asks for a rewrite.
+8. **Review batch mutations.** For 2 or more DecidR/LudFlow mutations, present the planned create/update/link actions for review before executing them, following the MCPViews bulk action review rule.
 
 ## Trigger
 
@@ -51,7 +52,8 @@ Use these defaults:
 | Work is migrated into the deployment codebase | Update the matching `STAGED` decision to `IMPLEMENTED`. |
 | Plan supersedes a previous direction | Update or supersede the existing decision; link the new supporting doc. |
 | Plan fills in missing implementation detail for an existing project/task | Create or update a child decision under the relevant project, bridge, or task context. |
-| No matching decision exists after search | Create a new decision under the best matching parent entity. |
+| No matching decision exists after search and the work records a durable choice, tradeoff, architecture direction, or approval-worthy implementation path | Propose a new decision under the best matching parent entity through MCPViews review before creating it. |
+| No matching decision exists after search and the work is lightweight implementation follow-up that did not need a decision approval flow | Propose a task under the relevant project or existing decision through MCPViews review before creating it. |
 | No suitable parent entity exists | Ask the user where this should live before creating anything. |
 
 Before transitioning a decision out of `DRAFT`, confirm it has at least one linked supporting document. Use `decidr_list_entity_documents` to inspect existing links and `decidr_link_document` to attach the supporting doc. For already-built work, transition `DRAFT -> STAGED`, not `DRAFT -> IMPLEMENTED`.
@@ -65,7 +67,11 @@ When the user asks you to commit code, or you otherwise reach the commit step in
 3. If DecidR organizations are available, search existing decisions by branch name, issue/PR title, commit summary, changed subsystem names, and user-provided task language.
 4. If exactly one or more confident existing decisions match the committed work, update those decisions to `STAGED` after the commit succeeds. Do not create new decisions solely because a commit happened.
 5. If matches are ambiguous, report candidate decisions and ask the user which ones to stage.
-6. Do not move any decision to `IMPLEMENTED` during ordinary code commit. Use `IMPLEMENTED` only after the work is migrated into the deployment codebase.
+6. If no confident matching decision exists, classify the committed work before creating anything:
+   - Propose a new decision when the work records a durable choice, tradeoff, architecture direction, approval-worthy implementation path, or behavior that should be auditable as a decision.
+   - Propose a task when the work is lightweight implementation follow-up, cleanup, small bugfix scope, or execution detail that did not require a decision approval flow. Attach the task to the relevant project or to an existing decision when the task implements or follows up that decision.
+7. Present any proposed decision/task creation through MCPViews review and execute only accepted rows. Do not create new records silently just because a commit happened.
+8. Do not move any decision to `IMPLEMENTED` during ordinary code commit. Use `IMPLEMENTED` only after the work is migrated into the deployment codebase.
 
 ### 4. Document the plan
 
@@ -88,11 +94,12 @@ The document should capture the plan summary, important tradeoffs, selected appr
 Collect the intended DecidR/LudFlow mutations before executing them:
 
 - Create/update/supersede decisions.
+- Create/update tasks.
 - Create/update supporting documents.
 - Link documents to entities.
 - Update parent projects, tasks, bridges, or initiatives when needed for the plan.
 
-If there are 2 or more mutations, use MCPViews bulk action review before executing. Execute only accepted rows and respect user edits.
+When creating a missing decision or task because implementation discovery found no confident existing record, always use MCPViews review before executing, even for a single proposed mutation. If there are 2 or more mutations, use MCPViews bulk action review. Execute only accepted rows and respect user edits.
 
 ### 6. Report outcome
 
@@ -100,7 +107,7 @@ After logging, report:
 
 - The organization used.
 - Existing decisions/docs updated.
-- New decisions/docs created.
+- New decisions/tasks/docs created.
 - Documents linked.
 - Any unresolved context or follow-up the user needs to provide.
 
