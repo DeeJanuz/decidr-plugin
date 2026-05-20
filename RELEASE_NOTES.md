@@ -1,5 +1,9 @@
 # Unreleased
 
+# 0.1.32
+
+- **fix**: Tighten commit-governance discovery so agents search existing decisions and tasks before proposing new DecidR records, avoiding duplicate lightweight task proposals.
+
 # 0.1.31
 
 - **feat**: Extend planning decision governance so agents propose missing DecidR records through MCPViews review. Durable implementation choices should be proposed as decisions; lightweight work that did not require approval should be proposed as tasks under the relevant project or existing decision.
