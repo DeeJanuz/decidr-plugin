@@ -35,6 +35,7 @@
     // ── Constants ─────────────────────────────────────────────
     var DECISION_STATUS_CONFIG = [
       { key: 'implemented', label: 'Implemented', color: 'var(--decision-approved)' },
+      { key: 'staged', label: 'Staged', color: 'var(--decision-staged)' },
       { key: 'approved', label: 'Approved', color: 'var(--decision-proposed)' },
       { key: 'proposed', label: 'Proposed', color: 'var(--priority-medium)' },
       { key: 'superseded', label: 'Superseded', color: 'var(--decision-superseded)' }
@@ -202,7 +203,7 @@
 
     function _graphStatusColor(status) {
       var map = { active: '#22c55e', planning: '#3b82f6', completed: '#6b7280',
-                  proposed: '#f59e0b', in_progress: '#3b82f6', implemented: '#22c55e' };
+                  proposed: '#f59e0b', in_progress: '#3b82f6', staged: '#14b8a6', implemented: '#22c55e' };
       return map[status] || '#6b7280';
     }
 
@@ -222,13 +223,15 @@
     }
 
     function countDecisionsByStatus(decisions) {
-      var counts = { proposed: 0, approved: 0, implemented: 0, superseded: 0, other: 0 };
+      var counts = { proposed: 0, approved: 0, staged: 0, implemented: 0, superseded: 0, other: 0 };
       for (var i = 0; i < decisions.length; i++) {
         var st = (decisions[i].status || '').toLowerCase().replace(/\s+/g, '_');
         if (st === 'proposed' || st === 'under_discussion' || st === 'open' || st === 'in_progress') {
           counts.proposed++;
         } else if (st === 'approved' || st === 'agreed') {
           counts.approved++;
+        } else if (st === 'staged') {
+          counts.staged++;
         } else if (st === 'implemented' || st === 'decided') {
           counts.implemented++;
         } else if (st === 'superseded') {
@@ -630,7 +633,7 @@
 
         // Build decision health bar for summary card
         var dsc = sc.decStatusCounts;
-        var totalDec = (dsc.implemented || 0) + (dsc.approved || 0) + (dsc.proposed || 0)
+        var totalDec = (dsc.implemented || 0) + (dsc.staged || 0) + (dsc.approved || 0) + (dsc.proposed || 0)
           + (dsc.superseded || 0) + (dsc.other || 0);
         var healthBar = '';
         if (totalDec > 0) {

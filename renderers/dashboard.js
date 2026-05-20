@@ -28,7 +28,7 @@
       loaded: false,
       error: null,
       // New section state
-      activeDecisionFilters: { DRAFT: true, PROPOSED: true, IN_PROGRESS: true, APPROVED: true, REJECTED: true },
+      activeDecisionFilters: { DRAFT: true, PROPOSED: true, IN_PROGRESS: true, STAGED: true, APPROVED: true, REJECTED: true },
       nextStepsExpanded: false,
       nextStepsGroupExpanded: {},
       decisionsExpanded: false,
@@ -347,7 +347,7 @@
       for (var i = 0; i < dashState.allDecisions.length; i++) {
         var dec = dashState.allDecisions[i];
         var status = normalizeStatus(dec);
-        if (status === 'PROPOSED' || status === 'IN_PROGRESS') {
+        if (status === 'PROPOSED' || status === 'IN_PROGRESS' || status === 'STAGED') {
           results.push({ decision: dec, projectName: projectMap[dec.projectId] || '' });
         }
       }
@@ -540,7 +540,7 @@
         if (s) statusSet[s] = true;
       }
 
-      var STATUS_ORDER = ['DRAFT', 'PROPOSED', 'IN_PROGRESS', 'APPROVED', 'IMPLEMENTED', 'REJECTED', 'ARCHIVED'];
+      var STATUS_ORDER = ['DRAFT', 'PROPOSED', 'IN_PROGRESS', 'STAGED', 'APPROVED', 'IMPLEMENTED', 'REJECTED', 'ARCHIVED'];
       var statuses = [];
       for (var j = 0; j < STATUS_ORDER.length; j++) {
         if (statusSet[STATUS_ORDER[j]]) statuses.push(STATUS_ORDER[j]);
@@ -610,7 +610,7 @@
           for (var pd = 0; pd < projDecisions.length; pd++) {
             var pDec = projDecisions[pd];
             var pStatus = normalizeStatus(pDec);
-            if (pStatus === 'PROPOSED' || pStatus === 'IN_PROGRESS') {
+            if (pStatus === 'PROPOSED' || pStatus === 'IN_PROGRESS' || pStatus === 'STAGED') {
               pendingCount++;
               // Check if current user is a reviewer on this decision
               if (currentUserId && pDec.reviewers && Array.isArray(pDec.reviewers)) {

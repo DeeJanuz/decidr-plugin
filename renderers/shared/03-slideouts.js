@@ -979,7 +979,7 @@
       }
       html += '</div></div>';
     }
-    if (decision.status === 'APPROVED' || decision.status === 'IMPLEMENTED') {
+    if (decision.status === 'APPROVED' || decision.status === 'STAGED' || decision.status === 'IMPLEMENTED') {
       html += '<button class="decidr-so-btn" id="decidr-so-btn-supersede">Supersede</button>';
     }
     html += '<span class="decidr-so-spacer"></span>';

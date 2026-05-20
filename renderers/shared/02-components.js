@@ -20,6 +20,7 @@
       decided: '#22c55e',
       agreed: '#22c55e',
       implemented: '#22c55e',
+      staged: '#14b8a6',
       in_progress: '#3b82f6',
       under_discussion: '#3b82f6',
       open: '#3b82f6',
@@ -31,6 +32,7 @@
       decided: 'Decided',
       agreed: 'Agreed',
       implemented: 'Implemented',
+      staged: 'Staged',
       in_progress: 'In Progress',
       under_discussion: 'Under Discussion',
       open: 'Open',
@@ -38,7 +40,7 @@
       blocked: 'Blocked',
       deferred: 'Deferred'
     },
-    order: ['decided', 'agreed', 'implemented', 'in_progress', 'under_discussion', 'open', 'proposed', 'blocked', 'deferred']
+    order: ['decided', 'agreed', 'implemented', 'staged', 'in_progress', 'under_discussion', 'open', 'proposed', 'blocked', 'deferred']
   };
 
   // ─── Status / Priority / Entity Labels ────────────────────────────
@@ -53,6 +55,7 @@
     APPROVED: 'Approved',
     REJECTED: 'Rejected',
     IN_PROGRESS: 'In Progress',
+    STAGED: 'Staged',
     IMPLEMENTED: 'Implemented',
     PLANNING: 'Planning',
     ACTIVE: 'Active',

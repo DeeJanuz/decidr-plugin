@@ -685,7 +685,7 @@
   function inferPriority(entity) {
     var s = (entity.status || '').toUpperCase();
     if (s === 'PROPOSED') return 'high';
-    if (s === 'IN_PROGRESS' || s === 'APPROVED') return 'medium';
+    if (s === 'IN_PROGRESS' || s === 'STAGED' || s === 'APPROVED') return 'medium';
     return 'low';
   }
 
@@ -693,6 +693,9 @@
     var s = (entity.status || '').toUpperCase();
     if (entityType === 'decision' && s === 'PROPOSED') {
       return 'Decision pending';
+    }
+    if (entityType === 'decision' && s === 'STAGED') {
+      return 'Decision staged for deployment review';
     }
     if (entityType === 'task' && (s === 'TODO' || s === 'IN_PROGRESS')) {
       return 'Task in progress';

@@ -147,7 +147,7 @@
 
     function statusIsActive(status) {
       var s = normalizeStatus(status);
-      return s === 'ACTIVE' || s === 'IN_PROGRESS' || s === 'PLANNING' || s === 'PROPOSED' || s === 'APPROVED' || s === 'TODO' || s === 'OPEN' || s === 'IN_REVIEW';
+      return s === 'ACTIVE' || s === 'IN_PROGRESS' || s === 'STAGED' || s === 'PLANNING' || s === 'PROPOSED' || s === 'APPROVED' || s === 'TODO' || s === 'OPEN' || s === 'IN_REVIEW';
     }
 
     function validDate(dateStr) {
@@ -222,6 +222,7 @@
         RESTORED: 'Restored',
         REVIEWER_ADDED: 'Reviewer added',
         APPROVED: 'Approved',
+        STAGED: 'Staged',
         BRIDGE_LINKED: 'Bridge linked',
         BRIDGE_CREATED: 'Bridge created'
       };
@@ -451,7 +452,7 @@
         var decisionProjectId = getDecisionProjectId(decision);
         var decisionInitId = getDecisionInitiativeId(decision, lookup);
         var decisionStatus = normalizeStatus(decision.status);
-        var riskDecision = decisionStatus === 'PROPOSED' || decisionStatus === 'IN_PROGRESS' || decisionStatus === 'DRAFT';
+        var riskDecision = decisionStatus === 'PROPOSED' || decisionStatus === 'IN_PROGRESS' || decisionStatus === 'STAGED' || decisionStatus === 'DRAFT';
         addEntityDate(items, decision, {
           id: 'decision-created-' + decision.id,
           type: 'decision',
@@ -737,7 +738,7 @@
         var dec = timelineState.decisions[i];
         var initId = getDecisionInitiativeId(dec, model.lookup);
         var st = normalizeStatus(dec.status);
-        if (laneSet[initId] && (st === 'DRAFT' || st === 'PROPOSED' || st === 'IN_PROGRESS')) pendingDecisions++;
+        if (laneSet[initId] && (st === 'DRAFT' || st === 'PROPOSED' || st === 'IN_PROGRESS' || st === 'STAGED')) pendingDecisions++;
       }
       for (i = 0; i < timelineState.tasks.length; i++) {
         var task = timelineState.tasks[i];
@@ -1026,7 +1027,7 @@
         var decInitId = getDecisionInitiativeId(dec, model.lookup);
         if (!laneSet[decInitId]) continue;
         var status = normalizeStatus(dec.status);
-        if (status === 'DRAFT' || status === 'PROPOSED' || status === 'IN_PROGRESS') {
+        if (status === 'DRAFT' || status === 'PROPOSED' || status === 'IN_PROGRESS' || status === 'STAGED') {
           next.push({
             entityType: 'decision',
             entityId: dec.id,

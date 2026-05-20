@@ -8,12 +8,15 @@ You are an agent creating or implementing a plan that appears related to DecidR-
 2. **Do not guess the organization.** Use available org/token context and `decidr_list_organizations` to identify the correct organization. If the correct org or context is unclear, ask the user for pointers.
 3. **Search before creating.** Look for existing initiatives, projects, decisions, tasks, and LudFlow documents before creating new DecidR records.
 4. **Prefer continuity.** Update existing decisions and linked docs when the plan refines, implements, supersedes, or documents prior work. Create new decisions and supporting docs only when no suitable existing record exists.
-5. **Preserve implemented records.** When a linked LudFlow document is already published or its DecidR decision is already implemented, fetch the current content first and append new information as a dated addendum. Do not replace or restructure the implemented record unless the user explicitly asks for a rewrite.
-6. **Review batch mutations.** For 2 or more DecidR/LudFlow mutations, present the planned create/update/link actions for review before executing them, following the MCPViews bulk action review rule.
+5. **Stage committed code, implement deployed code.** When committing code and DecidR has registered/authenticated organizations, search existing matching decisions and move confident matches to `STAGED` after the commit. `STAGED` means implemented in a test/review environment. Reserve `IMPLEMENTED` for work migrated into the deployment codebase.
+6. **Preserve implemented records.** When a linked LudFlow document is already published or its DecidR decision is already implemented, fetch the current content first and append new information as a dated addendum. Do not replace or restructure the implemented record unless the user explicitly asks for a rewrite.
+7. **Review batch mutations.** For 2 or more DecidR/LudFlow mutations, present the planned create/update/link actions for review before executing them, following the MCPViews bulk action review rule.
 
 ## Trigger
 
 Use this runbook when an implementation plan mentions or strongly implies governed work, decisions, initiatives, projects, tasks, DecidR entities, or existing DecidR/LudFlow documentation.
+
+Also use this runbook before or immediately after committing code in any codebase when DecidR is installed and the MCPViews session reports registered/authenticated DecidR organizations.
 
 Do not use it for casual planning or exploratory notes that have no apparent relationship to DecidR-managed work unless the user explicitly asks to log them.
 
@@ -44,12 +47,25 @@ Use these defaults:
 | Situation | Action |
 |---|---|
 | Plan implements or refines an existing decision | Update that decision and its linked docs. |
+| A commit implements an existing decision in a test/review environment | Update that decision to `STAGED` after the commit. |
+| Work is migrated into the deployment codebase | Update the matching `STAGED` decision to `IMPLEMENTED`. |
 | Plan supersedes a previous direction | Update or supersede the existing decision; link the new supporting doc. |
 | Plan fills in missing implementation detail for an existing project/task | Create or update a child decision under the relevant project, bridge, or task context. |
 | No matching decision exists after search | Create a new decision under the best matching parent entity. |
 | No suitable parent entity exists | Ask the user where this should live before creating anything. |
 
-Before transitioning a decision out of `DRAFT`, confirm it has at least one linked supporting document. Use `decidr_list_entity_documents` to inspect existing links and `decidr_link_document` to attach the supporting doc.
+Before transitioning a decision out of `DRAFT`, confirm it has at least one linked supporting document. Use `decidr_list_entity_documents` to inspect existing links and `decidr_link_document` to attach the supporting doc. For already-built work, transition `DRAFT -> STAGED`, not `DRAFT -> IMPLEMENTED`.
+
+### 3a. Commit governance
+
+When the user asks you to commit code, or you otherwise reach the commit step in a code workflow:
+
+1. Check the MCPViews session/org-token context for installed DecidR organizations.
+2. If no DecidR organization is registered or authenticated, continue the commit normally and do not invent DecidR context.
+3. If DecidR organizations are available, search existing decisions by branch name, issue/PR title, commit summary, changed subsystem names, and user-provided task language.
+4. If exactly one or more confident existing decisions match the committed work, update those decisions to `STAGED` after the commit succeeds. Do not create new decisions solely because a commit happened.
+5. If matches are ambiguous, report candidate decisions and ask the user which ones to stage.
+6. Do not move any decision to `IMPLEMENTED` during ordinary code commit. Use `IMPLEMENTED` only after the work is migrated into the deployment codebase.
 
 ### 4. Document the plan
 
@@ -61,7 +77,7 @@ For each logged plan, ensure there is supporting documentation:
 - If no relevant folder structure exists, create or use a folder named after the best matching DecidR project.
 - If no project context is identifiable, ask the user where the document should live before creating it.
 - If document creation tooling is available, create or update the supporting document before linking it, then move the document into the selected folder if the write tool created it elsewhere.
-- If the supporting document is already `PUBLISHED`, or if the linked DecidR decision is already `IMPLEMENTED`, treat the existing document as the historical implementation record. Fetch the current content with `ludflow_get_document`, preserve that content, and append new findings, validation notes, follow-up decisions, or corrections as a dated addendum. If the document was published before the update, publish the appended version after the required review flow.
+- If the supporting document is already `PUBLISHED`, or if the linked DecidR decision is already `IMPLEMENTED`, treat the existing document as the historical deployment record. Fetch the current content with `ludflow_get_document`, preserve that content, and append new findings, validation notes, follow-up decisions, or corrections as a dated addendum. If the document was published before the update, publish the appended version after the required review flow.
 - If no document can be created from the current toolset, ask the user for the document URL or LudFlow document to link.
 - Link supporting documents to the DecidR decision or parent entity with `decidr_link_document`.
 
