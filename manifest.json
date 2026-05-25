@@ -1,6 +1,6 @@
 {
   "name": "decidr",
-  "version": "0.1.32",
+  "version": "0.1.33",
   "prompt_definitions": [
     {
       "name": "initiative_planning",
@@ -67,7 +67,7 @@
     "When the user asks for an auditability dashboard, audit dashboard, audit overview, or manager view of audit events, push decidr_audit_dashboard directly. The renderer fetches audit events, categories, projects, and decisions from the API and provides filters plus audit-event drilldowns.",
     "When the user asks for audit reports, custom audit reporting, a report builder over audit events, CSV export of audit events, or Salesforce-like filtering over audit payloads, push decidr_audit_reports directly. The renderer fetches reports, field catalogs, projects, categories, members, and preview rows from the API."
   ],
-  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.32/decidr.zip",
+  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.33/decidr.zip",
   "registry_index": {
     "summary": "Decision governance \u2014 initiatives, projects, decisions, tasks, and bridges with approval workflows",
     "tags": [
@@ -145,10 +145,11 @@
       },
       {
         "name": "Documents",
-        "hint": "Link documents to entities, search LudFlow docs, find entities by document",
+        "hint": "Link and unlink documents on projects, decisions, and tasks; search LudFlow docs; find entities by document",
         "tools": [
           "link_document",
           "list_entity_documents",
+          "unlink_document",
           "search_ludflow_documents",
           "find_entities_by_ludflow_document"
         ]
@@ -234,6 +235,7 @@
     "replace_decisions": "Approve a replacement decision, reject one or more originals, record replacement relationships, and copy linked audit events forward.",
     "link_document": "Attach a document to any entity. Use type URL for external links, LUDFLOW for LudFlow documents. Search LudFlow docs first with search_ludflow_documents.",
     "list_entity_documents": "List all documents linked to an entity. Essential context before approving decisions.",
+    "unlink_document": "Unlink a document/file from a project, decision, or task. Use list_entity_documents first to get the document_id.",
     "search_ludflow_documents": "Search LudFlow documents by title. Use results with link_document to attach to DecidR entities.",
     "find_entities_by_ludflow_document": "Find all DecidR entities linked to a LudFlow document. Enables bidirectional navigation.",
     "archive_entity": "Soft-delete (archive) an entity. Archived entities are hidden from default lists but can be restored. Use when the user wants to remove or delete an entity.",
@@ -279,6 +281,7 @@
     "link_decision_audit_event",
     "replace_decisions",
     "link_document",
+    "unlink_document",
     "archive_entity",
     "restore_entity",
     "connect_github",
@@ -333,6 +336,7 @@
     "replace_decisions": "decidr_list",
     "link_document": "decidr_list",
     "list_entity_documents": "decidr_list",
+    "unlink_document": "decidr_list",
     "search_ludflow_documents": "decidr_list",
     "find_entities_by_ludflow_document": "decidr_list",
     "archive_entity": "decidr_list",
@@ -399,6 +403,7 @@
         "replace_decisions",
         "link_document",
         "list_entity_documents",
+        "unlink_document",
         "search_ludflow_documents",
         "find_entities_by_ludflow_document",
         "archive_entity",

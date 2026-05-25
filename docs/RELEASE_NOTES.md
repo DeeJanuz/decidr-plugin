@@ -1,5 +1,7 @@
 # Unreleased
 
+- **feat**: Expose the new `unlink_document` MCP tool in the DecidR plugin manifest so agents can remove linked files/documents from projects, decisions, and tasks after discovering the link with `list_entity_documents`.
+
 # 0.1.32
 
 - **fix**: Tighten commit-governance discovery so agents search existing decisions and tasks before proposing new DecidR records, avoiding duplicate lightweight task proposals.
