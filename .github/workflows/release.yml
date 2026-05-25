@@ -38,27 +38,37 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ steps.version.outputs.current }}"
+          RELEASE_ARGS=(--title "$VERSION")
+          if [[ "$VERSION" == *-* ]]; then
+            RELEASE_ARGS+=(--prerelease)
+          fi
           # Use RELEASE_NOTES.md if it has content beyond the header, otherwise auto-generate
           BODY=$(sed '1{/^# Unreleased$/d;}' RELEASE_NOTES.md | sed '/^$/d')
           if [ -n "$BODY" ]; then
             gh release create "$VERSION" release/decidr.zip \
-              --title "$VERSION" \
+              "${RELEASE_ARGS[@]}" \
               --notes "$BODY"
           else
             gh release create "$VERSION" release/decidr.zip \
-              --title "$VERSION" \
+              "${RELEASE_ARGS[@]}" \
               --generate-notes
           fi
 
-      - name: Clear release notes
-        if: steps.version.outputs.changed == 'true'
+      - name: Clear release notes after stable release
+        if: steps.version.outputs.changed == 'true' && !contains(steps.version.outputs.current, '-')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Reset RELEASE_NOTES.md to empty template
           echo "# Unreleased" > RELEASE_NOTES.md
+          if git diff --quiet -- RELEASE_NOTES.md; then
+            echo "RELEASE_NOTES.md already clear"
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add RELEASE_NOTES.md
           git commit -m "chore: clear release notes after ${{ steps.version.outputs.current }}"
-          git push
+          if ! git push; then
+            echo "::warning::Could not push release-note cleanup; branch protection may require a pull request."
+          fi
