@@ -26,7 +26,8 @@
       open: '#3b82f6',
       proposed: '#f59e0b',
       blocked: '#ef4444',
-      deferred: '#6b7280'
+      deferred: '#6b7280',
+      backlog: '#9ca3af'
     },
     labels: {
       decided: 'Decided',
@@ -38,9 +39,10 @@
       open: 'Open',
       proposed: 'Proposed',
       blocked: 'Blocked',
-      deferred: 'Deferred'
+      deferred: 'Deferred',
+      backlog: 'Backlog'
     },
-    order: ['decided', 'agreed', 'implemented', 'staged', 'in_progress', 'under_discussion', 'open', 'proposed', 'blocked', 'deferred']
+    order: ['decided', 'agreed', 'implemented', 'staged', 'in_progress', 'under_discussion', 'open', 'proposed', 'blocked', 'deferred', 'backlog']
   };
 
   // ─── Status / Priority / Entity Labels ────────────────────────────
@@ -51,6 +53,7 @@
     ON_HOLD: 'On Hold',
     COMPLETED: 'Completed',
     ARCHIVED: 'Archived',
+    BACKLOG: 'Backlog',
     PROPOSED: 'Proposed',
     APPROVED: 'Approved',
     REJECTED: 'Rejected',
@@ -751,7 +754,7 @@
   /** @private Status color map for graph nodes */
   function _graphStatusColor(status) {
     var map = { active: '#22c55e', planning: '#3b82f6', completed: '#6b7280',
-                proposed: '#f59e0b', in_progress: '#3b82f6', implemented: '#22c55e' };
+                backlog: '#9ca3af', proposed: '#f59e0b', in_progress: '#3b82f6', implemented: '#22c55e' };
     return map[status] || '#6b7280';
   }
 

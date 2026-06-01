@@ -38,6 +38,7 @@
       { key: 'staged', label: 'Staged', color: 'var(--decision-staged)' },
       { key: 'approved', label: 'Approved', color: 'var(--decision-proposed)' },
       { key: 'proposed', label: 'Proposed', color: 'var(--priority-medium)' },
+      { key: 'backlog', label: 'Backlog', color: '#9ca3af' },
       { key: 'superseded', label: 'Superseded', color: 'var(--decision-superseded)' }
     ];
 
@@ -203,7 +204,7 @@
 
     function _graphStatusColor(status) {
       var map = { active: '#22c55e', planning: '#3b82f6', completed: '#6b7280',
-                  proposed: '#f59e0b', in_progress: '#3b82f6', staged: '#14b8a6', implemented: '#22c55e' };
+                  backlog: '#9ca3af', proposed: '#f59e0b', in_progress: '#3b82f6', staged: '#14b8a6', implemented: '#22c55e' };
       return map[status] || '#6b7280';
     }
 

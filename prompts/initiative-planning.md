@@ -75,6 +75,7 @@ For each project (new or existing to link), define:
 ### Decisions
 For each project, identify key decisions:
 - **High-confidence decisions** (the team already knows the direction) — set status to `proposed`
+- **Future/deferred decisions** (useful to log, not actionable yet) — set status to `backlog`
 - **Uncertain decisions** (multiple viable options, needs investigation) — frame as a decision point with named alternatives in the description
 - For each decision: name, description, rationale (if proposed), and parent entity (project or bridge)
 
@@ -83,6 +84,7 @@ For each project, identify initial tasks:
 - Research tasks (investigate unknowns)
 - Action items (concrete next steps)
 - Setup tasks (tooling, environment, access)
+- Future actions worth capturing but not starting yet — set status to `backlog`
 - For each task: name, description, assignee (if known), and parent entity (project or bridge)
 
 ### Documents

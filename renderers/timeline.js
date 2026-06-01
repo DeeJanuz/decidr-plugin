@@ -145,6 +145,10 @@
       return s === 'DONE' || s === 'COMPLETED' || s === 'IMPLEMENTED' || s === 'MERGED' || s === 'ARCHIVED';
     }
 
+    function statusIsBacklog(status) {
+      return normalizeStatus(status) === 'BACKLOG';
+    }
+
     function statusIsActive(status) {
       var s = normalizeStatus(status);
       return s === 'ACTIVE' || s === 'IN_PROGRESS' || s === 'STAGED' || s === 'PLANNING' || s === 'PROPOSED' || s === 'APPROVED' || s === 'TODO' || s === 'OPEN' || s === 'IN_REVIEW';
@@ -473,8 +477,8 @@
         var taskDue = validDate(task.dueDate || task.due_date);
         var taskProjectId = getTaskProjectId(task, lookup);
         var taskInitId = getTaskInitiativeId(task, lookup);
-        if (taskDue) {
-          var overdue = taskDue < now && !statusIsDone(task.status);
+        if (taskDue && !statusIsBacklog(task.status)) {
+          var overdue = taskDue < now && !statusIsDone(task.status) && !statusIsBacklog(task.status);
           addEntityDate(items, task, {
             id: 'task-due-' + task.id,
             type: overdue ? 'task_overdue' : 'task_due',
@@ -644,7 +648,7 @@
         if (!laneMap[tInitId]) continue;
         laneMap[tInitId].tasks++;
         var due = validDate(task.dueDate || task.due_date);
-        if (due && !statusIsDone(task.status)) {
+        if (due && !statusIsDone(task.status) && !statusIsBacklog(task.status)) {
           if (due < now) laneMap[tInitId].overdueTasks++;
           else if (due <= soon) laneMap[tInitId].nextTasks++;
         }
@@ -743,7 +747,7 @@
       for (i = 0; i < timelineState.tasks.length; i++) {
         var task = timelineState.tasks[i];
         var taskInitId = getTaskInitiativeId(task, model.lookup);
-        if (!laneSet[taskInitId] || statusIsDone(task.status)) continue;
+        if (!laneSet[taskInitId] || statusIsDone(task.status) || statusIsBacklog(task.status)) continue;
         var due = validDate(task.dueDate || task.due_date);
         if (due && due < now) overdue++;
         else if (due && due <= soon) dueSoon++;
@@ -1008,7 +1012,7 @@
       for (i = 0; i < timelineState.tasks.length; i++) {
         var task = timelineState.tasks[i];
         var taskInitId = getTaskInitiativeId(task, model.lookup);
-        if (!laneSet[taskInitId] || statusIsDone(task.status)) continue;
+        if (!laneSet[taskInitId] || statusIsDone(task.status) || statusIsBacklog(task.status)) continue;
         var due = validDate(task.dueDate || task.due_date);
         if (!due) continue;
         var taskItem = {
