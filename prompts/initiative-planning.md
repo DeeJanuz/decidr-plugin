@@ -116,8 +116,8 @@ Push the full initiative graph to MCPViews using `push_review` with the `structu
 ```
 Initiative: [name]
   |-- Project: [name]
-  |     |-- Decision: [name] (status: proposed/draft)
-  |     |-- Decision: [name] (status: proposed/draft)
+  |     |-- Decision: [name] (status: proposed/draft/backlog)
+  |     |-- Decision: [name] (status: proposed/draft/backlog)
   |     |-- Task: [name] (assignee: X)
   |     |-- Task: [name]
   |     |-- Document: [title] (type: URL/LUDFLOW)
