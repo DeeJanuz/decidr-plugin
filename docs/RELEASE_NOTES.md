@@ -1,5 +1,7 @@
 # Unreleased
 
+# 0.1.33-rc.4
+
 - **feat**: Add Backlog as a non-actionable decision/task status in renderer labels, dashboard filters, graph legends, MCP tool guidance, and planning prompts so future work can be logged without appearing as Next Steps.
 - **feat**: Expose the new `unlink_document` MCP tool in the DecidR plugin manifest so agents can remove linked files/documents from projects, decisions, and tasks after discovering the link with `list_entity_documents`.
 
