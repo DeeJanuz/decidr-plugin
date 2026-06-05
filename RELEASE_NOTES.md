@@ -1,4 +1,4 @@
-# Unreleased
+# 0.1.33-rc.8
 
 - **feat**: Lazy-load DecidR timeline windows from `/timeline/window` instead of front-loading every page, with range cache reuse, cursor paging, stale-response protection, dense lane virtualization, and retry status for failed window loads.
 
