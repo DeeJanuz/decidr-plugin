@@ -1,5 +1,7 @@
 # Unreleased
 
+- **feat**: Lazy-load DecidR timeline windows from `/timeline/window` instead of front-loading every page, with range cache reuse, cursor paging, stale-response protection, dense lane virtualization, and retry status for failed window loads.
+
 # 0.1.33-rc.5
 
 - **feat**: Rework the DecidR timeline renderer around actionable visibility: preset ranges, horizontal day panning, stacked decision bars, legend visibility toggles, decision span states, overflow indicators, and unified month/week/day rendering.
