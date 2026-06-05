@@ -1,5 +1,10 @@
 # Unreleased
 
+# 0.1.33-rc.5
+
+- **feat**: Rework the DecidR timeline renderer around actionable visibility: preset ranges, horizontal day panning, stacked decision bars, legend visibility toggles, decision span states, overflow indicators, and unified month/week/day rendering.
+- **fix**: Keep decision actual-time indicators bounded to real event times so month views no longer project decision activity into the future.
+
 # 0.1.33-rc.4
 
 - **feat**: Add Backlog as a non-actionable decision/task status in renderer labels, dashboard filters, graph legends, MCP tool guidance, and planning prompts so future work can be logged without appearing as Next Steps.
