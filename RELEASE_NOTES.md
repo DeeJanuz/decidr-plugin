@@ -1,3 +1,9 @@
+# 0.1.33-rc.9
+
+- **feat**: Surface catch-up decisions as first-class decision records across DecidR MCP guidance, decision slideouts, list cards, and project-grouped timeline bars, including direct post-implementation capture affordances.
+
+- **feat**: Group DecidR timeline rows by project inside initiatives so dense initiative views show which project each decision, task, and activity belongs to.
+
 # 0.1.33-rc.8
 
 - **feat**: Surface catch-up decisions for post-implementation governance capture with manifest guidance, timeline anchoring to historical status events, and a visible Catch-up badge in decision cards, slideouts, lists, and timeline bars.
