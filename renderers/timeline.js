@@ -251,6 +251,11 @@
       return d;
     }
 
+    function eventOccurredDate(evt) {
+      if (!evt) return null;
+      return validDate(evt.occurredAt || evt.occurred_at || evt.createdAt);
+    }
+
     function startOfDay(d) {
       return new Date(d.getFullYear(), d.getMonth(), d.getDate());
     }
@@ -873,7 +878,7 @@
       for (var e = 0; e < timelineState.timeline.length; e++) {
         var evt = timelineState.timeline[e];
         var info = eventEntityInfo(evt, lookup);
-        var evtDate = validDate(evt.createdAt);
+        var evtDate = eventOccurredDate(evt);
         if (!info || !evtDate) continue;
         var eventPerson = eventPrimaryUser(evt, lookup);
         pushItem(items, {
@@ -1186,7 +1191,7 @@
         var evt = timelineState.timeline[i];
         if (!evt || evt.decisionId !== decisionId) continue;
         if (normalizeStatus(evt.action) !== 'STATUS_CHANGED') continue;
-        var date = validDate(evt.createdAt);
+        var date = eventOccurredDate(evt);
         if (!date) continue;
         events.push({
           date: date,
