@@ -397,6 +397,10 @@
       return api.get('/timeline' + _qs(params));
     },
 
+    getTimelineWindow: function(params) {
+      return api.get('/timeline/window' + _qs(params));
+    },
+
     runAuditReport: function(data) {
       return api.post('/audit-reports/run', data);
     },

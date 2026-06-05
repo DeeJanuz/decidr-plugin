@@ -53,6 +53,16 @@
       decisionStartFilter: 'any',
       decisionEndFilter: 'any',
       hiddenLegendTypes: {},
+      windowCache: {},
+      windowLoadSeq: 0,
+      loadingWindow: false,
+      windowError: null,
+      loadedWindowKey: null,
+      lanePositions: {},
+      viewportTop: 0,
+      viewportBottom: 0,
+      virtualScrollCleanup: null,
+      virtualScrollFrame: null,
       initiatives: [],
       projects: [],
       decisions: [],
@@ -90,6 +100,57 @@
       return [];
     }
 
+    function responseTotal(resp) {
+      if (!resp) return null;
+      if (typeof resp.total === 'number') return resp.total;
+      if (resp.meta && typeof resp.meta.total === 'number') return resp.meta.total;
+      if (resp.meta && typeof resp.meta.total_count === 'number') return resp.meta.total_count;
+      return null;
+    }
+
+    function responseHasMore(resp, items, skip, take) {
+      if (resp && resp.has_more !== undefined) return !!resp.has_more;
+      if (resp && resp.meta && resp.meta.has_more !== undefined) return !!resp.meta.has_more;
+      var total = responseTotal(resp);
+      if (typeof total === 'number') return skip + items.length < total;
+      return items.length >= take;
+    }
+
+    function fetchAllPages(fetchFn, opts) {
+      opts = opts || {};
+      var pageSize = opts.take || 200;
+      var maxItems = opts.max || 1200;
+      var baseParams = opts.params || {};
+      var skip = opts.skip || 0;
+      var all = [];
+
+      function loadNextPage() {
+        var remaining = maxItems - all.length;
+        if (remaining <= 0) return Promise.resolve(all);
+        var take = Math.min(pageSize, remaining);
+        var params = {};
+        for (var key in baseParams) {
+          if (Object.prototype.hasOwnProperty.call(baseParams, key)) params[key] = baseParams[key];
+        }
+        params.skip = skip;
+        params.take = take;
+        return fetchFn(params).then(function(resp) {
+          var page = unwrapList(resp);
+          for (var i = 0; i < page.length && all.length < maxItems; i++) {
+            all.push(page[i]);
+          }
+          var pageSkip = skip;
+          skip += page.length;
+          if (!page.length || all.length >= maxItems || !responseHasMore(resp, page, pageSkip, take)) {
+            return all;
+          }
+          return loadNextPage();
+        });
+      }
+
+      return loadNextPage();
+    }
+
     function fetchTimelineData() {
       var fetched = {};
       return API.resolveAndBindTargetOrg({
@@ -98,33 +159,190 @@
         fetched.organizations = preflight.organizations || [];
         fetched.defaultOrgId = preflight.defaultOrgId || null;
         fetched.activeOrgId = preflight.activeOrgId || API.getActiveOrgId();
-        return Promise.all([
-          API.listInitiatives({ take: 200 }).then(function(resp) { fetched.initiatives = unwrapList(resp); }),
-          API.listProjects({ take: 300 }).then(function(resp) { fetched.projects = unwrapList(resp); }),
-          API.listDecisions({ take: 300 }).then(function(resp) { fetched.decisions = unwrapList(resp); }),
-          API.listTasks({ take: 400 }).then(function(resp) { fetched.tasks = unwrapList(resp); }),
-          API.listBridges({ take: 300 }).then(function(resp) { fetched.bridges = unwrapList(resp); }),
-          API.listIssues({ take: 300 }).then(function(resp) { fetched.issues = unwrapList(resp); }).catch(function() { fetched.issues = []; }),
-          API.listPRs({ take: 300 }).then(function(resp) { fetched.prs = unwrapList(resp); }).catch(function() { fetched.prs = []; }),
-          API.listOrgMembers().then(function(resp) { fetched.members = unwrapList(resp); }).catch(function() { fetched.members = []; }),
-          API.getTimeline({ take: 500 }).then(function(resp) { fetched.timeline = unwrapList(resp); }).catch(function() { fetched.timeline = []; })
-        ]);
-      }).then(function() {
         timelineState.organizations = fetched.organizations || [];
         timelineState.defaultOrgId = fetched.defaultOrgId || null;
         timelineState.activeOrgId = fetched.activeOrgId || API.getActiveOrgId();
         if (!timelineState.activeOrgId && timelineState.organizations.length) {
           timelineState.activeOrgId = timelineState.organizations[0].id;
         }
-        timelineState.initiatives = fetched.initiatives || [];
-        timelineState.projects = fetched.projects || [];
-        timelineState.decisions = fetched.decisions || [];
-        timelineState.tasks = fetched.tasks || [];
-        timelineState.bridges = fetched.bridges || [];
-        timelineState.issues = fetched.issues || [];
-        timelineState.prs = fetched.prs || [];
-        timelineState.members = fetched.members || [];
-        timelineState.timeline = fetched.timeline || [];
+        return loadTimelineWindow({ force: true, renderOnStart: false, renderOnComplete: false });
+      });
+    }
+
+    function payloadFromWindowResponse(resp) {
+      if (!resp) return {};
+      if (resp.data && !Array.isArray(resp.data)) return resp.data;
+      return resp;
+    }
+
+    function applyTimelineWindowPayload(payload) {
+      payload = payloadFromWindowResponse(payload);
+      timelineState.initiatives = payload.initiatives || [];
+      timelineState.projects = payload.projects || [];
+      timelineState.decisions = payload.decisions || [];
+      timelineState.tasks = payload.tasks || [];
+      timelineState.bridges = payload.bridges || [];
+      timelineState.issues = payload.issues || [];
+      timelineState.prs = payload.prs || [];
+      timelineState.members = payload.people || payload.members || [];
+      timelineState.timeline = payload.timelineEvents || payload.timeline || [];
+      timelineState.windowTotals = payload.totals || {};
+      timelineState.windowRange = payload.range || null;
+    }
+
+    function currentWindowRange() {
+      var selected = selectedRange([]);
+      return normalizeRange(selected.min, selected.max);
+    }
+
+    function windowCacheKey(range) {
+      var initiativePart = timelineState.scope === 'initiative' && timelineState.selectedInitiativeId
+        ? timelineState.selectedInitiativeId
+        : 'all';
+      var personPart = timelineState.peopleFilter && timelineState.peopleFilter !== 'all' && timelineState.peopleFilter !== 'unassigned'
+        ? timelineState.peopleFilter
+        : 'all';
+      return [
+        timelineState.activeOrgId || 'org',
+        toInputDate(range.min),
+        toInputDate(range.max),
+        initiativePart,
+        personPart,
+        timelineState.decisionStartFilter || 'any',
+        timelineState.decisionEndFilter || 'any'
+      ].join('|');
+    }
+
+    function windowRequestParams(range) {
+      var params = {
+        from: range.min.toISOString(),
+        to: range.max.toISOString(),
+        bufferDays: 7,
+        take: 200
+      };
+      if (timelineState.scope === 'initiative' && timelineState.selectedInitiativeId) {
+        params.initiativeId = timelineState.selectedInitiativeId;
+      }
+      if (timelineState.peopleFilter && timelineState.peopleFilter !== 'all' && timelineState.peopleFilter !== 'unassigned') {
+        params.personId = timelineState.peopleFilter;
+      }
+      if (timelineState.decisionStartFilter && timelineState.decisionStartFilter !== 'any') {
+        params.decisionStart = timelineState.decisionStartFilter;
+      }
+      if (timelineState.decisionEndFilter && timelineState.decisionEndFilter !== 'any') {
+        params.decisionEnd = timelineState.decisionEndFilter;
+      }
+      return params;
+    }
+
+    function mergeUniqueRows(baseRows, nextRows) {
+      var rows = [];
+      var seen = {};
+      var i;
+      baseRows = baseRows || [];
+      nextRows = nextRows || [];
+      for (i = 0; i < baseRows.length; i++) {
+        if (!baseRows[i] || !baseRows[i].id) {
+          rows.push(baseRows[i]);
+          continue;
+        }
+        seen[baseRows[i].id] = true;
+        rows.push(baseRows[i]);
+      }
+      for (i = 0; i < nextRows.length; i++) {
+        if (!nextRows[i] || !nextRows[i].id || !seen[nextRows[i].id]) {
+          if (nextRows[i] && nextRows[i].id) seen[nextRows[i].id] = true;
+          rows.push(nextRows[i]);
+        }
+      }
+      return rows;
+    }
+
+    function mergeTimelineWindowPayload(base, next) {
+      base = payloadFromWindowResponse(base);
+      next = payloadFromWindowResponse(next);
+      var merged = {};
+      var key;
+      for (key in base) {
+        if (Object.prototype.hasOwnProperty.call(base, key)) merged[key] = base[key];
+      }
+      var entityKeys = ['initiatives', 'projects', 'decisions', 'tasks', 'bridges', 'issues', 'prs', 'people', 'members'];
+      for (var i = 0; i < entityKeys.length; i++) {
+        key = entityKeys[i];
+        merged[key] = mergeUniqueRows(base[key], next[key]);
+      }
+      merged.timelineEvents = mergeUniqueRows(base.timelineEvents || base.timeline, next.timelineEvents || next.timeline);
+      merged.timeline = merged.timelineEvents;
+      merged.nextCursor = next.nextCursor || null;
+      merged.truncated = !!next.truncated;
+      if (next.totals) merged.totals = next.totals;
+      return merged;
+    }
+
+    function fetchTimelineWindowPages(params, payload, depth) {
+      payload = payloadFromWindowResponse(payload);
+      if (!payload.nextCursor || depth >= 10) return Promise.resolve(payload);
+      var nextParams = {};
+      for (var key in params) {
+        if (Object.prototype.hasOwnProperty.call(params, key)) nextParams[key] = params[key];
+      }
+      nextParams.cursor = payload.nextCursor;
+      return API.getTimelineWindow(nextParams).then(function(resp) {
+        var merged = mergeTimelineWindowPayload(payload, resp);
+        return fetchTimelineWindowPages(nextParams, merged, depth + 1);
+      });
+    }
+
+    function loadTimelineWindow(opts) {
+      opts = opts || {};
+      var range = currentWindowRange();
+      var key = windowCacheKey(range);
+      if (!opts.force && timelineState.windowCache[key]) {
+        applyTimelineWindowPayload(timelineState.windowCache[key]);
+        timelineState.loadedWindowKey = key;
+        timelineState.windowError = null;
+        if (opts.renderOnComplete) renderTimeline();
+        return Promise.resolve(timelineState.windowCache[key]);
+      }
+
+      var seq = ++timelineState.windowLoadSeq;
+      timelineState.loadingWindow = true;
+      timelineState.windowError = null;
+      if (opts.renderOnStart) renderTimeline();
+
+      var params = windowRequestParams(range);
+      return API.getTimelineWindow(params).then(function(resp) {
+        return fetchTimelineWindowPages(params, resp, 0);
+      }).then(function(resp) {
+        if (seq !== timelineState.windowLoadSeq) return resp;
+        var payload = payloadFromWindowResponse(resp);
+        timelineState.windowCache[key] = payload;
+        timelineState.loadedWindowKey = key;
+        applyTimelineWindowPayload(payload);
+        timelineState.loadingWindow = false;
+        timelineState.windowError = null;
+        if (!timelineState.selectedInitiativeId && timelineState.initiatives.length) {
+          timelineState.selectedInitiativeId = timelineState.initiatives[0].id;
+        }
+        if (opts.renderOnComplete) renderTimeline();
+        return payload;
+      }).catch(function(err) {
+        if (seq !== timelineState.windowLoadSeq) return null;
+        timelineState.loadingWindow = false;
+        timelineState.windowError = err;
+        if (opts.renderOnComplete) renderTimeline();
+        throw err;
+      });
+    }
+
+    function reloadTimelineWindow(opts) {
+      opts = opts || {};
+      return loadTimelineWindow({
+        force: !!opts.force,
+        renderOnStart: opts.renderOnStart !== false,
+        renderOnComplete: true
+      }).catch(function(err) {
+        console.error('[decidr] Timeline window load failed:', err);
       });
     }
 
@@ -132,7 +350,8 @@
       container.innerHTML = '<div style="padding:var(--space-6);">'
         + UI.loadingSpinner('Refreshing timeline...')
         + '</div>';
-      return fetchTimelineData().then(function() {
+      timelineState.windowCache = {};
+      return loadTimelineWindow({ force: true, renderOnStart: false, renderOnComplete: false }).then(function() {
         renderTimeline();
       }).catch(function(err) {
         console.error('[decidr] Timeline refresh failed:', err);
@@ -405,7 +624,9 @@
     }
 
     function getProjectInitiativeId(project) {
-      return getField(project, ['initiativeId', 'initiative_id']);
+      return getField(project, ['initiativeId', 'initiative_id'])
+        || getField(project && project.initiative, ['id'])
+        || getField(project && project.parentInitiative, ['id']);
     }
 
     function buildLookup() {
@@ -437,12 +658,20 @@
     function getDecisionProjectId(decision) {
       var direct = getField(decision, ['projectId', 'project_id']);
       if (direct) return direct;
+      var nestedProjectId = getField(decision && decision.project, ['id']);
+      if (nestedProjectId) return nestedProjectId;
       var et = String(getField(decision, ['entityType', 'entity_type']) || '').toUpperCase();
       if (et === 'PROJECT') return getField(decision, ['entityId', 'entity_id']);
       return null;
     }
 
     function getDecisionInitiativeId(decision, lookup) {
+      var direct = getField(decision, ['initiativeId', 'initiative_id']);
+      if (direct) return direct;
+      var nestedInitiativeId = getField(decision && decision.initiative, ['id']);
+      if (nestedInitiativeId) return nestedInitiativeId;
+      var nestedProjectInitId = getProjectInitiativeId(decision && decision.project);
+      if (nestedProjectInitId) return nestedProjectInitId;
       var et = String(getField(decision, ['entityType', 'entity_type']) || '').toUpperCase();
       var entityId = getField(decision, ['entityId', 'entity_id']);
       if (et === 'INITIATIVE' && entityId) return entityId;
@@ -1171,18 +1400,9 @@
     function horizontalPanDeltaFromWheel(evt) {
       var dx = wheelDeltaPixels(evt, evt.deltaX || 0);
       var dy = wheelDeltaPixels(evt, evt.deltaY || 0);
-      if (Math.abs(dx) >= 1 && Math.abs(dx) >= Math.abs(dy) * 0.45) return dx;
-      if (evt.shiftKey && Math.abs(dy) >= 1) return dy;
+      if (Math.abs(dx) >= 8 && Math.abs(dx) > Math.abs(dy) * 1.25) return dx;
+      if (evt.shiftKey && Math.abs(dy) >= 8) return dy;
       return 0;
-    }
-
-    function eventPointWithinElement(evt, element) {
-      if (!evt || !element || typeof evt.clientX !== 'number' || typeof evt.clientY !== 'number') return false;
-      var rect = element.getBoundingClientRect();
-      return evt.clientX >= rect.left
-        && evt.clientX <= rect.right
-        && evt.clientY >= rect.top
-        && evt.clientY <= rect.bottom;
     }
 
     function decisionStatusEvents(decisionId) {
@@ -1682,8 +1902,8 @@
 
       var dayPan = rangeSupportsDayPan(model.range);
       var scrollerStyle = dayPan
-        ? 'overflow:hidden;overscroll-behavior:contain;max-width:100%;'
-        : 'overflow-x:auto;overscroll-behavior:contain;max-width:100%;';
+        ? 'overflow:hidden;overscroll-behavior-x:contain;overscroll-behavior-y:auto;max-width:100%;'
+        : 'overflow-x:auto;overscroll-behavior-x:contain;overscroll-behavior-y:auto;max-width:100%;';
       var contentStyle = dayPan
         ? 'width:100%;min-width:0;'
         : 'min-width:' + model.range.width + 'px;width:100%;';
@@ -1742,6 +1962,72 @@
       return html;
     }
 
+    function updateTimelineViewport() {
+      var doc = container.ownerDocument || document;
+      var win = doc.defaultView || window;
+      var scrolling = doc.scrollingElement || doc.documentElement || doc.body;
+      var scrollTop = win.pageYOffset !== undefined ? win.pageYOffset : (scrolling ? scrolling.scrollTop : 0);
+      var height = win.innerHeight || 900;
+      timelineState.viewportTop = Math.max(0, scrollTop - 900);
+      timelineState.viewportBottom = scrollTop + height + 900;
+    }
+
+    function laneRowShouldRender(laneId, rowTop, rowHeight) {
+      var laneTop = timelineState.lanePositions[laneId];
+      if (laneTop === undefined || laneTop === null) {
+        return rowTop < 2600;
+      }
+      var absTop = laneTop + rowTop;
+      var absBottom = absTop + rowHeight;
+      return absBottom >= timelineState.viewportTop && absTop <= timelineState.viewportBottom;
+    }
+
+    function measureLanePositions() {
+      var doc = container.ownerDocument || document;
+      var win = doc.defaultView || window;
+      var scrollTop = win.pageYOffset !== undefined
+        ? win.pageYOffset
+        : ((doc.scrollingElement || doc.documentElement || doc.body || {}).scrollTop || 0);
+      var lanes = container.querySelectorAll('[data-timeline-lane-id]');
+      var positions = {};
+      for (var i = 0; i < lanes.length; i++) {
+        var id = lanes[i].getAttribute('data-timeline-lane-id');
+        if (!id) continue;
+        positions[id] = lanes[i].getBoundingClientRect().top + scrollTop;
+      }
+      timelineState.lanePositions = positions;
+    }
+
+    function wireVirtualScroll() {
+      if (timelineState.virtualScrollCleanup) {
+        timelineState.virtualScrollCleanup();
+        timelineState.virtualScrollCleanup = null;
+      }
+      measureLanePositions();
+      var doc = container.ownerDocument || document;
+      var win = doc.defaultView || window;
+      var raf = win.requestAnimationFrame || function(fn) { return setTimeout(fn, 16); };
+      var caf = win.cancelAnimationFrame || clearTimeout;
+      function onScrollOrResize() {
+        if (timelineState.virtualScrollFrame) return;
+        timelineState.virtualScrollFrame = raf(function() {
+          timelineState.virtualScrollFrame = null;
+          updateTimelineViewport();
+          renderTimeline();
+        });
+      }
+      win.addEventListener('scroll', onScrollOrResize, { passive: true });
+      win.addEventListener('resize', onScrollOrResize);
+      timelineState.virtualScrollCleanup = function() {
+        win.removeEventListener('scroll', onScrollOrResize);
+        win.removeEventListener('resize', onScrollOrResize);
+        if (timelineState.virtualScrollFrame) {
+          caf(timelineState.virtualScrollFrame);
+          timelineState.virtualScrollFrame = null;
+        }
+      };
+    }
+
     function renderLane(lane, range, idx) {
       var init = lane.initiative;
       var laneItems = lane.items.slice().sort(function(a, b) {
@@ -1760,7 +2046,8 @@
       var laneHeight = Math.max(104, eventBottom, spanBottom);
 
       var bg = idx % 2 === 0 ? 'var(--bg-surface)' : 'var(--bg-subtle)';
-      var html = '<div style="display:grid;grid-template-columns:220px 1fr;min-height:' + laneHeight + 'px;'
+      var html = '<div data-timeline-lane-id="' + UI.escapeHtml(init.id) + '" '
+        + 'style="display:grid;grid-template-columns:220px 1fr;min-height:' + laneHeight + 'px;'
         + 'border-bottom:1px solid var(--border-color);background:' + bg + ';">';
       html += '<div data-entity-type="initiative" data-entity-id="' + UI.escapeHtml(init.id) + '" '
         + 'style="padding:var(--space-3);border-right:1px solid var(--border-color);cursor:pointer;min-width:0;">'
@@ -1792,18 +2079,22 @@
           + 'No dated work yet</div>';
       } else {
         for (var i = 0; i < visible.length; i++) {
-          html += renderMarker(visible[i], range, i);
+          if (laneRowShouldRender(init.id, eventTop + i * eventRowHeight - 12, eventRowHeight + 24)) {
+            html += renderMarker(visible[i], range, i);
+          }
         }
-        if (spanCount) html += renderDecisionSpans(lane.decisionSpans, range, spanTop, spanRowHeight);
+        if (spanCount) html += renderDecisionSpans(lane.decisionSpans, range, spanTop, spanRowHeight, init.id);
       }
       html += '</div></div>';
       return html;
     }
 
-    function renderDecisionSpans(spans, range, topOffset, rowHeight) {
+    function renderDecisionSpans(spans, range, topOffset, rowHeight, laneId) {
       var html = '';
       for (var i = 0; i < spans.length; i++) {
-        html += renderDecisionSpan(spans[i], range, i, topOffset, rowHeight);
+        if (laneRowShouldRender(laneId, topOffset + i * rowHeight - 8, rowHeight + 16)) {
+          html += renderDecisionSpan(spans[i], range, i, topOffset, rowHeight);
+        }
       }
       return html;
     }
@@ -2185,11 +2476,33 @@
         + ';border:1px solid ' + entry.color + ';"></span>';
     }
 
+    function renderWindowStatus() {
+      if (!timelineState.loadingWindow && !timelineState.windowError) return '';
+      var text = timelineState.loadingWindow
+        ? 'Loading timeline window...'
+        : 'Could not load this timeline window.';
+      var html = '<div style="display:flex;align-items:center;gap:var(--space-2);margin:0 0 var(--space-3) 0;'
+        + 'font-size:12px;color:var(--text-secondary);">';
+      if (timelineState.loadingWindow) {
+        html += '<span style="width:10px;height:10px;border-radius:999px;background:var(--accent-primary);'
+          + 'display:inline-block;opacity:0.82;"></span>';
+      }
+      html += '<span>' + UI.escapeHtml(text) + '</span>';
+      if (timelineState.windowError) {
+        html += '<button type="button" data-timeline-retry-window style="height:26px;padding:0 9px;'
+          + 'border:1px solid var(--border-color);border-radius:8px;background:var(--bg-surface);'
+          + 'color:var(--text-primary);font-family:var(--font-sans);font-size:11px;cursor:pointer;">Retry</button>';
+      }
+      html += '</div>';
+      return html;
+    }
+
     function renderTimeline() {
+      updateTimelineViewport();
       var model = buildModel();
       timelineState.renderedRange = model.range;
-      var html = '<div class="decidr-timeline-root" style="width:100%;max-width:1280px;box-sizing:border-box;'
-        + 'margin:0 auto;padding:var(--space-6) var(--space-4);font-family:var(--font-sans);'
+      var html = '<div class="decidr-timeline-root" style="width:calc(100vw - 40px);max-width:calc(100vw - 40px);box-sizing:border-box;'
+        + 'margin:0 auto;padding:var(--space-5) 0;font-family:var(--font-sans);'
         + 'color:var(--text-primary);overflow-x:hidden;">';
       html += '<style>.decidr-timeline-root select{background-color:var(--bg-surface)!important;'
         + 'background-image:none!important;-webkit-appearance:none;appearance:none;box-shadow:none!important;}'
@@ -2200,6 +2513,7 @@
       html += renderRangeControls(model);
       html += renderFilterControls(model);
       html += renderLegend();
+      html += renderWindowStatus();
       html += renderTimelineBoard(model);
       html += renderScan(model);
       html += '</div>';
@@ -2261,8 +2575,18 @@
       wirePeopleControls();
       wireDecisionSpanControls();
       wireLegendControls();
+      wireWindowRetry();
+      wireVirtualScroll();
       wireEntityClicks(container);
       wireOrgPicker();
+    }
+
+    function wireWindowRetry() {
+      var retry = container.querySelector('[data-timeline-retry-window]');
+      if (!retry) return;
+      retry.addEventListener('click', function() {
+        reloadTimelineWindow({ force: true });
+      });
     }
 
     function wireScopeControls() {
@@ -2276,7 +2600,7 @@
             if (scope === 'initiative' && !timelineState.selectedInitiativeId && timelineState.initiatives.length) {
               timelineState.selectedInitiativeId = timelineState.initiatives[0].id;
             }
-            renderTimeline();
+            reloadTimelineWindow();
           });
         })(scopeBtns[i]);
       }
@@ -2286,7 +2610,7 @@
         select.addEventListener('change', function() {
           timelineState.selectedInitiativeId = select.value;
           timelineState.scope = 'initiative';
-          renderTimeline();
+          reloadTimelineWindow();
         });
       }
     }
@@ -2316,7 +2640,7 @@
             timelineState.rangeStart = null;
             timelineState.rangeEnd = null;
             timelineState.rangePanRemainder = 0;
-            renderTimeline();
+            reloadTimelineWindow();
           });
         })(presetBtns[i]);
       }
@@ -2329,7 +2653,7 @@
         var end = fromInputDate(endInput.value, true);
         if (!start || !end) return;
         setCustomRangeDates(start, end);
-        renderTimeline();
+        reloadTimelineWindow();
       }
       if (startInput) startInput.addEventListener('change', applyCustomRange);
       if (endInput) endInput.addEventListener('change', applyCustomRange);
@@ -2340,7 +2664,7 @@
       if (!range || !days) return;
       setCustomRangeDates(addDays(range.min, days), addDays(range.max, days));
       timelineState.rangePanRemainder = 0;
-      renderTimeline();
+      reloadTimelineWindow();
     }
 
     function consumeTimelinePanDelta(delta, threshold) {
@@ -2372,26 +2696,21 @@
       var root = container.querySelector('.decidr-timeline-root');
       var range = timelineState.renderedRange;
       if (!root || !scroller || scroller.getAttribute('data-timeline-day-pan') !== 'true' || !rangeSupportsDayPan(range)) return;
-      var doc = container.ownerDocument || document;
 
       function handleWheel(evt) {
         if (!evt || !evt.target || !root.contains(evt.target)) return;
-        var target = evt.target.nodeType === 1 ? evt.target : evt.target.parentElement;
-        var panSurface = target && target.closest ? target.closest('[data-timeline-board-scroll]') : null;
-        if (!panSurface && eventPointWithinElement(evt, scroller)) panSurface = scroller;
-        if (!panSurface || panSurface.getAttribute('data-timeline-day-pan') !== 'true') return;
         var horizontalDelta = horizontalPanDeltaFromWheel(evt);
         if (!horizontalDelta) return;
 
         evt.preventDefault();
         if (evt.stopImmediatePropagation) evt.stopImmediatePropagation();
         else evt.stopPropagation();
-        consumeTimelinePanDelta(horizontalDelta, timelinePanThreshold(timelineState.renderedRange, panSurface));
+        consumeTimelinePanDelta(horizontalDelta, timelinePanThreshold(timelineState.renderedRange, scroller));
       }
 
-      doc.addEventListener('wheel', handleWheel, { passive: false, capture: true });
+      scroller.addEventListener('wheel', handleWheel, { passive: false });
       timelineState.panWheelCleanup = function() {
-        doc.removeEventListener('wheel', handleWheel, true);
+        scroller.removeEventListener('wheel', handleWheel);
       };
     }
 
@@ -2403,7 +2722,7 @@
             var filter = btn.getAttribute('data-timeline-person-filter');
             if (!filter || filter === timelineState.peopleFilter) return;
             timelineState.peopleFilter = filter;
-            renderTimeline();
+            reloadTimelineWindow();
           });
         })(filterBtns[i]);
       }
@@ -2415,13 +2734,13 @@
       if (startSelect) {
         startSelect.addEventListener('change', function() {
           timelineState.decisionStartFilter = startSelect.value || 'any';
-          renderTimeline();
+          reloadTimelineWindow();
         });
       }
       if (endSelect) {
         endSelect.addEventListener('change', function() {
           timelineState.decisionEndFilter = endSelect.value || 'any';
-          renderTimeline();
+          reloadTimelineWindow();
         });
       }
     }
@@ -2528,6 +2847,7 @@
             return;
           }
           timelineState.activeOrgId = settingsOrgId;
+          timelineState.windowCache = {};
           container.innerHTML = UI.loadingSpinner('Switching organization...');
           API.switchOrg(settingsOrgId).then(function() {
             return refreshTimeline();
@@ -2548,6 +2868,7 @@
           return;
         }
         timelineState.activeOrgId = orgId;
+        timelineState.windowCache = {};
         menu.classList.remove('open');
         container.innerHTML = UI.loadingSpinner('Switching organization...');
         API.switchOrg(orgId).then(function() {
