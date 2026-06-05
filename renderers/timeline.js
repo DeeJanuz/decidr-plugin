@@ -1554,6 +1554,7 @@
         entityType: 'decision',
         entityId: decision.id,
         initiativeId: getDecisionInitiativeId(decision, lookup),
+        projectId: getDecisionProjectId(decision),
         startDate: startDate,
         endDate: endDate,
         displayStartDate: displayStartDate,
@@ -1957,7 +1958,7 @@
     function renderTimelineLanes(model) {
       var html = '';
       for (var i = 0; i < model.lanes.length; i++) {
-        html += renderLane(model.lanes[i], model.range, i);
+        html += renderLane(model.lanes[i], model.range, i, model.lookup);
       }
       return html;
     }
@@ -2028,22 +2029,148 @@
       };
     }
 
-    function renderLane(lane, range, idx) {
-      var init = lane.initiative;
+    function projectGroupKey(projectId) {
+      return projectId ? 'project:' + projectId : 'initiative-level';
+    }
+
+    function projectGroupLabel(group, lookup) {
+      if (!group || !group.projectId) return 'Initiative-level work';
+      var project = lookup && lookup.projects ? lookup.projects[group.projectId] : null;
+      return project ? displayName(project) : 'Project ' + truncate(group.projectId, 10);
+    }
+
+    function projectGroupStatus(group, lookup) {
+      if (!group || !group.projectId || !lookup || !lookup.projects) return '';
+      var project = lookup.projects[group.projectId];
+      return project ? normalizeStatus(project.status).replace(/_/g, ' ') : '';
+    }
+
+    function ensureProjectGroup(groupsByKey, groups, projectId) {
+      var key = projectGroupKey(projectId);
+      if (!groupsByKey[key]) {
+        groupsByKey[key] = {
+          key: key,
+          projectId: projectId || null,
+          items: [],
+          decisionSpans: [],
+          earliest: null,
+          top: 0,
+          height: 0
+        };
+        groups.push(groupsByKey[key]);
+      }
+      return groupsByKey[key];
+    }
+
+    function rememberProjectGroupDate(group, date) {
+      if (!group || !date) return;
+      if (!group.earliest || date.getTime() < group.earliest.getTime()) group.earliest = date;
+    }
+
+    function buildLaneProjectGroups(lane, lookup) {
+      var groups = [];
+      var groupsByKey = {};
       var laneItems = lane.items.slice().sort(function(a, b) {
         var diff = a.date.getTime() - b.date.getTime();
         if (diff !== 0) return diff;
         return (a.priority || 3) - (b.priority || 3);
       });
-      var visible = laneItems;
-      var spanCount = lane.decisionSpans ? lane.decisionSpans.length : 0;
-      var eventTop = 18;
+      var spans = (lane.decisionSpans || []).slice().sort(function(a, b) {
+        var diff = a.startDate.getTime() - b.startDate.getTime();
+        if (diff !== 0) return diff;
+        return a.endDate.getTime() - b.endDate.getTime();
+      });
+
+      for (var i = 0; i < laneItems.length; i++) {
+        var itemGroup = ensureProjectGroup(groupsByKey, groups, laneItems[i].projectId);
+        itemGroup.items.push(laneItems[i]);
+        rememberProjectGroupDate(itemGroup, laneItems[i].date);
+      }
+      for (var s = 0; s < spans.length; s++) {
+        var spanGroup = ensureProjectGroup(groupsByKey, groups, spans[s].projectId);
+        spanGroup.decisionSpans.push(spans[s]);
+        rememberProjectGroupDate(spanGroup, spans[s].startDate);
+      }
+
+      groups.sort(function(a, b) {
+        if (!a.projectId && b.projectId) return -1;
+        if (a.projectId && !b.projectId) return 1;
+        var aTime = a.earliest ? a.earliest.getTime() : 0;
+        var bTime = b.earliest ? b.earliest.getTime() : 0;
+        if (aTime !== bTime) return aTime - bTime;
+        return projectGroupLabel(a, lookup).localeCompare(projectGroupLabel(b, lookup));
+      });
+      return groups;
+    }
+
+    function measureProjectGroups(groups) {
+      var top = 12;
+      var headerHeight = 42;
       var eventRowHeight = 24;
       var spanRowHeight = 48;
-      var spanTop = visible.length ? eventTop + visible.length * eventRowHeight + 12 : 28;
-      var eventBottom = visible.length ? eventTop + visible.length * eventRowHeight + 18 : 70;
-      var spanBottom = spanCount ? spanTop + spanCount * spanRowHeight + 20 : 0;
-      var laneHeight = Math.max(104, eventBottom, spanBottom);
+      for (var i = 0; i < groups.length; i++) {
+        var group = groups[i];
+        var eventCount = group.items.length;
+        var spanCount = group.decisionSpans.length;
+        var eventTop = top + headerHeight + 10;
+        var spanTop = eventCount ? eventTop + eventCount * eventRowHeight + 14 : top + headerHeight + 12;
+        var eventBottom = eventCount ? eventTop + eventCount * eventRowHeight + 12 : top + headerHeight + 42;
+        var spanBottom = spanCount ? spanTop + spanCount * spanRowHeight + 16 : 0;
+        group.top = top;
+        group.headerHeight = headerHeight;
+        group.eventTop = eventTop;
+        group.eventRowHeight = eventRowHeight;
+        group.spanTop = spanTop;
+        group.spanRowHeight = spanRowHeight;
+        group.height = Math.max(98, eventBottom - top, spanBottom ? spanBottom - top : 0);
+        top += group.height + 14;
+      }
+      return Math.max(116, top + 2);
+    }
+
+    function renderProjectGroupHeader(group, lookup, top, idx) {
+      var label = projectGroupLabel(group, lookup);
+      var status = projectGroupStatus(group, lookup);
+      var decisionCount = group.decisionSpans.length;
+      var eventCount = group.items.length;
+      var meta = [];
+      if (decisionCount) meta.push(decisionCount + ' decision' + (decisionCount === 1 ? '' : 's'));
+      if (eventCount) meta.push(eventCount + ' event' + (eventCount === 1 ? '' : 's'));
+      var attrs = group.projectId
+        ? 'data-entity-type="project" data-entity-id="' + UI.escapeHtml(group.projectId) + '" '
+        : '';
+      var accent = group.projectId ? MARKER_COLORS.project : MARKER_COLORS.initiative;
+      var accentRing = group.projectId ? 'rgba(59,130,246,0.14)' : 'rgba(34,197,94,0.14)';
+      var sectionBg = idx % 2 === 0 ? 'rgba(30,41,59,0.38)' : 'rgba(30,41,59,0.28)';
+      var headerBg = idx % 2 === 0 ? 'rgba(15,23,42,0.76)' : 'rgba(15,23,42,0.68)';
+      var html = '<div aria-hidden="true" '
+        + 'style="position:absolute;left:10px;right:10px;top:' + top + 'px;height:' + group.height + 'px;'
+        + 'border:1px solid rgba(148,163,184,0.22);border-left:3px solid ' + accent + ';'
+        + 'border-radius:8px;background:' + sectionBg + ';'
+        + 'box-shadow:inset 0 1px 0 rgba(255,255,255,0.03);z-index:1;pointer-events:none;"></div>';
+      html += '<div ' + attrs
+        + 'style="position:absolute;left:10px;right:10px;top:' + top + 'px;height:' + group.headerHeight + 'px;'
+        + 'display:flex;align-items:center;gap:10px;padding:0 12px 0 14px;'
+        + 'border-top-left-radius:8px;border-top-right-radius:8px;border-bottom:1px solid rgba(148,163,184,0.18);'
+        + 'background:' + headerBg + ';color:var(--text-secondary);font-size:11px;z-index:3;'
+        + (group.projectId ? 'cursor:pointer;' : '') + '">'
+        + '<span style="width:8px;height:8px;border-radius:999px;background:' + accent + ';'
+        + 'box-shadow:0 0 0 3px ' + accentRing + ';flex:0 0 auto;"></span>'
+        + '<span data-project-group-label="true" style="font-weight:var(--weight-semibold);color:var(--text-primary);'
+        + 'overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:min(420px,44vw);">'
+        + UI.escapeHtml(truncate(label, 68)) + '</span>'
+        + (status ? '<span style="font-size:10px;color:var(--text-tertiary);text-transform:capitalize;white-space:nowrap;">'
+          + UI.escapeHtml(status.toLowerCase()) + '</span>' : '')
+        + (meta.length ? '<span style="font-size:10px;color:var(--text-tertiary);white-space:nowrap;">'
+          + UI.escapeHtml(meta.join(' / ')) + '</span>' : '')
+        + '</div>';
+      return html;
+    }
+
+    function renderLane(lane, range, idx, lookup) {
+      var init = lane.initiative;
+      var groups = buildLaneProjectGroups(lane, lookup);
+      var laneHeight = groups.length ? measureProjectGroups(groups) : 104;
 
       var bg = idx % 2 === 0 ? 'var(--bg-surface)' : 'var(--bg-subtle)';
       var html = '<div data-timeline-lane-id="' + UI.escapeHtml(init.id) + '" '
@@ -2074,16 +2201,25 @@
         var tickPct = positionForDate(range.ticks[t], range);
         html += '<div style="position:absolute;left:' + tickPct + '%;top:0;bottom:0;border-left:1px solid rgba(148,163,184,0.18);"></div>';
       }
-      if (visible.length === 0 && spanCount === 0) {
+      if (!groups.length) {
         html += '<div style="position:absolute;left:24px;top:39px;font-size:12px;color:var(--text-tertiary);">'
           + 'No dated work yet</div>';
       } else {
-        for (var i = 0; i < visible.length; i++) {
-          if (laneRowShouldRender(init.id, eventTop + i * eventRowHeight - 12, eventRowHeight + 24)) {
-            html += renderMarker(visible[i], range, i);
+        for (var g = 0; g < groups.length; g++) {
+          var group = groups[g];
+          if (laneRowShouldRender(init.id, group.top - 4, group.height + 8)) {
+            html += renderProjectGroupHeader(group, lookup, group.top, g);
+          }
+          for (var i = 0; i < group.items.length; i++) {
+            var itemTop = group.eventTop + i * group.eventRowHeight;
+            if (laneRowShouldRender(init.id, itemTop - 12, group.eventRowHeight + 24)) {
+              html += renderMarker(group.items[i], range, i, itemTop);
+            }
+          }
+          if (group.decisionSpans.length) {
+            html += renderDecisionSpans(group.decisionSpans, range, group.spanTop, group.spanRowHeight, init.id);
           }
         }
-        if (spanCount) html += renderDecisionSpans(lane.decisionSpans, range, spanTop, spanRowHeight, init.id);
       }
       html += '</div></div>';
       return html;
@@ -2267,9 +2403,9 @@
       return people.length || lane.unassignedActive ? html : '';
     }
 
-    function renderMarker(item, range, idx) {
+    function renderMarker(item, range, idx, topOverride) {
       var pct = positionForDate(item.date, range);
-      var top = 18 + idx * 24;
+      var top = topOverride === undefined || topOverride === null ? 18 + idx * 24 : topOverride;
       var color = item.color || MARKER_COLORS.activity;
       var label = truncate(item.label, 40);
       var dateLabel = UI.formatDate(item.date.toISOString());
