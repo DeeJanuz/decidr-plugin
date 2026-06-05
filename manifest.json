@@ -1,6 +1,6 @@
 {
   "name": "decidr",
-  "version": "0.1.33-rc.6",
+  "version": "0.1.33-rc.7",
   "prompt_definitions": [
     {
       "name": "initiative_planning",
@@ -69,7 +69,7 @@
     "Use update_decision_stage_time and update_task_stage_time only to correct historical stage occurrence timestamps. They must not be used to transition live status; use update_decision or update_task for actual status changes.",
     "When the user asks for audit reports, custom audit reporting, a report builder over audit events, CSV export of audit events, or Salesforce-like filtering over audit payloads, push decidr_audit_reports directly. The renderer fetches reports, field catalogs, projects, categories, members, and preview rows from the API."
   ],
-  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.33-rc.6/decidr.zip",
+  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.33-rc.7/decidr.zip",
   "registry_index": {
     "summary": "Decision governance \u2014 initiatives, projects, decisions, tasks, and bridges with approval workflows",
     "tags": [
