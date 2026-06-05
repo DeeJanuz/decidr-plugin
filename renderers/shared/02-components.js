@@ -378,6 +378,15 @@
     return '<span class="decidr-badge decidr-entity-' + norm + '">' + UI.escapeHtml(label) + '</span>';
   };
 
+  UI.isCatchUpDecision = function(decision) {
+    return normalizeStatus(decision && (decision.kind || decision.decisionKind || decision.decision_kind)) === 'catch_up';
+  };
+
+  UI.decisionKindBadge = function(decision) {
+    if (!UI.isCatchUpDecision(decision)) return '';
+    return '<span class="decidr-badge decidr-decision-kind-catch-up">Catch-up</span>';
+  };
+
   // ─── Activity Label ─────────────────────────────────────────────────
 
   UI.activityLabel = function(lastActivity) {
@@ -812,6 +821,7 @@
       + '<div class="decidr-card-header">'
       + '<span class="decidr-card-type-label">Decision</span>'
       + UI.statusBadge(decision.status)
+      + UI.decisionKindBadge(decision)
       + '</div>'
       + '<div class="decidr-card-title">' + UI.escapeHtml(decision.title) + '</div>'
       + descHtml
@@ -1278,6 +1288,7 @@
       + activityHtml
       + '</div>'
       + UI.statusBadge(decision.status)
+      + UI.decisionKindBadge(decision)
       + supersedesBadge
       + '</div>';
 
@@ -1300,6 +1311,7 @@
         + '</div>'
         + '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">'
         + UI.statusBadge(supersededDec.status)
+        + UI.decisionKindBadge(supersededDec)
         + prevStatusHtml
         + '</div>'
         + '</div>';
@@ -1323,6 +1335,7 @@
       + (projectName ? '<div class="decidr-pending-item-project">' + UI.escapeHtml(projectName) + '</div>' : '')
       + '</div>'
       + UI.statusBadge(decision.status)
+      + UI.decisionKindBadge(decision)
       + '</div>';
   };
 
@@ -2094,6 +2107,7 @@
         }
         html += '<span class="decidr-so-list-title">' + UI.escapeHtml(title) + '</span>'
           + UI.statusBadge(item.status)
+          + (normalizeStatus(rowType || entityType) === 'decision' ? UI.decisionKindBadge(item) : '')
           + '</div>';
       }
       html += '</div>';

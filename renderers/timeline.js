@@ -832,6 +832,30 @@
       return normalizeStatus(metadata.to || metadata.toStatus || metadata.to_status);
     }
 
+    function eventIsCatchUp(evt) {
+      var metadata = eventMetadata(evt);
+      return metadata.catchUp === true || normalizeStatus(metadata.kind) === 'CATCH_UP';
+    }
+
+    function isCatchUpDecision(decision) {
+      return normalizeStatus(getField(decision, ['kind', 'decisionKind', 'decision_kind'])) === 'CATCH_UP';
+    }
+
+    function decisionAnchorStartDate(decision, events) {
+      if (isCatchUpDecision(decision)) {
+        if (events && events.length) {
+          for (var i = 0; i < events.length; i++) {
+            if (events[i].catchUp) return events[i].date;
+          }
+          return events[0].date;
+        }
+        return validDate(decision.decidedAt || decision.decided_at)
+          || validDate(decision.updatedAt || decision.updated_at)
+          || validDate(decision.createdAt);
+      }
+      return validDate(decision.createdAt);
+    }
+
     function itemHasPerson(item, userId) {
       if (!userId || !item || !Array.isArray(item.personIds)) return false;
       for (var i = 0; i < item.personIds.length; i++) {
@@ -1144,12 +1168,12 @@
         var decision = timelineState.decisions[i];
         var initId = getDecisionInitiativeId(decision, lookup);
         if (!scopeAllows(initId)) continue;
-        var created = validDate(decision.createdAt);
-        if (created) {
-          items.push({ date: decisionDisplayStartDate(created) });
-          var events = decisionStatusEvents(decision.id);
+        var events = decisionStatusEvents(decision.id);
+        var start = decisionAnchorStartDate(decision, events);
+        if (start) {
+          items.push({ date: decisionDisplayStartDate(start) });
           var end = decisionFallbackEndDate(decision, events);
-          if (end) items.push({ date: decisionDisplayEndDate(created, end) });
+          if (end) items.push({ date: decisionDisplayEndDate(start, end) });
         }
       }
       return items;
@@ -1416,7 +1440,8 @@
         events.push({
           date: date,
           from: eventStatusFrom(evt),
-          to: eventStatusTo(evt)
+          to: eventStatusTo(evt),
+          catchUp: eventIsCatchUp(evt)
         });
       }
       events.sort(function(a, b) { return a.date.getTime() - b.date.getTime(); });
@@ -1440,15 +1465,15 @@
 
     function decisionReachedStatusAt(decision, events, status) {
       var target = normalizeStatus(status);
-      var created = validDate(decision.createdAt);
-      if (!target || !created) return null;
+      var anchor = decisionAnchorStartDate(decision, events);
+      if (!target || !anchor) return null;
       var initial = decisionInitialStatus(decision, events);
-      if (initial === target) return created;
+      if (initial === target) return anchor;
       for (var i = 0; i < events.length; i++) {
         if (events[i].to === target) return events[i].date;
       }
       if (normalizeStatus(decision.status) === target) {
-        return validDate(decision.decidedAt || decision.decided_at) || validDate(decision.updatedAt || decision.updated_at) || created;
+        return validDate(decision.decidedAt || decision.decided_at) || validDate(decision.updatedAt || decision.updated_at) || anchor;
       }
       return null;
     }
@@ -1463,8 +1488,8 @@
 
     function decisionReachedEndStatusAt(decision, events, status) {
       var target = normalizeStatus(status);
-      var created = validDate(decision.createdAt);
-      if (!target || !created) return null;
+      var anchor = decisionAnchorStartDate(decision, events);
+      if (!target || !anchor) return null;
       var exact = decisionReachedStatusAt(decision, events, target);
       if (exact) return { date: exact, status: target, inherited: false };
 
@@ -1473,7 +1498,7 @@
 
       var initial = decisionInitialStatus(decision, events);
       if (decisionEndStatusRank(initial) >= targetRank) {
-        return { date: created, status: initial, inherited: initial !== target };
+        return { date: anchor, status: initial, inherited: initial !== target };
       }
 
       for (var i = 0; i < events.length; i++) {
@@ -1486,7 +1511,7 @@
       var current = normalizeStatus(decision.status);
       if (decisionEndStatusRank(current) >= targetRank) {
         return {
-          date: validDate(decision.decidedAt || decision.decided_at) || validDate(decision.updatedAt || decision.updated_at) || created,
+          date: validDate(decision.decidedAt || decision.decided_at) || validDate(decision.updatedAt || decision.updated_at) || anchor,
           status: current,
           inherited: current !== target
         };
@@ -1507,9 +1532,9 @@
     }
 
     function decisionSpanFor(decision, lookup, range) {
-      var created = validDate(decision.createdAt);
-      if (!created) return null;
       var events = decisionStatusEvents(decision.id);
+      var anchor = decisionAnchorStartDate(decision, events);
+      if (!anchor) return null;
       var startFilter = normalizeStatus(timelineState.decisionStartFilter);
       var endFilter = normalizeStatus(timelineState.decisionEndFilter);
       var startStatus = startFilter && startFilter !== 'ANY'
@@ -1517,7 +1542,7 @@
         : decisionInitialStatus(decision, events);
       var startDate = startFilter && startFilter !== 'ANY'
         ? decisionReachedStatusAt(decision, events, startFilter)
-        : created;
+        : anchor;
       if (!startDate) return null;
 
       var currentStatus = normalizeStatus(decision.status);
@@ -1568,6 +1593,7 @@
         endReached: endReached,
         currentStatus: currentStatus,
         label: displayName(decision),
+        kind: getField(decision, ['kind', 'decisionKind', 'decision_kind']),
         person: person,
         personIds: personIds
       };
@@ -2238,7 +2264,8 @@
     function decisionSpanMinWidth(span) {
       var label = span && span.label ? span.label : '';
       var time = span && span.startDate ? formatMinuteTime(span.startDate) : '';
-      return Math.max(160, Math.min(680, Math.round((label.length * 6.2) + (time.length * 5.4) + 64)));
+      var kindExtra = span && normalizeStatus(span.kind) === 'CATCH_UP' ? 58 : 0;
+      return Math.max(160, Math.min(760, Math.round((label.length * 6.2) + (time.length * 5.4) + 64 + kindExtra)));
     }
 
     function timeWidthPx(start, end, range) {
@@ -2279,8 +2306,10 @@
       var buttonBackground = 'rgba(15,23,42,0.68)';
       var timeBarOpacity = '0.62';
       var buttonWidthStyle = 'width:max-content;min-width:' + Math.max(actualBarPx, labelMinWidth) + 'px;';
+      var catchUp = normalizeStatus(span.kind) === 'CATCH_UP';
       var title = span.label + ' - ' + span.startStatus.replace(/_/g, ' ')
         + ' to ' + span.endStatus.replace(/_/g, ' ')
+        + (catchUp ? ' (catch-up)' : '')
         + (span.inheritedEndStatus && span.requestedEndStatus
           ? ' (matches ' + span.requestedEndStatus.replace(/_/g, ' ') + ' filter)'
           : '')
@@ -2303,6 +2332,7 @@
         + 'white-space:nowrap;min-width:max-content;">'
         + (startOverflow ? renderDecisionStartOverflow(span, color) : '')
         + renderDecisionBadge(color, 15, true)
+        + (catchUp ? '<span class="decidr-badge decidr-decision-kind-catch-up">Catch-up</span>' : '')
         + '<span>' + UI.escapeHtml(span.label) + '</span>'
         + '<span style="color:var(--text-tertiary);font-size:9px;font-weight:var(--weight-medium);">'
         + UI.escapeHtml(formatMinuteTime(span.startDate)) + '</span>'

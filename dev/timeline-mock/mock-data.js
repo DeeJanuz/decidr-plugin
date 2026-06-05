@@ -117,6 +117,18 @@
       createdAt: '2026-06-04T20:05:00.000Z',
       updatedAt: '2026-06-05T18:35:00.000Z',
       createdById: 'u-daenon'
+    },
+    {
+      id: 'decision-catch-up',
+      title: 'Capture shipped timeline badge polish after implementation',
+      description: 'Small UI polish was already implemented; this catch-up decision records why it happened.',
+      kind: 'CATCH_UP',
+      entityType: 'PROJECT',
+      entityId: 'project-timeline-ux',
+      status: 'IMPLEMENTED',
+      createdAt: '2026-06-05T22:30:00.000Z',
+      decidedAt: '2026-06-04T18:20:00.000Z',
+      createdById: 'u-daenon'
     }
   ];
 
@@ -172,7 +184,19 @@
     }
   ];
 
-  function statusEvent(id, decisionId, at, from, to, actorId, title) {
+  function statusEvent(id, decisionId, at, from, to, actorId, title, extraMetadata) {
+    var metadata = {
+      decisionTitle: title,
+      from: from,
+      to: to
+    };
+    if (extraMetadata) {
+      for (var key in extraMetadata) {
+        if (Object.prototype.hasOwnProperty.call(extraMetadata, key)) {
+          metadata[key] = extraMetadata[key];
+        }
+      }
+    }
     return {
       id: id,
       decisionId: decisionId,
@@ -181,11 +205,7 @@
       createdAt: at,
       actorId: actorId,
       actor: people.filter(function(p) { return p.id === actorId; })[0],
-      metadata: {
-        decisionTitle: title,
-        from: from,
-        to: to
-      }
+      metadata: metadata
     };
   }
 
@@ -218,6 +238,7 @@
     statusEvent('evt-rc8-proposed', 'decision-plugin-rc8', '2026-06-05T20:58:00.000Z', 'DRAFT', 'PROPOSED', 'u-sam', decisions[4].title),
     statusEvent('evt-rc8-implemented', 'decision-plugin-rc8', '2026-06-05T21:16:00.000Z', 'STAGED', 'IMPLEMENTED', 'u-sam', decisions[4].title),
     statusEvent('evt-open-progress', 'decision-open-span', '2026-06-05T18:35:00.000Z', 'PROPOSED', 'IN_PROGRESS', 'u-daenon', decisions[5].title),
+    statusEvent('evt-catch-up-implemented', 'decision-catch-up', '2026-06-04T18:20:00.000Z', 'DRAFT', 'IMPLEMENTED', 'u-daenon', decisions[6].title, { catchUp: true, kind: 'CATCH_UP' }),
     taskEvent('evt-task-review-created', 'task-visual-review', '2026-06-05T21:28:00.000Z', 'u-daenon', tasks[0].title, 'CREATED'),
     taskEvent('evt-task-dense-one', 'task-dense-window', '2026-06-05T17:52:00.000Z', 'u-mira', tasks[1].title, 'CREATED'),
     taskEvent('evt-task-dense-two', 'task-dense-window', '2026-06-05T18:06:00.000Z', 'u-mira', 'Dense row spacing adjusted', 'UPDATED'),

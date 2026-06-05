@@ -942,10 +942,12 @@
   UI.slideOutDecision = function(decision) {
     var state = UI.SlideOut._decisionPanelState;
     var enriched = decision._enriched || {};
+    var isCatchUp = UI.isCatchUpDecision && UI.isCatchUpDecision(decision);
     var html = '<div class="decidr-so-detail">';
 
     // Meta row
     var metaItems = [{ html: UI.statusBadge(decision.status) }];
+    if (isCatchUp) metaItems.push({ html: UI.decisionKindBadge(decision) });
     // Priority from tags
     var tags = decision.tags || [];
     for (var ti = 0; ti < tags.length; ti++) {
@@ -986,89 +988,90 @@
     html += '<button class="decidr-so-btn decidr-so-btn-danger" id="decidr-so-btn-archive">' + ICON_TRASH + ' Archive</button>';
     html += '</div>';
 
-    // Reviewers & Approval Progress
-    var reviewers = decision.reviewers || decision.approvals || [];
-    var approvalProgress = decision.approvalProgress || null;
+    if (!isCatchUp) {
+      // Reviewers & Approval Progress
+      var reviewers = decision.reviewers || decision.approvals || [];
+      var approvalProgress = decision.approvalProgress || null;
 
-    html += '<div class="decidr-so-reviewers-card">';
-    html += '<div class="decidr-so-reviewers-label">REVIEWERS</div>';
+      html += '<div class="decidr-so-reviewers-card">';
+      html += '<div class="decidr-so-reviewers-label">REVIEWERS</div>';
 
-    // Reviewer chips with approve/reject states
-    html += '<div class="decidr-so-reviewers">';
-    for (var ri = 0; ri < reviewers.length; ri++) {
-      var appr = reviewers[ri];
-      var approverUser = { name: appr.userName || appr.userId || 'Unknown', image: appr.image, avatarColor: appr.avatarColor };
-      var chipStatus = appr.status || (appr.approved ? 'approved' : '');
-      var chipClass = chipStatus === 'approved' ? ' approved' : (chipStatus === 'rejected' ? ' rejected' : '');
-      html += '<span class="decidr-so-reviewer-chip' + chipClass + '">'
-        + UI.avatar(approverUser, 'sm')
-        + ' <span>' + UI.escapeHtml(approverUser.name) + '</span>';
-      if (chipStatus === 'approved') {
-        html += ' <span class="decidr-so-reviewer-check">\u2713</span>';
-      } else if (chipStatus === 'rejected') {
-        html += ' <span class="decidr-so-reviewer-reject">\u2717</span>';
+      // Reviewer chips with approve/reject states
+      html += '<div class="decidr-so-reviewers">';
+      for (var ri = 0; ri < reviewers.length; ri++) {
+        var appr = reviewers[ri];
+        var approverUser = { name: appr.userName || appr.userId || 'Unknown', image: appr.image, avatarColor: appr.avatarColor };
+        var chipStatus = appr.status || (appr.approved ? 'approved' : '');
+        var chipClass = chipStatus === 'approved' ? ' approved' : (chipStatus === 'rejected' ? ' rejected' : '');
+        html += '<span class="decidr-so-reviewer-chip' + chipClass + '">'
+          + UI.avatar(approverUser, 'sm')
+          + ' <span>' + UI.escapeHtml(approverUser.name) + '</span>';
+        if (chipStatus === 'approved') {
+          html += ' <span class="decidr-so-reviewer-check">\u2713</span>';
+        } else if (chipStatus === 'rejected') {
+          html += ' <span class="decidr-so-reviewer-reject">\u2717</span>';
+        }
+        html += '</span>';
       }
-      html += '</span>';
-    }
-    html += '<div style="position:relative;display:inline-block;">';
-    html += '<button class="decidr-so-assign-btn" id="decidr-so-btn-assign-reviewers">+ Assign</button>';
-    html += '<div class="decidr-so-reviewer-dropdown" id="decidr-so-reviewer-dropdown" style="display:none;">';
-    html += '<div class="decidr-so-reviewer-dropdown-header">Add Reviewer</div>';
-    html += '<div id="decidr-so-reviewer-list"></div>';
-    html += '</div></div>';
-    html += '</div>';
-
-    // Approval progress summary
-    if (approvalProgress) {
-      var totalNeeded = approvalProgress.totalNeeded || 1;
-      var totalHave = approvalProgress.totalHave || 0;
-      html += '<div class="decidr-so-approval-progress">';
-      html += '<span class="decidr-so-approval-stepper">';
-      html += '<button class="decidr-so-stepper-btn" id="decidr-so-btn-approvals-dec" title="Decrease required approvals">\u2212</button>';
-      html += '<span class="decidr-so-stepper-label" id="decidr-so-approvals-needed">' + totalNeeded + '</span>';
-      html += '<button class="decidr-so-stepper-btn" id="decidr-so-btn-approvals-inc" title="Increase required approvals">+</button>';
-      html += '</span>';
-      html += '<span class="decidr-so-stepper-label">required</span>';
-      html += '<span class="decidr-so-approval-divider">\u00b7</span>';
-      if (approvalProgress.satisfied) {
-        html += '<span class="decidr-so-approval-satisfied">\u2713 ' + totalHave + ' / ' + totalNeeded + ' approved</span>';
-      } else {
-        html += '<span class="decidr-so-approval-count">' + totalHave + ' / ' + totalNeeded + ' approvals</span>';
-      }
+      html += '<div style="position:relative;display:inline-block;">';
+      html += '<button class="decidr-so-assign-btn" id="decidr-so-btn-assign-reviewers">+ Assign</button>';
+      html += '<div class="decidr-so-reviewer-dropdown" id="decidr-so-reviewer-dropdown" style="display:none;">';
+      html += '<div class="decidr-so-reviewer-dropdown-header">Add Reviewer</div>';
+      html += '<div id="decidr-so-reviewer-list"></div>';
+      html += '</div></div>';
       html += '</div>';
-    }
 
-    // Approve/Reject action buttons — reflect current user's vote
-    var myVote = null;
-    var myUserId = (typeof API !== 'undefined' && API._currentUserId) ? API._currentUserId : null;
-    if (myUserId) {
-      for (var vi = 0; vi < approvals.length; vi++) {
-        if (approvals[vi].userId === myUserId) {
-          myVote = approvals[vi].status || 'approved';
-          break;
+      // Approval progress summary
+      if (approvalProgress) {
+        var totalNeeded = approvalProgress.totalNeeded || 1;
+        var totalHave = approvalProgress.totalHave || 0;
+        html += '<div class="decidr-so-approval-progress">';
+        html += '<span class="decidr-so-approval-stepper">';
+        html += '<button class="decidr-so-stepper-btn" id="decidr-so-btn-approvals-dec" title="Decrease required approvals">\u2212</button>';
+        html += '<span class="decidr-so-stepper-label" id="decidr-so-approvals-needed">' + totalNeeded + '</span>';
+        html += '<button class="decidr-so-stepper-btn" id="decidr-so-btn-approvals-inc" title="Increase required approvals">+</button>';
+        html += '</span>';
+        html += '<span class="decidr-so-stepper-label">required</span>';
+        html += '<span class="decidr-so-approval-divider">\u00b7</span>';
+        if (approvalProgress.satisfied) {
+          html += '<span class="decidr-so-approval-satisfied">\u2713 ' + totalHave + ' / ' + totalNeeded + ' approved</span>';
+        } else {
+          html += '<span class="decidr-so-approval-count">' + totalHave + ' / ' + totalNeeded + ' approvals</span>';
+        }
+        html += '</div>';
+      }
+
+      // Approve/Reject action buttons — reflect current user's vote
+      var myVote = null;
+      var myUserId = (typeof API !== 'undefined' && API._currentUserId) ? API._currentUserId : null;
+      if (myUserId) {
+        for (var vi = 0; vi < reviewers.length; vi++) {
+          if (reviewers[vi].userId === myUserId) {
+            myVote = reviewers[vi].status || 'approved';
+            break;
+          }
         }
       }
+      html += '<div class="decidr-so-approval-actions">';
+      if (myVote === 'approved') {
+        html += '<span class="decidr-so-btn decidr-so-btn-approve decidr-so-btn-active" aria-disabled="true">'
+          + '\u2713 You approved</span>';
+        html += '<button class="decidr-so-btn decidr-so-btn-reject" id="decidr-so-btn-reject">'
+          + '\u2717 Reject</button>';
+      } else if (myVote === 'rejected') {
+        html += '<button class="decidr-so-btn decidr-so-btn-approve" id="decidr-so-btn-approve">'
+          + '\u2713 Approve</button>';
+        html += '<span class="decidr-so-btn decidr-so-btn-reject decidr-so-btn-active" aria-disabled="true">'
+          + '\u2717 You rejected</span>';
+      } else {
+        html += '<button class="decidr-so-btn decidr-so-btn-approve" id="decidr-so-btn-approve">'
+          + '\u2713 Approve</button>';
+        html += '<button class="decidr-so-btn decidr-so-btn-reject" id="decidr-so-btn-reject">'
+          + '\u2717 Reject</button>';
+      }
+      html += '</div>';
+      html += '</div>';
     }
-    html += '<div class="decidr-so-approval-actions">';
-    if (myVote === 'approved') {
-      html += '<span class="decidr-so-btn decidr-so-btn-approve decidr-so-btn-active" aria-disabled="true">'
-        + '\u2713 You approved</span>';
-      html += '<button class="decidr-so-btn decidr-so-btn-reject" id="decidr-so-btn-reject">'
-        + '\u2717 Reject</button>';
-    } else if (myVote === 'rejected') {
-      html += '<button class="decidr-so-btn decidr-so-btn-approve" id="decidr-so-btn-approve">'
-        + '\u2713 Approve</button>';
-      html += '<span class="decidr-so-btn decidr-so-btn-reject decidr-so-btn-active" aria-disabled="true">'
-        + '\u2717 You rejected</span>';
-    } else {
-      html += '<button class="decidr-so-btn decidr-so-btn-approve" id="decidr-so-btn-approve">'
-        + '\u2713 Approve</button>';
-      html += '<button class="decidr-so-btn decidr-so-btn-reject" id="decidr-so-btn-reject">'
-        + '\u2717 Reject</button>';
-    }
-    html += '</div>';
-
-    html += '</div>';
 
     // Supersession banner
     html += UI.SlideOut._renderSupersessionBanner(decision);

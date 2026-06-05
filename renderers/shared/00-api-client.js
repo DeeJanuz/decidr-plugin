@@ -453,6 +453,16 @@
       return api.post('/decisions', data);
     },
 
+    createCatchUpDecision: function(data) {
+      var body = {};
+      data = data || {};
+      for (var key in data) {
+        if (Object.prototype.hasOwnProperty.call(data, key)) body[key] = data[key];
+      }
+      body.kind = 'CATCH_UP';
+      return api.post('/decisions', body);
+    },
+
     createTask: function(data) {
       return api.post('/tasks', data);
     },
@@ -481,6 +491,10 @@
 
     updateDecision: function(id, data) {
       return api.patch('/decisions/' + id, data);
+    },
+
+    markDecisionAsCatchUp: function(id, data) {
+      return api.post('/decisions/' + id + '/catch-up', data || {});
     },
 
     updateTask: function(id, data) {
