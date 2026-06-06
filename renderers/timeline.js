@@ -13,6 +13,8 @@
     var MINUTE_MS = 60 * 1000;
     var HOUR_MS = 60 * MINUTE_MS;
     var DAY_MS = 24 * HOUR_MS;
+    var PROJECT_GROUP_X_INSET = 10;
+    var DECISION_MIN_VISIBLE_WIDTH = 36;
     var MARKER_COLORS = {
       task_due: '#10b981',
       task_overdue: '#ef4444',
@@ -1935,7 +1937,8 @@
         ? 'width:100%;min-width:0;'
         : 'min-width:' + model.range.width + 'px;width:100%;';
       var html = '<div style="border:1px solid var(--border-color);border-radius:8px;'
-        + 'background:var(--bg-surface);overflow:hidden;">'
+        + 'background:var(--decidr-timeline-board-bg);overflow:hidden;'
+        + 'box-shadow:var(--decidr-timeline-board-shadow);">'
         + '<div data-timeline-board-scroll data-timeline-day-pan="' + (dayPan ? 'true' : 'false') + '" '
         + (dayPan ? 'title="Scroll horizontally to move the timeline by days" ' : '')
         + 'style="' + scrollerStyle + '">'
@@ -1952,14 +1955,14 @@
       var hasHourTicks = range.hourTicks && range.hourTicks.length;
       var headerHeight = hasHourTicks ? 66 : 48;
       var html = '<div style="display:grid;grid-template-columns:220px 1fr;border-bottom:1px solid var(--border-color);'
-        + 'background:var(--bg-subtle);min-height:' + headerHeight + 'px;">'
+        + 'background:var(--decidr-timeline-header-bg);min-height:' + headerHeight + 'px;">'
         + '<div style="padding:14px var(--space-3);font-size:var(--text-small);font-weight:var(--weight-semibold);'
         + 'color:var(--text-secondary);border-right:1px solid var(--border-color);">Initiative</div>'
         + '<div style="position:relative;height:' + headerHeight + 'px;">';
       if (hasHourTicks) {
         for (var h = 0; h < range.hourTicks.length; h++) {
           var hourPct = positionForDate(range.hourTicks[h], range);
-          html += '<div style="position:absolute;left:' + hourPct + '%;top:28px;bottom:0;border-left:1px solid rgba(148,163,184,0.16);"></div>'
+          html += '<div style="position:absolute;left:' + hourPct + '%;top:28px;bottom:0;border-left:1px solid var(--decidr-timeline-hour-grid);"></div>'
             + '<div style="position:absolute;left:calc(' + hourPct + '% + 4px);top:42px;'
             + 'font-size:9px;color:var(--text-tertiary);white-space:nowrap;">'
             + UI.escapeHtml(formatHourTick(range.hourTicks[h])) + '</div>';
@@ -1967,15 +1970,15 @@
       }
       for (var i = 0; i < range.ticks.length; i++) {
         var pct = positionForDate(range.ticks[i], range);
-        html += '<div style="position:absolute;left:' + pct + '%;top:0;bottom:0;border-left:1px solid var(--border-color);"></div>'
+        html += '<div style="position:absolute;left:' + pct + '%;top:0;bottom:0;border-left:1px solid var(--decidr-timeline-grid);"></div>'
           + '<div style="position:absolute;left:calc(' + pct + '% + 8px);top:' + (hasHourTicks ? '10' : '14') + 'px;'
           + 'font-size:11px;color:var(--text-secondary);white-space:nowrap;">'
           + UI.escapeHtml(formatTick(range.ticks[i], range.scale)) + '</div>';
       }
       if (dateIsWithinRange(now, range)) {
-        html += '<div style="position:absolute;left:' + nowPct + '%;top:0;bottom:0;border-left:2px solid #ef4444;"></div>'
+        html += '<div style="position:absolute;left:' + nowPct + '%;top:0;bottom:0;border-left:2px solid var(--decidr-timeline-now);"></div>'
           + '<div style="position:absolute;left:calc(' + nowPct + '% + 6px);bottom:4px;'
-          + 'font-size:10px;color:#ef4444;font-weight:var(--weight-semibold);">Now</div>';
+          + 'font-size:10px;color:var(--decidr-timeline-now);font-weight:var(--weight-semibold);">Now</div>';
       }
       html += '</div></div>';
       return html;
@@ -2167,17 +2170,21 @@
         : '';
       var accent = group.projectId ? MARKER_COLORS.project : MARKER_COLORS.initiative;
       var accentRing = group.projectId ? 'rgba(59,130,246,0.14)' : 'rgba(34,197,94,0.14)';
-      var sectionBg = idx % 2 === 0 ? 'rgba(30,41,59,0.38)' : 'rgba(30,41,59,0.28)';
-      var headerBg = idx % 2 === 0 ? 'rgba(15,23,42,0.76)' : 'rgba(15,23,42,0.68)';
+      var sectionBg = idx % 2 === 0
+        ? 'var(--decidr-timeline-project-section-bg)'
+        : 'var(--decidr-timeline-project-section-alt-bg)';
+      var headerBg = idx % 2 === 0
+        ? 'var(--decidr-timeline-project-header-bg)'
+        : 'var(--decidr-timeline-project-header-alt-bg)';
       var html = '<div aria-hidden="true" '
         + 'style="position:absolute;left:10px;right:10px;top:' + top + 'px;height:' + group.height + 'px;'
-        + 'border:1px solid rgba(148,163,184,0.22);border-left:3px solid ' + accent + ';'
+        + 'border:1px solid var(--decidr-timeline-project-border);border-left:3px solid ' + accent + ';'
         + 'border-radius:8px;background:' + sectionBg + ';'
-        + 'box-shadow:inset 0 1px 0 rgba(255,255,255,0.03);z-index:1;pointer-events:none;"></div>';
+        + 'box-shadow:var(--decidr-timeline-project-shadow);z-index:1;pointer-events:none;"></div>';
       html += '<div ' + attrs
         + 'style="position:absolute;left:10px;right:10px;top:' + top + 'px;height:' + group.headerHeight + 'px;'
         + 'display:flex;align-items:center;gap:10px;padding:0 12px 0 14px;'
-        + 'border-top-left-radius:8px;border-top-right-radius:8px;border-bottom:1px solid rgba(148,163,184,0.18);'
+        + 'border-top-left-radius:8px;border-top-right-radius:8px;border-bottom:1px solid var(--decidr-timeline-project-header-border);'
         + 'background:' + headerBg + ';color:var(--text-secondary);font-size:11px;z-index:3;'
         + (group.projectId ? 'cursor:pointer;' : '') + '">'
         + '<span style="width:8px;height:8px;border-radius:999px;background:' + accent + ';'
@@ -2198,7 +2205,7 @@
       var groups = buildLaneProjectGroups(lane, lookup);
       var laneHeight = groups.length ? measureProjectGroups(groups) : 104;
 
-      var bg = idx % 2 === 0 ? 'var(--bg-surface)' : 'var(--bg-subtle)';
+      var bg = idx % 2 === 0 ? 'var(--decidr-timeline-lane-bg)' : 'var(--decidr-timeline-lane-alt-bg)';
       var html = '<div data-timeline-lane-id="' + UI.escapeHtml(init.id) + '" '
         + 'style="display:grid;grid-template-columns:220px 1fr;min-height:' + laneHeight + 'px;'
         + 'border-bottom:1px solid var(--border-color);background:' + bg + ';">';
@@ -2220,12 +2227,12 @@
       if (range.hourTicks && range.hourTicks.length) {
         for (var h = 0; h < range.hourTicks.length; h++) {
           var hourPct = positionForDate(range.hourTicks[h], range);
-          html += '<div style="position:absolute;left:' + hourPct + '%;top:0;bottom:0;border-left:1px solid rgba(148,163,184,0.07);"></div>';
+          html += '<div style="position:absolute;left:' + hourPct + '%;top:0;bottom:0;border-left:1px solid var(--decidr-timeline-hour-grid-soft);"></div>';
         }
       }
       for (var t = 0; t < range.ticks.length; t++) {
         var tickPct = positionForDate(range.ticks[t], range);
-        html += '<div style="position:absolute;left:' + tickPct + '%;top:0;bottom:0;border-left:1px solid rgba(148,163,184,0.18);"></div>';
+        html += '<div style="position:absolute;left:' + tickPct + '%;top:0;bottom:0;border-left:1px solid var(--decidr-timeline-grid);"></div>';
       }
       if (!groups.length) {
         html += '<div style="position:absolute;left:24px;top:39px;font-size:12px;color:var(--text-tertiary);">'
@@ -2277,8 +2284,8 @@
       var startLabel = formatDateTime(span.startDate);
       return '<span title="' + UI.escapeHtml('Started before this view: ' + startLabel) + '" '
         + 'style="display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 6px 0 5px;'
-        + 'border-radius:999px;border:1px solid rgba(148,163,184,0.28);border-left:2px solid ' + color + ';'
-        + 'background:rgba(15,23,42,0.72);color:var(--text-secondary);font-size:9px;'
+        + 'border-radius:999px;border:1px solid var(--decidr-timeline-pill-border);border-left:2px solid ' + color + ';'
+        + 'background:var(--decidr-timeline-overflow-bg);color:var(--text-secondary);font-size:9px;'
         + 'font-weight:var(--weight-medium);white-space:nowrap;flex:0 0 auto;">'
         + '&larr; ' + UI.escapeHtml(startLabel) + '</span>';
     }
@@ -2302,10 +2309,14 @@
       var top = topOffset + idx * rowHeight;
       var color = decisionStatusColor(span.endReached ? span.endStatus : span.currentStatus);
       var startOverflow = span.actualStartDate.getTime() < range.min.getTime();
-      var buttonBorder = 'rgba(148,163,184,0.24)';
-      var buttonBackground = 'rgba(15,23,42,0.68)';
-      var timeBarOpacity = '0.62';
-      var buttonWidthStyle = 'width:max-content;min-width:' + Math.max(actualBarPx, labelMinWidth) + 'px;';
+      var buttonBorder = 'var(--decidr-timeline-decision-border)';
+      var buttonBackground = 'var(--decidr-timeline-decision-bg)';
+      var timeBarOpacity = 'var(--decidr-timeline-time-bar-opacity)';
+      var desiredButtonWidth = Math.max(actualBarPx, labelMinWidth);
+      var buttonWidthStyle = 'left:calc(' + PROJECT_GROUP_X_INSET + 'px + ' + startPct + '%);'
+        + 'width:' + desiredButtonWidth + 'px;min-width:0;'
+        + 'max-width:max(' + DECISION_MIN_VISIBLE_WIDTH + 'px,calc(100% - '
+        + (PROJECT_GROUP_X_INSET * 2) + 'px - ' + startPct + '%));';
       var catchUp = normalizeStatus(span.kind) === 'CATCH_UP';
       var title = span.label + ' - ' + span.startStatus.replace(/_/g, ' ')
         + ' to ' + span.endStatus.replace(/_/g, ' ')
@@ -2317,23 +2328,25 @@
         + ' (' + formatDateTime(span.startDate) + ' - ' + formatDateTime(span.endDate) + ')';
       return '<button data-entity-type="decision" data-entity-id="' + UI.escapeHtml(span.entityId) + '" '
         + 'data-timeline-label-min-width="' + labelMinWidth + '" '
+        + 'data-timeline-start-pct="' + startPct + '" '
+        + 'data-timeline-desired-width="' + desiredButtonWidth + '" '
         + 'title="' + UI.escapeHtml(title) + '" '
-        + 'style="position:absolute;left:' + startPct + '%;top:' + top + 'px;'
+        + 'style="position:absolute;top:' + top + 'px;'
         + buttonWidthStyle + 'min-height:38px;border-radius:8px;'
         + 'border:1px solid ' + buttonBorder + ';background:' + buttonBackground + ';'
         + 'color:var(--text-primary);font-family:var(--font-sans);font-size:10px;'
-        + 'display:flex;align-items:center;gap:7px;padding:7px 10px;overflow:visible;cursor:pointer;z-index:2;'
-        + 'box-shadow:0 1px 0 rgba(15,23,42,0.08);">'
+        + 'display:flex;align-items:center;gap:7px;padding:7px 10px;overflow:hidden;cursor:pointer;z-index:2;'
+        + 'box-shadow:var(--decidr-timeline-decision-shadow);">'
         + '<span aria-hidden="true" data-timeline-actual-bar="' + UI.escapeHtml(span.entityId) + '" '
         + 'data-timeline-actual-width-pct="' + actualWidthPct + '" '
         + 'style="position:absolute;' + actualBarStyle
         + 'border-radius:6px;background:' + color + ';opacity:' + timeBarOpacity + ';"></span>'
         + '<span style="position:relative;z-index:1;display:inline-flex;align-items:center;gap:7px;'
-        + 'white-space:nowrap;min-width:max-content;">'
+        + 'white-space:nowrap;min-width:0;max-width:100%;overflow:hidden;">'
         + (startOverflow ? renderDecisionStartOverflow(span, color) : '')
         + renderDecisionBadge(color, 15, true)
         + (catchUp ? '<span class="decidr-badge decidr-decision-kind-catch-up">Catch-up</span>' : '')
-        + '<span>' + UI.escapeHtml(span.label) + '</span>'
+        + '<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;">' + UI.escapeHtml(span.label) + '</span>'
         + '<span style="color:var(--text-tertiary);font-size:9px;font-weight:var(--weight-medium);">'
         + UI.escapeHtml(formatMinuteTime(span.startDate)) + '</span>'
         + '</span>'
@@ -2452,7 +2465,8 @@
         + 'title="' + UI.escapeHtml(title) + '" '
         + 'style="position:absolute;left:calc(' + pct + '% - ' + (markerSize / 2) + 'px);top:' + markerTop + 'px;'
         + 'width:' + markerSize + 'px;height:' + markerSize + 'px;border-radius:' + markerRadius + ';'
-        + 'border:2px solid var(--bg-surface);background:' + color + ';box-shadow:0 0 0 1px rgba(0,0,0,0.12);'
+        + 'border:2px solid var(--decidr-timeline-marker-stroke);background:' + color + ';'
+        + 'box-shadow:var(--decidr-timeline-marker-shadow);'
         + 'color:' + (isDecision ? decisionBadgeTextColor(color) : 'transparent') + ';font-family:var(--font-sans);'
         + 'font-size:9px;font-weight:var(--weight-semibold);line-height:1;'
         + 'display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;z-index:2;">'
@@ -2612,8 +2626,13 @@
     }
 
     function renderLegend() {
-      var html = '<div style="display:flex;align-items:center;gap:var(--space-3);flex-wrap:wrap;'
-        + 'font-size:11px;color:var(--text-secondary);margin:0 0 var(--space-3) 0;">';
+      var html = '<div data-timeline-sticky-legend style="position:sticky;top:8px;z-index:20;'
+        + 'display:flex;align-items:center;gap:var(--space-2);flex-wrap:wrap;'
+        + 'font-size:11px;color:var(--text-secondary);margin:0 0 var(--space-3) 0;'
+        + 'padding:7px;border:1px solid var(--decidr-timeline-legend-border);border-radius:10px;'
+        + 'background:var(--decidr-timeline-legend-bg);box-shadow:var(--decidr-timeline-legend-shadow);'
+        + 'backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);max-width:100%;overflow-x:auto;'
+        + 'overscroll-behavior-x:contain;">';
       for (var i = 0; i < LEGEND_ENTRIES.length; i++) {
         html += renderLegendToggle(LEGEND_ENTRIES[i]);
       }
@@ -2627,7 +2646,7 @@
         + 'aria-pressed="' + (active ? 'true' : 'false') + '" '
         + 'title="' + UI.escapeHtml(entry.label) + '" '
         + 'style="height:26px;display:inline-flex;align-items:center;gap:6px;padding:0 9px;'
-        + 'border:1px solid ' + (active ? 'var(--border-color)' : 'rgba(148,163,184,0.28)')
+        + 'border:1px solid ' + (active ? 'var(--border-color)' : 'var(--decidr-timeline-muted-border)')
         + ';border-radius:999px;background:' + (active ? 'var(--bg-surface)' : 'transparent')
         + ';color:' + (active ? 'var(--text-secondary)' : 'var(--text-tertiary)')
         + ';font-family:var(--font-sans);font-size:11px;cursor:pointer;white-space:nowrap;'
@@ -2663,15 +2682,91 @@
       return html;
     }
 
+    function timelineLightThemeCss(selector) {
+      return selector + '{'
+        + '--bg-surface:rgba(255,255,255,0.92);'
+        + '--bg-subtle:#f8fafc;'
+        + '--text-primary:rgba(15,23,42,0.92);'
+        + '--text-secondary:rgba(51,65,85,0.72);'
+        + '--text-tertiary:rgba(71,85,105,0.52);'
+        + '--accent-primary:#6366f1;'
+        + '--accent-primary-hover:#4f46e5;'
+        + '--accent-primary-ghost:rgba(99,102,241,0.1);'
+        + '--border-color:rgba(100,116,139,0.22);'
+        + '--decidr-timeline-board-bg:#ffffff;'
+        + '--decidr-timeline-board-shadow:0 10px 32px rgba(15,23,42,0.08);'
+        + '--decidr-timeline-header-bg:rgba(248,250,252,0.78);'
+        + '--decidr-timeline-lane-bg:rgba(255,255,255,0.66);'
+        + '--decidr-timeline-lane-alt-bg:rgba(255,255,255,0.66);'
+        + '--decidr-timeline-grid:rgba(100,116,139,0.24);'
+        + '--decidr-timeline-hour-grid:rgba(100,116,139,0.16);'
+        + '--decidr-timeline-hour-grid-soft:rgba(100,116,139,0.12);'
+        + '--decidr-timeline-now:#dc2626;'
+        + '--decidr-timeline-project-section-bg:rgba(241,245,249,0.56);'
+        + '--decidr-timeline-project-section-alt-bg:rgba(241,245,249,0.56);'
+        + '--decidr-timeline-project-header-bg:rgba(255,255,255,0.72);'
+        + '--decidr-timeline-project-header-alt-bg:rgba(255,255,255,0.72);'
+        + '--decidr-timeline-project-border:rgba(100,116,139,0.26);'
+        + '--decidr-timeline-project-header-border:rgba(100,116,139,0.2);'
+        + '--decidr-timeline-project-shadow:inset 0 1px 0 rgba(255,255,255,0.9);'
+        + '--decidr-timeline-decision-bg:rgba(255,255,255,0.68);'
+        + '--decidr-timeline-decision-border:rgba(71,85,105,0.24);'
+        + '--decidr-timeline-decision-shadow:0 1px 2px rgba(15,23,42,0.08);'
+        + '--decidr-timeline-time-bar-opacity:0.48;'
+        + '--decidr-timeline-overflow-bg:rgba(255,255,255,0.74);'
+        + '--decidr-timeline-pill-border:rgba(100,116,139,0.28);'
+        + '--decidr-timeline-legend-bg:rgba(255,255,255,0.76);'
+        + '--decidr-timeline-legend-border:rgba(100,116,139,0.2);'
+        + '--decidr-timeline-legend-shadow:0 8px 22px rgba(15,23,42,0.1);'
+        + '--decidr-timeline-marker-stroke:#ffffff;'
+        + '--decidr-timeline-marker-shadow:0 0 0 1px rgba(15,23,42,0.18),0 1px 2px rgba(15,23,42,0.12);'
+        + '--decidr-timeline-muted-border:rgba(100,116,139,0.3);'
+        + '}';
+    }
+
     function renderTimeline() {
       updateTimelineViewport();
       var model = buildModel();
       timelineState.renderedRange = model.range;
       var html = '<div class="decidr-timeline-root" style="width:calc(100vw - 40px);max-width:calc(100vw - 40px);box-sizing:border-box;'
         + 'margin:0 auto;padding:var(--space-5) 0;font-family:var(--font-sans);'
-        + 'color:var(--text-primary);overflow-x:hidden;">';
+        + 'color:var(--text-primary);overflow-x:clip;overflow-y:visible;">';
       html += '<style>.decidr-timeline-root select{background-color:var(--bg-surface)!important;'
         + 'background-image:none!important;-webkit-appearance:none;appearance:none;box-shadow:none!important;}'
+        + '.decidr-timeline-root{'
+        + '--border-color:var(--border-default);'
+        + '--bg-subtle:var(--bg-surface-subtle);'
+        + '--decidr-timeline-board-bg:var(--bg-surface);'
+        + '--decidr-timeline-board-shadow:none;'
+        + '--decidr-timeline-header-bg:var(--bg-surface-subtle);'
+        + '--decidr-timeline-lane-bg:var(--bg-surface);'
+        + '--decidr-timeline-lane-alt-bg:var(--bg-surface-subtle);'
+        + '--decidr-timeline-grid:rgba(148,163,184,0.18);'
+        + '--decidr-timeline-hour-grid:rgba(148,163,184,0.16);'
+        + '--decidr-timeline-hour-grid-soft:rgba(148,163,184,0.07);'
+        + '--decidr-timeline-now:#ef4444;'
+        + '--decidr-timeline-project-section-bg:rgba(30,41,59,0.38);'
+        + '--decidr-timeline-project-section-alt-bg:rgba(30,41,59,0.28);'
+        + '--decidr-timeline-project-header-bg:rgba(15,23,42,0.76);'
+        + '--decidr-timeline-project-header-alt-bg:rgba(15,23,42,0.68);'
+        + '--decidr-timeline-project-border:rgba(148,163,184,0.22);'
+        + '--decidr-timeline-project-header-border:rgba(148,163,184,0.18);'
+        + '--decidr-timeline-project-shadow:inset 0 1px 0 rgba(255,255,255,0.03);'
+        + '--decidr-timeline-decision-bg:rgba(15,23,42,0.68);'
+        + '--decidr-timeline-decision-border:rgba(148,163,184,0.24);'
+        + '--decidr-timeline-decision-shadow:0 1px 0 rgba(15,23,42,0.08);'
+        + '--decidr-timeline-time-bar-opacity:0.62;'
+        + '--decidr-timeline-overflow-bg:rgba(15,23,42,0.72);'
+        + '--decidr-timeline-pill-border:rgba(148,163,184,0.28);'
+        + '--decidr-timeline-legend-bg:rgba(15,23,42,0.78);'
+        + '--decidr-timeline-legend-border:rgba(148,163,184,0.18);'
+        + '--decidr-timeline-legend-shadow:0 8px 24px rgba(0,0,0,0.22);'
+        + '--decidr-timeline-marker-stroke:var(--bg-surface);'
+        + '--decidr-timeline-marker-shadow:0 0 0 1px rgba(0,0,0,0.12);'
+        + '--decidr-timeline-muted-border:rgba(148,163,184,0.28);'
+        + '}'
+        + '@media (prefers-color-scheme: light){' + timelineLightThemeCss('.decidr-timeline-root') + '}'
+        + timelineLightThemeCss('html[data-decidr-theme="light"] .decidr-timeline-root,.decidr-timeline-root[data-decidr-theme="light"]')
         + '.decidr-timeline-root,.decidr-timeline-root *{box-sizing:border-box;}'
         + '.decidr-timeline-root [data-timeline-board-scroll]{max-width:100%;}</style>';
       html += renderHeader(model);
@@ -2701,9 +2796,20 @@
         if (!railWidth) continue;
         var actualWidth = Math.max(8, Math.round((pct / 100) * railWidth));
         var labelMinWidth = button ? Number(button.getAttribute('data-timeline-label-min-width')) : 0;
-        bar.style.width = actualWidth + 'px';
+        var desiredWidth = button ? Number(button.getAttribute('data-timeline-desired-width')) : 0;
+        var startPct = button ? Number(button.getAttribute('data-timeline-start-pct')) : 0;
+        if (!isFinite(startPct)) startPct = 0;
+        startPct = Math.max(0, Math.min(100, startPct));
+        var rawLeft = PROJECT_GROUP_X_INSET + ((startPct / 100) * railWidth);
+        var left = Math.min(rawLeft, Math.max(PROJECT_GROUP_X_INSET, railWidth - PROJECT_GROUP_X_INSET - DECISION_MIN_VISIBLE_WIDTH));
+        var maxWidth = Math.max(DECISION_MIN_VISIBLE_WIDTH, railWidth - left - PROJECT_GROUP_X_INSET);
+        var buttonWidth = Math.min(Math.max(actualWidth, labelMinWidth || 0, desiredWidth || 0), maxWidth);
+        bar.style.width = Math.min(actualWidth, buttonWidth) + 'px';
         if (button && isFinite(labelMinWidth)) {
-          button.style.minWidth = Math.max(actualWidth, labelMinWidth || 0) + 'px';
+          button.style.left = left + 'px';
+          button.style.width = buttonWidth + 'px';
+          button.style.maxWidth = buttonWidth + 'px';
+          button.style.minWidth = '0px';
         }
       }
     }

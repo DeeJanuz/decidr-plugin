@@ -1,3 +1,9 @@
+# 0.1.33-rc.10
+
+- **feat**: Improve DecidR timeline review ergonomics with a sticky filterable legend that follows vertical scroll without pinning the full filter panel.
+
+- **fix**: Polish light-mode timeline rendering with consistent project wrappers, translucent timeline surfaces, bounded decision bars, and visible grid lines under decision spans.
+
 # 0.1.33-rc.9
 
 - **feat**: Surface catch-up decisions as first-class decision records across DecidR MCP guidance, decision slideouts, list cards, and project-grouped timeline bars, including direct post-implementation capture affordances.
