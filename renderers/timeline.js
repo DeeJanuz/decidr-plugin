@@ -26,6 +26,24 @@
       activity: '#6366f1',
       initiative: '#22c55e'
     };
+    var USER_COLOR_PALETTE = [
+      '#2563eb',
+      '#16a34a',
+      '#dc2626',
+      '#7c3aed',
+      '#0891b2',
+      '#ca8a04',
+      '#db2777',
+      '#4f46e5',
+      '#ea580c',
+      '#0d9488',
+      '#65a30d',
+      '#9333ea',
+      '#0284c7',
+      '#be123c',
+      '#475569',
+      '#0369a1'
+    ];
 
     var LEGEND_ENTRIES = [
       { key: 'task_due', label: 'Task due', color: MARKER_COLORS.task_due },
@@ -383,11 +401,15 @@
       if (!user) return null;
       if (user.user) user = user.user;
       var id = getField(user, ['id', 'userId', 'user_id']);
+      var email = getField(user, ['email']);
       var name = getField(user, ['name', 'displayName', 'display_name', 'email']);
       return {
         id: id || null,
         name: name || (id ? String(id).slice(0, 8) : ''),
-        image: getField(user, ['image', 'avatar', 'avatarUrl', 'avatar_url']) || null
+        email: email || null,
+        image: getField(user, ['image', 'avatar', 'avatarUrl', 'avatar_url']) || null,
+        color: getField(user, ['color', 'avatarColor', 'avatar_color', 'timelineColor', 'timeline_color']) || null,
+        initials: getField(user, ['initials']) || null
       };
     }
 
@@ -413,7 +435,10 @@
         return {
           id: user.id,
           name: member.name || user.name,
-          image: user.image || member.image || null
+          email: user.email || member.email || null,
+          image: user.image || member.image || null,
+          color: user.color || member.color || null,
+          initials: user.initials || member.initials || null
         };
       }
       return user;
@@ -428,12 +453,101 @@
       var name = userDisplayName(user);
       if (!name) return '?';
       var parts = name.split(/\s+/);
-      var initials = '';
+      var first = '';
+      var last = '';
       for (var i = 0; i < parts.length; i++) {
-        if (parts[i]) initials += parts[i].charAt(0).toUpperCase();
-        if (initials.length >= 2) break;
+        if (!parts[i]) continue;
+        if (!first) first = parts[i];
+        last = parts[i];
       }
-      return initials || '?';
+      if (!first) return '?';
+      if (first === last) return first.charAt(0).toUpperCase();
+      return (first.charAt(0) + last.charAt(0)).toUpperCase();
+    }
+
+    function hashString(value) {
+      var text = String(value || '');
+      var hash = 0;
+      for (var i = 0; i < text.length; i++) {
+        hash = ((hash << 5) - hash) + text.charCodeAt(i);
+        hash |= 0;
+      }
+      return Math.abs(hash);
+    }
+
+    function sanitizeTimelineColor(color) {
+      if (!color) return null;
+      if (UI && UI.sanitizeColor) return UI.sanitizeColor(color);
+      return String(color);
+    }
+
+    function preferredUserColor(user) {
+      var normalized = normalizeUser(user);
+      if (!normalized) return USER_COLOR_PALETTE[0];
+      var supplied = sanitizeTimelineColor(normalized.color);
+      if (supplied) return supplied;
+      return USER_COLOR_PALETTE[hashString((normalized.id || '') + '|' + userDisplayName(normalized)) % USER_COLOR_PALETTE.length];
+    }
+
+    function makeUserColorState(memberMap) {
+      var state = {
+        colors: {},
+        initialsColorOwner: {}
+      };
+      var members = [];
+      for (var id in memberMap) {
+        if (Object.prototype.hasOwnProperty.call(memberMap, id)) members.push(memberMap[id]);
+      }
+      members.sort(function(a, b) {
+        return userDisplayName(a).localeCompare(userDisplayName(b));
+      });
+      for (var i = 0; i < members.length; i++) {
+        assignUserColor(members[i], state);
+      }
+      return state;
+    }
+
+    function assignUserColor(user, state) {
+      var normalized = normalizeUser(user);
+      if (!normalized) return USER_COLOR_PALETTE[0];
+      var userId = normalized.id || userDisplayName(normalized) || '?';
+      if (state && state.colors && state.colors[userId]) return state.colors[userId];
+
+      var initials = userInitials(normalized);
+      var preferred = preferredUserColor(normalized);
+      var color = preferred;
+      if (state) {
+        state.initialsColorOwner[initials] = state.initialsColorOwner[initials] || {};
+        var used = state.initialsColorOwner[initials];
+        if (used[color] && used[color] !== userId) {
+          var start = hashString(userId + '|' + userDisplayName(normalized)) % USER_COLOR_PALETTE.length;
+          for (var i = 0; i < USER_COLOR_PALETTE.length; i++) {
+            var candidate = USER_COLOR_PALETTE[(start + i) % USER_COLOR_PALETTE.length];
+            if (!used[candidate] || used[candidate] === userId) {
+              color = candidate;
+              break;
+            }
+          }
+        }
+        if (state.colors) state.colors[userId] = color;
+        used[color] = userId;
+      }
+      return color;
+    }
+
+    function timelineUserColor(user, lookup) {
+      var normalized = normalizeUser(user);
+      if (!normalized) return '#475569';
+      if (lookup && lookup.userColorState) return assignUserColor(normalized, lookup.userColorState);
+      return preferredUserColor(normalized);
+    }
+
+    function decorateTimelineUser(user, lookup) {
+      var normalized = normalizeUser(user);
+      if (!normalized) return null;
+      normalized.initials = userInitials(normalized);
+      normalized.color = timelineUserColor(normalized, lookup);
+      return normalized;
     }
 
     function uniqueIds(ids) {
@@ -638,6 +752,7 @@
       var bridgeMap = makeMap(timelineState.bridges);
       var initiativeMap = makeMap(timelineState.initiatives);
       var memberMap = makeMemberMap(timelineState.members);
+      var userColorState = makeUserColorState(memberMap);
       var projectToInitiative = {};
 
       for (var i = 0; i < timelineState.projects.length; i++) {
@@ -653,6 +768,7 @@
         bridges: bridgeMap,
         initiatives: initiativeMap,
         members: memberMap,
+        userColorState: userColorState,
         projectToInitiative: projectToInitiative
       };
     }
@@ -875,8 +991,8 @@
       return false;
     }
 
-    function addLanePerson(lane, user) {
-      var normalized = normalizeUser(user);
+    function addLanePerson(lane, user, lookup) {
+      var normalized = decorateTimelineUser(user, lookup);
       if (!lane || !normalized || !normalized.id) return;
       lane.activePeople[normalized.id] = normalized;
     }
@@ -918,6 +1034,8 @@
       if (!d) return;
       var person = cfg.person || null;
       var personIds = uniqueIds((cfg.personIds || []).concat(person && person.id ? [person.id] : []));
+      var personColor = cfg.personColor || (person && person.color ? sanitizeTimelineColor(person.color) : null);
+      var personInitials = cfg.personInitials || (person ? (person.initials || userInitials(person)) : '');
       pushItem(items, {
         id: cfg.id,
         type: cfg.type,
@@ -934,6 +1052,8 @@
         unassigned: !!cfg.unassigned,
         person: person,
         personIds: personIds,
+        personColor: personColor,
+        personInitials: personInitials,
         priority: cfg.priority || 3,
         color: cfg.color || MARKER_COLORS[cfg.type] || MARKER_COLORS.activity
       });
@@ -996,7 +1116,10 @@
       for (var i = 0; i < timelineState.initiatives.length; i++) {
         var init = timelineState.initiatives[i];
         if (!scopeAllows(init.id)) continue;
-        var initPerson = resolveUser(init.createdBy, lookup) || resolveUser(getField(init, ['createdById', 'created_by_id']), lookup);
+        var initPerson = decorateTimelineUser(
+          resolveUser(init.createdBy, lookup) || resolveUser(getField(init, ['createdById', 'created_by_id']), lookup),
+          lookup
+        );
         addEntityDate(items, init, {
           id: 'initiative-created-' + init.id,
           type: 'initiative',
@@ -1015,7 +1138,7 @@
       for (var p = 0; p < timelineState.projects.length; p++) {
         var project = timelineState.projects[p];
         var projectInitId = getProjectInitiativeId(project);
-        var projectPerson = projectPrimaryUser(project, lookup);
+        var projectPerson = decorateTimelineUser(projectPrimaryUser(project, lookup), lookup);
         addEntityDate(items, project, {
           id: 'project-created-' + project.id,
           type: 'project',
@@ -1037,7 +1160,7 @@
         var taskDue = validDate(task.dueDate || task.due_date);
         var taskProjectId = getTaskProjectId(task, lookup);
         var taskInitId = getTaskInitiativeId(task, lookup);
-        var taskPerson = taskPrimaryUser(task, lookup);
+        var taskPerson = decorateTimelineUser(taskPrimaryUser(task, lookup), lookup);
         var taskUnassigned = taskIsUnassigned(task) && !statusIsDone(task.status) && !statusIsBacklog(task.status);
         if (taskDue && !statusIsBacklog(task.status)) {
           var overdue = taskDue < now && !statusIsDone(task.status) && !statusIsBacklog(task.status);
@@ -1135,7 +1258,7 @@
         var info = eventEntityInfo(evt, lookup);
         var evtDate = eventOccurredDate(evt);
         if (!info || !evtDate) continue;
-        var eventPerson = eventPrimaryUser(evt, lookup);
+        var eventPerson = decorateTimelineUser(eventPrimaryUser(evt, lookup), lookup);
         pushItem(items, {
           id: 'activity-' + (evt.id || e),
           type: 'activity',
@@ -1233,7 +1356,7 @@
         laneMap[pInitId].projects++;
         if (statusIsActive(timelineState.projects[p].status)) {
           laneMap[pInitId].activeProjects++;
-          addLanePerson(laneMap[pInitId], projectPrimaryUser(timelineState.projects[p], lookup));
+          addLanePerson(laneMap[pInitId], projectPrimaryUser(timelineState.projects[p], lookup), lookup);
         }
       }
 
@@ -1249,7 +1372,7 @@
         laneMap[tInitId].tasks++;
         var due = validDate(task.dueDate || task.due_date);
         if (!statusIsDone(task.status) && !statusIsBacklog(task.status)) {
-          addLanePerson(laneMap[tInitId], taskPrimaryUser(task, lookup));
+          addLanePerson(laneMap[tInitId], taskPrimaryUser(task, lookup), lookup);
           if (taskIsUnassigned(task)) laneMap[tInitId].unassignedActive++;
           if (due) {
             if (due < now) laneMap[tInitId].overdueTasks++;
@@ -1572,9 +1695,11 @@
 
       if (displayEndDate.getTime() < range.min.getTime() || displayStartDate.getTime() > range.max.getTime()) return null;
 
-      var person = decisionPrimaryUser(decision, lookup);
+      var person = decorateTimelineUser(decisionPrimaryUser(decision, lookup), lookup);
       var personIds = decisionPersonIds(decision);
       if (!peopleFilterMatches(personIds, false)) return null;
+      var personColor = person ? timelineUserColor(person, lookup) : MARKER_COLORS.decision;
+      var personInitials = person ? userInitials(person) : 'D';
 
       return {
         id: 'decision-span-' + decision.id + '-' + startStatus + '-' + endStatus,
@@ -1597,7 +1722,9 @@
         label: displayName(decision),
         kind: getField(decision, ['kind', 'decisionKind', 'decision_kind']),
         person: person,
-        personIds: personIds
+        personIds: personIds,
+        personColor: personColor,
+        personInitials: personInitials
       };
     }
 
@@ -2307,7 +2434,8 @@
       var actualWidthPct = Math.max(0.05, endPct - startPct);
       var actualBarStyle = 'left:0;top:4px;bottom:4px;width:' + actualBarPx + 'px;max-width:100%;min-width:8px;';
       var top = topOffset + idx * rowHeight;
-      var color = decisionStatusColor(span.endReached ? span.endStatus : span.currentStatus);
+      var statusColor = decisionStatusColor(span.endReached ? span.endStatus : span.currentStatus);
+      var color = span.personColor || statusColor;
       var startOverflow = span.actualStartDate.getTime() < range.min.getTime();
       var buttonBorder = 'var(--decidr-timeline-decision-border)';
       var buttonBackground = 'var(--decidr-timeline-decision-bg)';
@@ -2318,8 +2446,10 @@
         + 'max-width:max(' + DECISION_MIN_VISIBLE_WIDTH + 'px,calc(100% - '
         + (PROJECT_GROUP_X_INSET * 2) + 'px - ' + startPct + '%));';
       var catchUp = normalizeStatus(span.kind) === 'CATCH_UP';
+      var ownerName = span.person ? userDisplayName(span.person) : '';
       var title = span.label + ' - ' + span.startStatus.replace(/_/g, ' ')
         + ' to ' + span.endStatus.replace(/_/g, ' ')
+        + (ownerName ? ' - Owner: ' + ownerName : '')
         + (catchUp ? ' (catch-up)' : '')
         + (span.inheritedEndStatus && span.requestedEndStatus
           ? ' (matches ' + span.requestedEndStatus.replace(/_/g, ' ') + ' filter)'
@@ -2344,7 +2474,7 @@
         + '<span style="position:relative;z-index:1;display:inline-flex;align-items:center;gap:7px;'
         + 'white-space:nowrap;min-width:0;max-width:100%;overflow:hidden;">'
         + (startOverflow ? renderDecisionStartOverflow(span, color) : '')
-        + renderDecisionBadge(color, 15, true)
+        + renderDecisionBadge(color, 21, true, span.personInitials || '?', ownerName)
         + (catchUp ? '<span class="decidr-badge decidr-decision-kind-catch-up">Catch-up</span>' : '')
         + '<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;">' + UI.escapeHtml(span.label) + '</span>'
         + '<span style="color:var(--text-tertiary);font-size:9px;font-weight:var(--weight-medium);">'
@@ -2354,18 +2484,32 @@
     }
 
     function decisionBadgeTextColor(color) {
+      var hex = String(color || '').replace('#', '');
+      if (/^[0-9a-fA-F]{3}$/.test(hex)) {
+        hex = hex.charAt(0) + hex.charAt(0) + hex.charAt(1) + hex.charAt(1) + hex.charAt(2) + hex.charAt(2);
+      }
+      if (/^[0-9a-fA-F]{6}$/.test(hex)) {
+        var r = parseInt(hex.substring(0, 2), 16) / 255;
+        var g = parseInt(hex.substring(2, 4), 16) / 255;
+        var b = parseInt(hex.substring(4, 6), 16) / 255;
+        var luminance = (0.2126 * r) + (0.7152 * g) + (0.0722 * b);
+        return luminance < 0.56 ? 'white' : '#0f172a';
+      }
       if (color === '#8b5cf6' || color === '#3b82f6' || color === '#ef4444' || color === '#64748b') return 'white';
       return '#0f172a';
     }
 
-    function renderDecisionBadge(color, size, active) {
+    function renderDecisionBadge(color, size, active, label, title) {
       var bg = active ? color : 'transparent';
       var fg = active ? decisionBadgeTextColor(color) : color;
-      return '<span aria-hidden="true" style="width:' + size + 'px;height:' + size + 'px;'
+      var text = label || '';
+      return '<span aria-hidden="true" '
+        + (title ? 'title="' + UI.escapeHtml(title) + '" ' : '')
+        + 'style="width:' + size + 'px;height:' + size + 'px;'
         + 'border-radius:4px;border:1px solid ' + color + ';background:' + bg + ';color:' + fg + ';'
         + 'display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;'
         + 'font-size:' + (size <= 14 ? '8px' : '9px') + ';font-weight:var(--weight-semibold);'
-        + 'line-height:1;letter-spacing:0;">D</span>';
+        + 'line-height:1;letter-spacing:0;">' + UI.escapeHtml(text) + '</span>';
     }
 
     function decisionStatusColor(status) {
@@ -2400,11 +2544,12 @@
       var normalized = normalizeUser(user);
       var text = normalized ? userDisplayName(normalized) : (fallbackText || '');
       if (!text) return '';
-      var initials = normalized ? userInitials(normalized) : text.charAt(0).toUpperCase();
+      var initials = normalized ? (normalized.initials || userInitials(normalized)) : text.charAt(0).toUpperCase();
+      var color = (normalized && normalized.color) ? sanitizeTimelineColor(normalized.color) : '#475569';
       return '<span title="' + UI.escapeHtml(text) + '" style="display:inline-flex;align-items:center;gap:5px;'
         + 'min-width:0;border:1px solid var(--border-color);border-radius:999px;background:var(--bg-surface);'
         + 'color:var(--text-secondary);font-size:11px;line-height:18px;padding:1px 7px 1px 3px;max-width:136px;">'
-        + '<span style="width:18px;height:18px;border-radius:999px;background:#475569;color:white;'
+        + '<span style="width:18px;height:18px;border-radius:999px;background:' + color + ';color:' + decisionBadgeTextColor(color) + ';'
         + 'display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:var(--weight-semibold);flex:0 0 auto;">'
         + UI.escapeHtml(initials) + '</span>'
         + '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'
@@ -2416,9 +2561,10 @@
       var normalized = normalizeUser(user);
       var title = normalized ? userDisplayName(normalized) : (fallbackText || '');
       if (!title) return '';
-      var initials = normalized ? userInitials(normalized) : title.charAt(0).toUpperCase();
+      var initials = normalized ? (normalized.initials || userInitials(normalized)) : title.charAt(0).toUpperCase();
+      var color = (normalized && normalized.color) ? sanitizeTimelineColor(normalized.color) : '#475569';
       return '<span title="' + UI.escapeHtml(title) + '" style="width:17px;height:17px;border-radius:999px;'
-        + 'background:#475569;color:white;display:inline-flex;align-items:center;justify-content:center;'
+        + 'background:' + color + ';color:' + decisionBadgeTextColor(color) + ';display:inline-flex;align-items:center;justify-content:center;'
         + 'font-size:9px;font-weight:var(--weight-semibold);flex:0 0 auto;">'
         + UI.escapeHtml(initials) + '</span>';
     }
@@ -2455,10 +2601,11 @@
       var personLabel = item.unassigned ? 'Unassigned' : userDisplayName(item.person);
       var title = dateLabel + ' - ' + item.label + (personLabel ? ' - ' + personLabel : '');
       var isDecision = item.type === 'decision';
-      var markerSize = isDecision ? 16 : 14;
+      if (isDecision && item.personColor) color = item.personColor;
+      var markerSize = isDecision ? 20 : 14;
       var markerRadius = isDecision ? '4px' : '999px';
-      var markerTop = isDecision ? top - 1 : top;
-      var markerText = isDecision ? 'D' : '';
+      var markerTop = isDecision ? top - 3 : top;
+      var markerText = isDecision ? (item.personInitials || (item.person ? userInitials(item.person) : 'D')) : '';
       var html = '<button data-entity-type="' + UI.escapeHtml(item.entityType) + '" '
         + 'data-entity-id="' + UI.escapeHtml(item.entityId) + '" '
         + (isDecision ? 'aria-label="' + UI.escapeHtml('Decision: ' + item.label) + '" ' : '')
@@ -2506,7 +2653,7 @@
         var taskIds = taskPersonIds(task);
         var taskUnassigned = taskIsUnassigned(task);
         if (!peopleFilterMatches(taskIds, taskUnassigned)) continue;
-        var taskPerson = taskPrimaryUser(task, model.lookup);
+        var taskPerson = decorateTimelineUser(taskPrimaryUser(task, model.lookup), model.lookup);
         var taskItem = {
           entityType: 'task',
           entityId: task.id,
@@ -2515,6 +2662,7 @@
           date: due,
           person: taskPerson,
           personIds: taskIds,
+          color: taskPerson ? timelineUserColor(taskPerson, model.lookup) : null,
           unassigned: taskUnassigned
         };
         if (due < now) risk.push(taskItem);
@@ -2529,14 +2677,16 @@
         if (status === 'DRAFT' || status === 'PROPOSED' || status === 'IN_PROGRESS' || status === 'STAGED') {
           var decIds = decisionPersonIds(dec);
           if (!peopleFilterMatches(decIds, false)) continue;
+          var decPerson = decorateTimelineUser(decisionPrimaryUser(dec, model.lookup), model.lookup);
           next.push({
             entityType: 'decision',
             entityId: dec.id,
             label: displayName(dec),
             meta: status.replace(/_/g, ' '),
             date: validDate(dec.createdAt) || now,
-            person: decisionPrimaryUser(dec, model.lookup),
+            person: decPerson,
             personIds: decIds,
+            color: decPerson ? timelineUserColor(decPerson, model.lookup) : MARKER_COLORS.decision,
             unassigned: false
           });
         }
@@ -2604,7 +2754,7 @@
     }
 
     function renderScanItem(item, tone) {
-      var color = tone === 'risk' ? '#ef4444' : (tone === 'next' ? '#10b981' : '#6366f1');
+      var color = item.color || (tone === 'risk' ? '#ef4444' : (tone === 'next' ? '#10b981' : '#6366f1'));
       var meta = item.meta || (item.date ? UI.timeAgo(item.date.toISOString()) : '');
       var personChip = item.unassigned
         ? renderMiniUserChip(null, 'Unassigned')
@@ -2656,7 +2806,7 @@
     }
 
     function renderLegendIcon(entry, active) {
-      if (entry.key === 'decision') return renderDecisionBadge(entry.color, 12, active);
+      if (entry.key === 'decision') return renderDecisionBadge(entry.color, 12, active, '');
       return '<span style="width:9px;height:9px;border-radius:999px;background:' + (active ? entry.color : 'transparent')
         + ';border:1px solid ' + entry.color + ';"></span>';
     }

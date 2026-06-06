@@ -1,3 +1,7 @@
+# 0.1.33-rc.14
+
+- **feat**: Add deterministic owner color and initials treatment to the DecidR timeline so lane people chips, decision spans, decision markers, and scan items stay attributable even when users share initials or lack avatars.
+
 # 0.1.33-rc.13
 
 - **fix**: Add an explicit DecidR implementation-start gate to setup breadcrumbs, governance runbooks, registry hints, and decision tool rules so agents verify or propose governed records before leaving discovery/planning for code, packaging, deployment prep, or external writes.
