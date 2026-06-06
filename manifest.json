@@ -1,6 +1,6 @@
 {
   "name": "decidr",
-  "version": "0.1.33-rc.12",
+  "version": "0.1.33-rc.13",
   "prompt_definitions": [
     {
       "name": "initiative_planning",
@@ -46,7 +46,7 @@
     },
     {
       "name": "governance_lifecycle",
-      "description": "Canonical DecidR governance lifecycle runbook. Fetch before creating, proposing, approving, staging, implementing, or otherwise moving governed decisions through solo-builder or team workflows.",
+      "description": "Canonical DecidR governance lifecycle runbook. Fetch before creating, proposing, approving, staging, implementing, leaving discovery/planning for implementation, or otherwise moving governed decisions through solo-builder or team workflows.",
       "arguments": [
         {
           "name": "mode",
@@ -72,14 +72,15 @@
   "plugin_rules": [
     "When the user asks for action items, to-do items, pending work, or what needs attention: call my_action_items and push to decidr_list. Never open decidr_dashboard for these requests.",
     "When the user asks for a DecidR governance check-in, pending approvals, approval reminders, or assigned decision reviews, fetch governance_checkin and follow it.",
-    "During MCPViews setup or persisted-rule refresh, if no default DecidR governance mode rule is already persisted, fetch governance_lifecycle, ask its mode-selection question, and persist only the selected compact rule: either 'Default DecidR governance mode is team. For governed DecidR decision lifecycle work, fetch the DecidR governance_lifecycle prompt and use mode=team unless the user explicitly chooses solo_builder.' or 'Default DecidR governance mode is solo_builder. For governed DecidR decision lifecycle work, fetch the DecidR governance_lifecycle prompt and use mode=solo_builder unless the user explicitly chooses team.'",
+    "During MCPViews setup or persisted-rule refresh, if no default DecidR governance mode rule is already persisted, fetch governance_lifecycle, ask its mode-selection question, and persist only the selected compact rule: either 'Default DecidR governance mode is team. For governed DecidR decision lifecycle work, fetch the DecidR governance_lifecycle prompt and use mode=team unless the user explicitly chooses solo_builder. Before starting implementation after discovery/planning, fetch governance_lifecycle and verify or propose the governing decision/task. Use STAGED only for built/configured work in testing or non-production validation, and IMPLEMENTED only after production/live release.' or 'Default DecidR governance mode is solo_builder. For governed DecidR decision lifecycle work, fetch the DecidR governance_lifecycle prompt and use mode=solo_builder unless the user explicitly chooses team. Before starting implementation after discovery/planning, fetch governance_lifecycle and verify or propose the governing decision/task. Use STAGED only for built/configured work in testing or non-production validation, and IMPLEMENTED only after production/live release.'",
     "Use BACKLOG status for future or intentionally non-actionable decisions and tasks; BACKLOG records should not be treated as Next Steps or immediate action items.",
     "When using search, list_decisions, or get_decision only for agent discovery, do not push decidr_list. Push decidr_list only when the user explicitly asks to see decision results or details.",
     "When the user asks to see entity details (get_initiative, get_project, get_decision, get_task, get_bridge): push to decidr_list. Only open decidr_dashboard when the user explicitly asks for the User Dashboard, dashboard, or overview.",
     "When the user asks for a timeline, roadmap, schedule, portfolio timing, or how initiatives shape up over time: push decidr_timeline directly. Do not call list tools first; the renderer fetches its own data.",
     "Before taking any action on a GitHub issue or PR linked to DecidR (create_issue, create_pr, review_pr, merge_pr, or prompt generation), fetch the github_pr_lifecycle prompt and follow it. Inbound GitHub sync is automatic through Ludflow-backed metadata. Use get_repo_last_sync or refresh_repo_metadata when the user asks about freshness, and never reintroduce manual sync or reconciliation instructions.",
     "When creating, updating, approving, staging, implementing, or logging DecidR-governed decision work, fetch governance_lifecycle and use the persisted governance mode unless the user explicitly chooses another mode.",
-    "When governed implementation work has no confident matching DecidR decision or task, fetch governance_lifecycle and propose the missing decision, catch-up decision, or task through MCPViews review before creating records.",
+    "When leaving discovery or planning for governed feature/process implementation, fetch governance_lifecycle before the first repo edit, packaging command, deployment prep, or external write.",
+    "When governed implementation work has no confident matching DecidR decision or task, fetch governance_lifecycle and choose the right path: create clear low-risk records directly after search/context checks, but use MCPViews review for significant, ambiguous, destructive, high-impact, or hard-to-undo mutations.",
     "Use create_catch_up_decision or mark_decision_as_catch_up for small already-implemented work that needs post-implementation rationale capture without the full standard decision workflow. Catch-up decisions are directly IMPLEMENTED, require a rationale, and should not be used for active approval/status transitions.",
     "When creating supporting LudFlow documents for DecidR work, place them in an existing relevant folder structure or, if none exists, in a folder named for the DecidR project; fetch governance_lifecycle for details.",
     "When updating a LudFlow document linked to an implemented DecidR decision, or a LudFlow document that is already published, preserve the existing implemented content and append new findings as a dated addendum unless the user explicitly asks for a rewrite.",
@@ -99,19 +100,19 @@
         {
           "value": "team",
           "label": "Yes - team approvals",
-          "description": "Use DRAFT -> PROPOSED -> APPROVED -> STAGED -> IMPLEMENTED as the default governance workflow.",
-          "persisted_rule": "Default DecidR governance mode is team. For governed DecidR decision lifecycle work, fetch the DecidR governance_lifecycle prompt and use mode=team unless the user explicitly chooses solo_builder."
+          "description": "Use discovery -> PROPOSED -> APPROVED -> implementation -> STAGED for testing/non-prod validation -> IMPLEMENTED after live release.",
+          "persisted_rule": "Default DecidR governance mode is team. For governed DecidR decision lifecycle work, fetch the DecidR governance_lifecycle prompt and use mode=team unless the user explicitly chooses solo_builder. Before starting implementation after discovery/planning, fetch governance_lifecycle and verify or propose the governing decision/task. Use STAGED only for built/configured work in testing or non-production validation, and IMPLEMENTED only after production/live release."
         },
         {
           "value": "solo_builder",
           "label": "No - solo builder",
-          "description": "Use DRAFT -> STAGED -> IMPLEMENTED as the default governance workflow.",
-          "persisted_rule": "Default DecidR governance mode is solo_builder. For governed DecidR decision lifecycle work, fetch the DecidR governance_lifecycle prompt and use mode=solo_builder unless the user explicitly chooses team."
+          "description": "Use discovery -> accepted decision artifact -> implementation -> STAGED for testing/non-prod validation -> IMPLEMENTED after live release.",
+          "persisted_rule": "Default DecidR governance mode is solo_builder. For governed DecidR decision lifecycle work, fetch the DecidR governance_lifecycle prompt and use mode=solo_builder unless the user explicitly chooses team. Before starting implementation after discovery/planning, fetch governance_lifecycle and verify or propose the governing decision/task. Use STAGED only for built/configured work in testing or non-production validation, and IMPLEMENTED only after production/live release."
         }
       ]
     }
   ],
-  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.33-rc.12/decidr.zip",
+  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.33-rc.13/decidr.zip",
   "registry_index": {
     "summary": "Decision governance \u2014 initiatives, projects, decisions, tasks, and bridges with approval workflows",
     "tags": [
@@ -131,7 +132,7 @@
       },
       {
         "name": "Browse",
-        "hint": "List and search initiatives, projects, decisions, tasks, bridges, and audit ledger events. Filter by BACKLOG to inspect future/non-actionable work. Use private decision discovery for commit governance before updating matching work to STAGED.",
+        "hint": "List and search initiatives, projects, decisions, tasks, bridges, and audit ledger events. Filter by BACKLOG to inspect future/non-actionable work. Use private discovery before implementation starts and before commit governance; update matching work to STAGED only after built/tested work exists.",
         "tools": [
           "list_initiatives",
           "list_projects",
@@ -157,7 +158,7 @@
       },
       {
         "name": "Create & Update",
-        "hint": "Create and modify initiatives, projects, decisions, tasks, bridges, audit events, and audit categories. Use BACKLOG for future/non-actionable decisions or tasks. Use catch-up decisions for small already-implemented rationale capture. Commit-time implementation updates should move matching decisions to STAGED; missing governed records should be proposed through MCPViews review before creation.",
+        "hint": "Create and modify initiatives, projects, decisions, tasks, bridges, audit events, and audit categories. Before implementation starts after discovery/planning, fetch governance_lifecycle and verify or propose the governing decision/task. Clear low-risk decision/doc/task updates can proceed directly; use MCPViews review for significant, ambiguous, destructive, high-impact, or hard-to-undo changes.",
         "tools": [
           "create_initiative",
           "create_project",
@@ -253,21 +254,21 @@
     "list_bridges": "Use to discover project and decision bridges. Push to decidr_list.",
     "get_initiative": "Get full initiative details. Push to decidr_list for detail view.",
     "get_project": "Get full project details including task/decision/bridge counts. Push to decidr_list.",
-    "get_decision": "Get full decision details including approval progress and linked documents. No auto-push: keep discovery-only calls private. Push to decidr_list only when the user explicitly asked to see/open the decision details. Use BACKLOG for future/non-actionable decisions that should stay out of Next Steps. Draft standard decisions need linked documents before leaving DRAFT, including a direct transition to STAGED for already-built test/review work. Check list_entity_documents for supporting context and use allowedTransitions to choose the next valid status. For standard decisions, IMPLEMENTED is reserved for deployment-codebase migration; CATCH_UP decisions are the exception and are directly IMPLEMENTED for post-implementation capture.",
+    "get_decision": "Get full decision details including approval progress and linked documents. No auto-push: keep discovery-only calls private. Push to decidr_list only when the user explicitly asked to see/open the decision details. Use BACKLOG for future/non-actionable decisions that should stay out of Next Steps. Draft standard decisions need linked documents before leaving DRAFT. STAGED is only for already-built/configured work in test/review or non-production validation, not for accepted plans. Check list_entity_documents for supporting context and use allowedTransitions to choose the next valid status. For standard decisions, IMPLEMENTED is reserved for deployment-codebase migration; CATCH_UP decisions are the exception and are directly IMPLEMENTED for post-implementation capture.",
     "get_audit_event": "Get a full audit event with payload, source context, linked decisions, URL links, and visible revision history. Push to decidr_list when the user asked to inspect the audit record.",
     "get_task": "Get full task details. BACKLOG tasks are future/non-actionable and should stay out of Next Steps. If status is TODO or IN_PROGRESS, user can use update_task with status: DONE. Push to decidr_list.",
     "get_bridge": "Get full bridge details including project or decision endpoints and linked decisions. Push to decidr_list.",
     "search": "Use when user describes something by name or keyword. No auto-push: keep agent-discovery searches private. Push results to decidr_list only when the user explicitly asked to see/search/browse matching decisions or entities. Offer to drill into specific results with get_* tools.",
     "create_initiative": "Create a new initiative. Returns full created entity. Consider creating projects under it next.",
     "create_project": "Create a new project. Pass initiative_id to link to an initiative and member_ids to assign members. Returns full created entity. Consider adding decisions or tasks next.",
-    "create_decision": "Create a new standard decision. Requires entity_type and matching parent ID. Decisions default to DRAFT status; pass status BACKLOG for future/non-actionable decisions that should stay out of Next Steps. Link supporting documents with link_document, then transition to PROPOSED for review or directly to STAGED when recording already-built work that is in a test/review environment. Use create_catch_up_decision instead for small already-implemented work that needs post-implementation rationale capture without the full standard workflow. Use IMPLEMENTED only after deployment-codebase migration. When creating a missing governance record from implementation discovery, propose it through MCPViews review before calling this tool.",
+    "create_decision": "Create a new standard decision. Requires entity_type and matching parent ID. Decisions default to DRAFT status; pass status BACKLOG for future/non-actionable decisions that should stay out of Next Steps. After human-accepted discovery, create/update the decision and link the discovery artifact, then transition to PROPOSED for review when needed. Use STAGED only when recording already-built/configured work that is in test/review or non-production validation, not for accepted plans. Use create_catch_up_decision instead for small already-implemented work that needs post-implementation rationale capture without the full standard workflow. Use IMPLEMENTED only after deployment-codebase migration. When creating a missing governance record from implementation discovery, proceed directly for clear low-risk single decisions and accompanying doc links/edits after search/context checks; use MCPViews review only for significant, ambiguous, destructive, high-impact, or hard-to-undo changes.",
     "create_catch_up_decision": "Create an IMPLEMENTED catch-up decision for small work that already happened and needs governance/rationale captured after the fact. Requires title, description/rationale, entity_type, and matching parent ID. Optional implemented_at records when the work actually happened. Do not use for active approval workflow or live status transitions.",
     "create_audit_event": "Create a factual project-ledger audit event. Admins may create new free-form categories. external_reference_id plus created_by_client is idempotent.",
-    "create_task": "Create a new task. Returns full created entity. Pass status BACKLOG for future/non-actionable work that should stay out of Next Steps. Use for lightweight implementation follow-up that did not need a decision approval flow, under the relevant project or existing decision. When creating a missing task from implementation discovery, propose it through MCPViews review before calling this tool.",
+    "create_task": "Create a new task. Returns full created entity. Pass status BACKLOG for future/non-actionable work that should stay out of Next Steps. Use for lightweight implementation follow-up that did not need a decision approval flow, under the relevant project or existing decision. When creating a missing task from implementation discovery, proceed directly for clear low-risk tasks after search/context checks; use MCPViews review only for significant, ambiguous, destructive, high-impact, or hard-to-undo changes.",
     "create_bridge": "Create a bridge between two projects or two decisions. Returns full created entity.",
     "update_initiative": "Update initiative fields. Returns full updated entity.",
     "update_project": "Update project fields and/or transition status. Returns full updated entity.",
-    "update_decision": "Update standard decision fields and/or transition status. Use action param for approve/reject/supersede/unsupersede. Use BACKLOG for future/non-actionable decisions that should stay out of Next Steps. Draft decisions require at least one linked document before transitioning to PROPOSED or STAGED. Commit-time implementation updates should transition matching decisions to STAGED; reserve IMPLEMENTED for deployment-codebase migration. If a draft/backlog decision is actually small already-implemented catch-up work, use mark_decision_as_catch_up instead. Returns the full updated entity. Field updates are applied before status transition.",
+    "update_decision": "Update standard decision fields and/or transition status. Use action param for approve/reject/supersede/unsupersede. Use BACKLOG for future/non-actionable decisions that should stay out of Next Steps. Draft decisions require at least one linked document before transitioning to PROPOSED or STAGED. Before implementation starts after discovery/planning, verify or propose the governing decision/task; do not mark accepted plans as STAGED. Move matching decisions to STAGED only after the work is built/configured and in test/review or non-production validation; reserve IMPLEMENTED for deployment-codebase migration. If a draft/backlog decision is actually small already-implemented catch-up work, use mark_decision_as_catch_up instead. Returns the full updated entity. Field updates are applied before status transition.",
     "mark_decision_as_catch_up": "Convert an existing DRAFT or BACKLOG decision into an IMPLEMENTED catch-up decision. Use when the record captures small already-implemented work after the fact and a full standard document-gated workflow would add noise. Provide description if the existing decision lacks rationale, and optional implemented_at for the actual implementation time.",
     "update_decision_stage_time": "Correct when a decision stage/status actually occurred without changing live decision status. Provide id, status, occurred_at ISO timestamp, and optional reason. Updates the matching STATUS_CHANGED timeline event occurred_at while preserving createdAt as the write/correction audit timestamp. For v1, only the decision creator or organization admins/owners may correct timing.",
     "update_audit_event": "Edit an audit event and create visible revision history. Only admins can change occurred_at.",
