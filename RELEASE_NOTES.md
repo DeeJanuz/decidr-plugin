@@ -2,6 +2,7 @@
 
 - **fix**: Add an explicit DecidR implementation-start gate to setup breadcrumbs, governance runbooks, registry hints, and decision tool rules so agents verify or propose governed records before leaving discovery/planning for code, packaging, deployment prep, or external writes.
 - **fix**: Clarify DecidR MCPViews review thresholds so ordinary low-risk decision, task, and accompanying-document writes proceed directly, while review is reserved for significant, ambiguous, destructive, high-impact, hard-to-undo, or row-level approval-worthy changes.
+- **fix**: Clarify DecidR release breadcrumbs so agents move matching `STAGED` decisions to `IMPLEMENTED` after production-equivalent pushes, merges, or versioned releases, while avoiding false implementation state for staging-only `main` or `master` branches.
 
 # 0.1.33-rc.12
 

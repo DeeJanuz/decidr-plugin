@@ -10,7 +10,7 @@ Use this runbook when the user asks you to create, update, implement, stage, app
 4. **Do not fake lifecycle state.** Use `get_decision` and `allowedTransitions` before status changes. If the backend requires an intermediate state, use that actual transition path.
 5. **Keep documentation attached.** Standard decisions need at least one linked supporting document before leaving `DRAFT` for review or execution states.
 6. **Run the implementation start gate.** When leaving discovery or planning for governed feature/process work, fetch this runbook and verify or propose the governing decision/task before the first repo edit, packaging command, deployment prep, or external write.
-7. **Stage built work, implement live work.** `STAGED` means built/configured and in test/review or non-production validation. It is not approval-to-build or acceptance of a plan. `IMPLEMENTED` means migrated into the deployment codebase or otherwise live.
+7. **Stage built work, implement live work.** `STAGED` means built/configured and in test/review or non-production validation. It is not approval-to-build or acceptance of a plan. `IMPLEMENTED` means the work is live or production-equivalent: deployed to production, merged/pushed to a branch that is the repository's live release source such as `main`, `master`, `prod`, or `production`, or published as a versioned release, tag, or package users or downstream systems can install. Do not treat `main` or `master` as `IMPLEMENTED` when that branch is only staging or pre-production.
 8. **Use catch-up decisions only for small already-implemented work.** Use `create_catch_up_decision` or `mark_decision_as_catch_up` for post-implementation rationale capture, not active approval workflows.
 
 ## Discovery and implementation gates
@@ -21,7 +21,7 @@ Use these checkpoints whenever a new feature, process, public/plugin packaging c
 2. **Human-accepted direction:** When the human says the direction is good enough to preserve, create or update the DecidR decision and link the discovery artifact. Do not mark the decision `STAGED` merely because the plan is accepted.
 3. **Implementation start gate:** Before the first implementation action after discovery/planning, search for a matching decision or task. If a confident record exists, attach work to it. If none exists, choose the right creation path: proceed directly for clear low-risk records after search/context checks, or use MCPViews review for significant, ambiguous, destructive, high-impact, or hard-to-undo changes. If the parent initiative/project/bridge is unclear, ask where the work should live.
 4. **Built and validating:** Move the matching standard decision to `STAGED` only after the code/process/configuration exists and is being tested, reviewed, or validated outside production.
-5. **Live release:** Move a matching `STAGED` decision to `IMPLEMENTED` only after production deployment or the agreed production-equivalent operational release.
+5. **Live release:** Move a matching `STAGED` decision to `IMPLEMENTED` only after production deployment or the agreed production-equivalent operational release. This includes a successful push/merge to `main`, `master`, `prod`, or another production branch only when that branch is the live release source, and a new versioned release/tag/package only when it is available for users or downstream systems to install.
 
 ## Mode selection
 
@@ -43,7 +43,7 @@ Workflow:
 4. Create or update the supporting LudFlow plan/discovery document and link it to the decision.
 5. Before implementation starts, run the implementation start gate and verify the work is attached to this decision/task.
 6. After the implementation is committed or available in a test/review environment, move the decision to `STAGED` if `allowedTransitions` permits it.
-7. After deployment or migration into the live/deployment codebase, move the decision to `IMPLEMENTED`.
+7. After deployment, migration into the live/deployment codebase, push/merge to the repository's production release branch, or publication of an installable versioned release, move the decision to `IMPLEMENTED`.
 
 ### Team mode
 
@@ -72,7 +72,7 @@ Workflow:
 7. When approval rules are satisfied, DecidR may auto-transition `PROPOSED -> APPROVED`; verify with `get_decision`.
 8. Run the implementation start gate, then move `APPROVED -> IN_PROGRESS` when implementation starts.
 9. Move `IN_PROGRESS -> STAGED` after commit/test/review implementation exists.
-10. Move `STAGED -> IMPLEMENTED` after deployment or migration into the live/deployment codebase.
+10. Move `STAGED -> IMPLEMENTED` after deployment, migration into the live/deployment codebase, push/merge to the repository's production release branch, or publication of an installable versioned release.
 
 ## Planning, implementation-start, and commit governance
 
@@ -81,6 +81,7 @@ Workflow:
 - If governed work has no matching decision/task, create clear low-risk records directly after search/context checks; use MCPViews review only when the proposed mutation is significant, ambiguous, destructive, high-impact, hard to undo, cross-organization, customer/production-visible, or needs row-level accept/reject control.
 - Do not require MCPViews review solely because there are multiple related DecidR/LudFlow writes. Creating one new decision with a linked discovery document, or updating one decision and its accompanying documents, can proceed directly when the user intent, organization, parent entity, and target documents are clear.
 - When committing code, search for confident matching decisions and tasks. Move confident matching decisions to `STAGED` only after the commit succeeds.
+- When the same workflow also pushes or merges that work to the repository's production release branch, or publishes a versioned release/tag/package that users or downstream systems can install, move confident matching `STAGED` decisions to `IMPLEMENTED` after that release action succeeds.
 - Do not create a new decision merely because a commit happened. If no confident record exists, propose a standard decision, catch-up decision, or task based on scope.
 
 ## Document handling

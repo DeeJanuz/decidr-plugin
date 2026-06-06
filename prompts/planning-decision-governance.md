@@ -9,7 +9,7 @@ You are an agent creating or implementing a plan that appears related to DecidR-
 3. **Search before creating.** Look for existing initiatives, projects, decisions, tasks, and LudFlow documents before creating new DecidR records.
 4. **Prefer continuity.** Update existing decisions and linked docs when the plan refines, implements, supersedes, or documents prior work. Create new decisions, tasks, and supporting docs only when no suitable existing record exists.
 5. **Run the implementation start gate.** Before leaving discovery or planning for governed implementation, search for a matching decision/task and verify or propose the governing record before the first repo edit, packaging command, deployment prep, or external write.
-6. **Stage built work, implement deployed code.** When committing code and DecidR has registered/authenticated organizations, search existing matching decisions and move confident matches to `STAGED` after the commit. `STAGED` means built/configured and in test/review or non-production validation, not approval-to-build. Reserve `IMPLEMENTED` for work migrated into the deployment codebase.
+6. **Stage built work, implement deployed code.** When committing code and DecidR has registered/authenticated organizations, search existing matching decisions and move confident matches to `STAGED` after the commit. `STAGED` means built/configured and in test/review or non-production validation, not approval-to-build. Reserve `IMPLEMENTED` for live or production-equivalent work: production deployment, push/merge to a branch that is the repository's live release source such as `main`, `master`, `prod`, or `production`, or publication of a versioned release, tag, or package users or downstream systems can install. Do not treat `main` or `master` as `IMPLEMENTED` when that branch is only staging or pre-production.
 7. **Backlog future work.** Use `BACKLOG` status for future, deferred, or intentionally non-actionable decisions and tasks. Backlog records document possible work without putting it in Next Steps or action-item queues.
 8. **Create low-risk records directly, review risky ones.** If governed implementation work has no confident matching decision or task, create clear low-risk standard decisions, catch-up decisions, or tasks directly after search/context checks. Use catch-up decisions for small already-implemented work that needs rationale/governance capture after the fact without the full standard decision workflow. Use MCPViews review only for significant, ambiguous, destructive, high-impact, hard-to-undo, cross-organization, customer/production-visible, or row-level approval-worthy changes.
 9. **Preserve implemented records.** When a linked LudFlow document is already published or its DecidR decision is already implemented, fetch the current content first and append new information as a dated addendum. Do not replace or restructure the implemented record unless the user explicitly asks for a rewrite.
@@ -53,7 +53,7 @@ Use these defaults:
 | Human accepts discovery as the durable direction | Create or update the decision and link the discovery artifact; do not mark it `STAGED` until implementation exists. |
 | Implementation is about to start after discovery/planning | Search for a matching decision/task. If none confidently exists, create a clear low-risk governing decision/task directly after context checks, or use MCPViews review when the target, parent, or impact is significant or ambiguous. |
 | A commit implements an existing decision in a test/review environment | Update that decision to `STAGED` after the commit. |
-| Work is migrated into the deployment codebase | Update the matching `STAGED` decision to `IMPLEMENTED`. |
+| Work is migrated into the deployment codebase, pushed/merged to the repository's production release branch, or published as an installable versioned release/tag/package | Update the matching `STAGED` decision to `IMPLEMENTED`. |
 | Plan records future or deferred work that should not appear as immediately actionable | Create or update the relevant decision or task with status `BACKLOG`. |
 | Plan supersedes a previous direction | Update or supersede the existing decision; link the new supporting doc. |
 | Plan fills in missing implementation detail for an existing project/task | Create or update a child decision under the relevant project, bridge, or task context. |
@@ -92,7 +92,16 @@ When the user asks you to commit code, or you otherwise reach the commit step in
    - Propose a task when the work is lightweight implementation follow-up, cleanup, small bugfix scope, or execution detail that did not require a decision approval flow. Attach the task to the relevant project or to an existing decision when the task implements or follows up that decision.
    - Use initial status `BACKLOG` for proposed decisions or tasks that represent future/deferred work rather than immediate next steps.
 8. Create clear low-risk decision/task records directly after search/context checks. Use MCPViews review and execute only accepted rows when proposed creations are significant, ambiguous, destructive, high-impact, hard to undo, cross-organization, customer/production-visible, or need row-level approval. Do not create new records silently just because a commit happened.
-9. Do not move any decision to `IMPLEMENTED` during ordinary code commit. Use `IMPLEMENTED` only after the work is migrated into the deployment codebase.
+9. Do not move any decision to `IMPLEMENTED` during ordinary code commit. Use `IMPLEMENTED` only after the work is migrated into the deployment codebase, pushed/merged to a branch that is the repository's production release source, or published as a versioned release/tag/package users or downstream systems can install. If `main` or `master` is only staging or pre-production for that repository, keep the decision `STAGED`.
+
+### 3c. Release governance
+
+When the workflow includes pushing, merging, deploying, or publishing after the commit:
+
+1. Verify the push, merge, deployment, tag, package, or release publication actually succeeded.
+2. Decide whether that action is production-equivalent for the repository or process. Production-equivalent examples include a production deployment, a push/merge to a live release branch such as `main`, `master`, `prod`, or `production`, or a published versioned release/tag/package that users or downstream systems can install.
+3. If the action is production-equivalent, search for confident matching `STAGED` decisions and move them to `IMPLEMENTED`.
+4. If the branch or release target is only staging, development, QA, preview, or pre-production, keep matching decisions in `STAGED` and note the remaining production release step.
 
 ### 4. Document the plan
 
