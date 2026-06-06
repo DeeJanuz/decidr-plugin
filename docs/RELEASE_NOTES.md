@@ -1,3 +1,11 @@
+# 0.1.33-rc.12
+
+- **fix**: Add a backward-compatible governance-mode setup rule to plugin_rules so older MCPViews builds can prompt for DecidR team-vs-solo defaults without needing core setup_questions support.
+
+# 0.1.33-rc.11
+
+- **feat**: Add DecidR governance lifecycle and governance check-in prompts, plus setup-question metadata so MCPViews setup can persist a compact default governance mode rule.
+
 # 0.1.33-rc.9
 
 - **feat**: Surface catch-up decisions as first-class decision records across DecidR MCP guidance, decision slideouts, list cards, and project-grouped timeline bars, including direct post-implementation capture affordances.

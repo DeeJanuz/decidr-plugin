@@ -1,6 +1,6 @@
 {
   "name": "decidr",
-  "version": "0.1.33-rc.10",
+  "version": "0.1.33-rc.12",
   "prompt_definitions": [
     {
       "name": "initiative_planning",
@@ -45,31 +45,73 @@
       "source": "prompts/github-pr-lifecycle.md"
     },
     {
-      "name": "planning_decision_governance",
-      "description": "Behavioral runbook for agents creating DecidR-looking implementation plans. Governs DecidR context discovery plus decision and document logging for relevant plans.",
+      "name": "governance_lifecycle",
+      "description": "Canonical DecidR governance lifecycle runbook. Fetch before creating, proposing, approving, staging, implementing, or otherwise moving governed decisions through solo-builder or team workflows.",
+      "arguments": [
+        {
+          "name": "mode",
+          "description": "Optional governance mode: solo_builder or team",
+          "required": false
+        }
+      ],
+      "source": "prompts/governance-lifecycle.md"
+    },
+    {
+      "name": "governance_checkin",
+      "description": "Manual DecidR governance check-in workflow for pending approvals, assigned reviews, action items, and staged deployment review reminders.",
       "arguments": [],
-      "source": "prompts/planning-decision-governance.md"
+      "source": "prompts/governance-checkin.md"
+    },
+    {
+      "name": "planning_decision_governance",
+      "description": "Compatibility alias for the DecidR governance lifecycle runbook. Prefer governance_lifecycle for new workflows.",
+      "arguments": [],
+      "source": "prompts/governance-lifecycle.md"
     }
   ],
   "plugin_rules": [
     "When the user asks for action items, to-do items, pending work, or what needs attention: call my_action_items and push to decidr_list. Never open decidr_dashboard for these requests.",
+    "When the user asks for a DecidR governance check-in, pending approvals, approval reminders, or assigned decision reviews, fetch governance_checkin and follow it.",
+    "During MCPViews setup or persisted-rule refresh, if no default DecidR governance mode rule is already persisted, fetch governance_lifecycle, ask its mode-selection question, and persist only the selected compact rule: either 'Default DecidR governance mode is team. For governed DecidR decision lifecycle work, fetch the DecidR governance_lifecycle prompt and use mode=team unless the user explicitly chooses solo_builder.' or 'Default DecidR governance mode is solo_builder. For governed DecidR decision lifecycle work, fetch the DecidR governance_lifecycle prompt and use mode=solo_builder unless the user explicitly chooses team.'",
     "Use BACKLOG status for future or intentionally non-actionable decisions and tasks; BACKLOG records should not be treated as Next Steps or immediate action items.",
     "When using search, list_decisions, or get_decision only for agent discovery, do not push decidr_list. Push decidr_list only when the user explicitly asks to see decision results or details.",
     "When the user asks to see entity details (get_initiative, get_project, get_decision, get_task, get_bridge): push to decidr_list. Only open decidr_dashboard when the user explicitly asks for the User Dashboard, dashboard, or overview.",
     "When the user asks for a timeline, roadmap, schedule, portfolio timing, or how initiatives shape up over time: push decidr_timeline directly. Do not call list tools first; the renderer fetches its own data.",
     "Before taking any action on a GitHub issue or PR linked to DecidR (create_issue, create_pr, review_pr, merge_pr, or prompt generation), fetch the github_pr_lifecycle prompt and follow it. Inbound GitHub sync is automatic through Ludflow-backed metadata. Use get_repo_last_sync or refresh_repo_metadata when the user asks about freshness, and never reintroduce manual sync or reconciliation instructions.",
-    "When creating a DecidR-looking implementation plan, ask the user whether it should be logged in DecidR; if yes, fetch planning_decision_governance and follow it before creating or updating decisions or documents.",
-    "When committing code in any codebase and DecidR has registered/authenticated organizations, fetch planning_decision_governance, resolve the relevant organization, search for existing matching decisions and tasks, and update confident decision matches to STAGED after the commit. STAGED means implemented in a test/review environment; reserve IMPLEMENTED for work migrated into the deployment codebase.",
-    "When governed implementation work has no confident matching DecidR decision or task, fetch planning_decision_governance and propose creating either a decision or, for lightweight work that did not need approval, a task under the relevant project or existing decision. Present the proposal through MCPViews review before creating records.",
+    "When creating, updating, approving, staging, implementing, or logging DecidR-governed decision work, fetch governance_lifecycle and use the persisted governance mode unless the user explicitly chooses another mode.",
+    "When governed implementation work has no confident matching DecidR decision or task, fetch governance_lifecycle and propose the missing decision, catch-up decision, or task through MCPViews review before creating records.",
     "Use create_catch_up_decision or mark_decision_as_catch_up for small already-implemented work that needs post-implementation rationale capture without the full standard decision workflow. Catch-up decisions are directly IMPLEMENTED, require a rationale, and should not be used for active approval/status transitions.",
-    "When creating supporting LudFlow documents for DecidR work, place them in an existing relevant folder structure or, if none exists, in a folder named for the DecidR project; fetch planning_decision_governance for details.",
+    "When creating supporting LudFlow documents for DecidR work, place them in an existing relevant folder structure or, if none exists, in a folder named for the DecidR project; fetch governance_lifecycle for details.",
     "When updating a LudFlow document linked to an implemented DecidR decision, or a LudFlow document that is already published, preserve the existing implemented content and append new findings as a dated addendum unless the user explicitly asks for a rewrite.",
     "When a GitHub write tool fails with 'GitHub connection not found' or the user asks to connect a GitHub PAT for outbound writes, push the decidr_github_auth renderer \u2014 do not call connect_github with a PAT collected in chat. For org-level GitHub connection and metadata-sync settings, use the organization settings GitHub section backed by Ludflow, not the PAT flow.",
     "When the user asks what happened on a project or needs an auditable project ledger, use list_audit_events or get_audit_event and push to decidr_list when the user asked to see the results.",
     "Use update_decision_stage_time and update_task_stage_time only to correct historical stage occurrence timestamps. They must not be used to transition live status; use update_decision or update_task for actual status changes.",
     "Audit dashboard, audit report, and graph renderers are currently hidden from this DecidR plugin line; use list/get tools with decidr_list for audit ledger and relationship visibility until those renderers move to future plugin lines."
   ],
-  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.33-rc.10/decidr.zip",
+  "setup_questions": [
+    {
+      "id": "decidr_governance_mode",
+      "question": "Do you plan to use DecidR to collaborate with and get approvals from shared decisions with other teammates?",
+      "description": "This chooses the default lifecycle mode agents use when DecidR governance work does not specify a mode.",
+      "default_value": "team",
+      "persist_as_rule_name": "decidr_governance_mode",
+      "options": [
+        {
+          "value": "team",
+          "label": "Yes - team approvals",
+          "description": "Use DRAFT -> PROPOSED -> APPROVED -> STAGED -> IMPLEMENTED as the default governance workflow.",
+          "persisted_rule": "Default DecidR governance mode is team. For governed DecidR decision lifecycle work, fetch the DecidR governance_lifecycle prompt and use mode=team unless the user explicitly chooses solo_builder."
+        },
+        {
+          "value": "solo_builder",
+          "label": "No - solo builder",
+          "description": "Use DRAFT -> STAGED -> IMPLEMENTED as the default governance workflow.",
+          "persisted_rule": "Default DecidR governance mode is solo_builder. For governed DecidR decision lifecycle work, fetch the DecidR governance_lifecycle prompt and use mode=solo_builder unless the user explicitly chooses team."
+        }
+      ]
+    }
+  ],
+  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.33-rc.12/decidr.zip",
   "registry_index": {
     "summary": "Decision governance \u2014 initiatives, projects, decisions, tasks, and bridges with approval workflows",
     "tags": [
