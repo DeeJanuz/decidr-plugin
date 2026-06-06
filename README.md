@@ -5,16 +5,15 @@ MCPViews plugin for [DecidR](https://app.decidrmcp.com) — a decision graph too
 ## Renderers
 
 - **decidr_list** — Universal entity list/detail view with slide-out panels
-- **decidr_dashboard** — Initiative dashboard with health bars, project cards, and action items
+- **decidr_dashboard** — User Dashboard with health bars, project cards, and action items
 - **decidr_timeline** — Executive timeline of planned work and actual activity across initiatives
-- **decidr_graph** — Force-directed SVG graph of projects and bridges
 - **decidr_github_auth** — Secure GitHub PAT entry form for outbound GitHub write actions
 
 ## Organization Picker
 
-The dashboard, timeline, and graph headers expose a glassmorphism organization picker. Click a row to switch the active org for the current session; click the star to persist that org as your default across sessions (backed by `/api/me/preferences`). Orgs whose plugin token is not yet connected show a "Connect" badge and can still be starred as the default.
+The User Dashboard and timeline headers expose a glassmorphism organization picker. Click a row to switch the active org for the current session; click the star to persist that org as your default across sessions (backed by `/api/me/preferences`). Orgs whose plugin token is not yet connected show a "Connect" badge and can still be starred as the default.
 
-Audit dashboard and audit report renderer source remains in the repository, but those standalone surfaces are hidden from this plugin line while we evaluate a future audit-focused plugin.
+Audit dashboard, audit report, and graph renderer source remains in the repository, but those standalone surfaces are hidden from this plugin line while we evaluate future focused plugins.
 
 ## Build
 

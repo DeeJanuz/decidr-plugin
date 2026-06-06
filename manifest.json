@@ -55,7 +55,7 @@
     "When the user asks for action items, to-do items, pending work, or what needs attention: call my_action_items and push to decidr_list. Never open decidr_dashboard for these requests.",
     "Use BACKLOG status for future or intentionally non-actionable decisions and tasks; BACKLOG records should not be treated as Next Steps or immediate action items.",
     "When using search, list_decisions, or get_decision only for agent discovery, do not push decidr_list. Push decidr_list only when the user explicitly asks to see decision results or details.",
-    "When the user asks to see entity details (get_initiative, get_project, get_decision, get_task, get_bridge): push to decidr_list. Only open decidr_dashboard or decidr_graph when the user explicitly asks for a 'dashboard', 'overview', 'graph', or 'map'.",
+    "When the user asks to see entity details (get_initiative, get_project, get_decision, get_task, get_bridge): push to decidr_list. Only open decidr_dashboard when the user explicitly asks for the User Dashboard, dashboard, or overview.",
     "When the user asks for a timeline, roadmap, schedule, portfolio timing, or how initiatives shape up over time: push decidr_timeline directly. Do not call list tools first; the renderer fetches its own data.",
     "Before taking any action on a GitHub issue or PR linked to DecidR (create_issue, create_pr, review_pr, merge_pr, or prompt generation), fetch the github_pr_lifecycle prompt and follow it. Inbound GitHub sync is automatic through Ludflow-backed metadata. Use get_repo_last_sync or refresh_repo_metadata when the user asks about freshness, and never reintroduce manual sync or reconciliation instructions.",
     "When creating a DecidR-looking implementation plan, ask the user whether it should be logged in DecidR; if yes, fetch planning_decision_governance and follow it before creating or updating decisions or documents.",
@@ -67,7 +67,7 @@
     "When a GitHub write tool fails with 'GitHub connection not found' or the user asks to connect a GitHub PAT for outbound writes, push the decidr_github_auth renderer \u2014 do not call connect_github with a PAT collected in chat. For org-level GitHub connection and metadata-sync settings, use the organization settings GitHub section backed by Ludflow, not the PAT flow.",
     "When the user asks what happened on a project or needs an auditable project ledger, use list_audit_events or get_audit_event and push to decidr_list when the user asked to see the results.",
     "Use update_decision_stage_time and update_task_stage_time only to correct historical stage occurrence timestamps. They must not be used to transition live status; use update_decision or update_task for actual status changes.",
-    "Audit dashboard and audit report renderers are currently hidden from this DecidR plugin line; use list_audit_events or get_audit_event with decidr_list for audit ledger visibility until those renderers move to a future plugin line."
+    "Audit dashboard, audit report, and graph renderers are currently hidden from this DecidR plugin line; use list/get tools with decidr_list for audit ledger and relationship visibility until those renderers move to future plugin lines."
   ],
   "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.33-rc.10/decidr.zip",
   "registry_index": {
@@ -197,13 +197,12 @@
       "decidr_list",
       "decidr_dashboard",
       "decidr_timeline",
-      "decidr_graph",
       "decidr_github_auth"
     ]
   },
   "tool_rules": {
     "my_action_items": "Returns prioritized action items as entity refs. ALWAYS push results to decidr_list \u2014 the renderer fetches full data from the API. Never use decidr_dashboard for action item requests. Drill into individual items with get_decision/get_task.",
-    "list_initiatives": "Use to discover all initiatives. Push to decidr_list. Use format=compact to save tokens. For a visual graph, push directly to decidr_graph with just { organization_id } \u2014 no tool call needed.",
+    "list_initiatives": "Use to discover all initiatives. Push to decidr_list. Use format=compact to save tokens. The standalone graph view is currently hidden from this plugin line.",
     "list_projects": "Use to discover projects. Push to decidr_list. Filter by status to find active work. Use initiative_id to filter by initiative.",
     "list_decisions": "Use to discover decisions. Filter status=BACKLOG to inspect future/non-actionable decisions. No auto-push: keep discovery-only calls private. Push to decidr_list only when the user explicitly asked to see/list/browse decisions. Call get_decision for full details including approval progress.",
     "list_audit_events": "Use to review a project's universal audit ledger, especially for 'what happened' questions. Push to decidr_list when the user explicitly asked to see the ledger or audit trail.",
@@ -451,12 +450,12 @@
     },
     {
       "name": "decidr_dashboard",
-      "description": "Full dashboard with initiative grouping, health bars, project cards, and prioritized action items",
+      "description": "User Dashboard with initiative grouping, health bars, project cards, and prioritized action items",
       "scope": "universal",
-      "rule": "Push directly to show the dashboard \u2014 do NOT call my_action_items or any other tool first. The renderer fetches all data from the API. Only pass organization_id. For fast access, push immediately when user asks for dashboard or overview.",
+      "rule": "Push directly to show the User Dashboard \u2014 do NOT call my_action_items or any other tool first. The renderer fetches all data from the API. Only pass organization_id. For fast access, push immediately when user asks for the User Dashboard, dashboard, or overview.",
       "data_hint": "{ organization_id: string }",
       "standalone": true,
-      "standalone_label": "Dashboard"
+      "standalone_label": "User Dashboard"
     },
     {
       "name": "decidr_timeline",
@@ -477,16 +476,6 @@
         "connect_github"
       ],
       "data_hint": "{ github_username?: string } \u2014 push with empty data for a blank form, or pre-fill the username field. The renderer POSTs the PAT directly to DecidR's /github/connections endpoint; no follow-up connect_github call is needed."
-    },
-    {
-      "name": "decidr_graph",
-      "description": "Force-directed SVG graph of projects and bridges with interactive nodes and semantic zoom",
-      "scope": "universal",
-      "rule": "Push directly when user asks for a visual map, graph, or diagram \u2014 do NOT call list_initiatives or any other tool first. The renderer fetches all data from the API. Only pass organization_id and optionally initiative_ids to scope the view. For fast access, push immediately.",
-      "invoke_schema": "{ \"type\": \"object\", \"properties\": { \"initiative_ids\": { \"type\": \"array\", \"items\": { \"type\": \"string\" }, \"description\": \"Initiative IDs to scope the graph view. Omit for all initiatives.\" } } }",
-      "data_hint": "{ organization_id: string, initiative_ids?: string[] }",
-      "standalone": true,
-      "standalone_label": "Graph View"
     }
   ],
   "mcp": {
