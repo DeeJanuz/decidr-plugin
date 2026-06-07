@@ -3143,11 +3143,11 @@
           billingBtn.textContent = 'Opening...';
           API.openOrganizationBilling(id).then(function(result) {
             UI.SlideOut._busy = false;
-            if (result && result.portalUrl) {
-              window.open(result.portalUrl, '_blank');
-            } else if (result && result.url) {
-              window.open(result.url, '_blank');
+            var billingUrl = result && (result.portalUrl || result.url);
+            if (billingUrl) {
+              window.open(billingUrl, '_blank');
             }
+            UI.SlideOut._render();
           }).catch(function(err) {
             UI.SlideOut._busy = false;
             console.error('[decidr] Open billing failed:', err);
