@@ -1,3 +1,8 @@
+# 0.1.33-rc.15
+
+- **feat**: Add the direct `invite_member` DecidR organization tool to plugin metadata so agents can invite team members without routing through `manage_member(action=add)`.
+- **fix**: Teach setup, initiative-planning, and tool rules to resolve referenced people with `list_members`, invite missing people by email, and avoid assigning pending invitation IDs to owner, member, assignee, or reviewer fields.
+
 # 0.1.33-rc.14
 
 - **feat**: Add deterministic owner color and initials treatment to the DecidR timeline so lane people chips, decision spans, decision markers, and scan items stay attributable even when users share initials or lack avatars.
