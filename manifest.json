@@ -276,7 +276,7 @@
     "update_task": "Update task fields and/or transition status. Use BACKLOG for future/non-actionable work that should stay out of Next Steps. Set status to DONE to complete a task. Returns full updated entity.",
     "update_task_stage_time": "Correct when a task stage/status actually occurred without changing live task status. Provide id, status, occurred_at ISO timestamp, and optional reason. Updates the matching STATUS_CHANGED timeline event occurred_at while preserving createdAt as the write/correction audit timestamp. For v1, only the task creator or organization admins/owners may correct timing.",
     "update_bridge": "Update bridge fields and/or transition status. Returns full updated entity.",
-    "create_organization": "Create a new organization. The caller becomes OWNER. Use manage_member to invite others.",
+    "create_organization": "Create a new organization. The caller becomes OWNER. Use manage_member to invite others. DecidR setup/onboarding agents must pass creation_source: \"DECIDR_ONBOARDING\" so the starter initiative, project, decision, and Ludflow document are seeded. Other callers should omit creation_source or pass GENERIC.",
     "list_organizations": "List organizations the current user belongs to.",
     "list_members": "List all active members of the current organization.",
     "list_member_invites": "List pending member invitations for the current organization.",

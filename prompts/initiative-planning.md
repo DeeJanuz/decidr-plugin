@@ -181,7 +181,7 @@ Summarize what was created:
 | `decidr_link_document` | Link a document to an entity |
 | `decidr_search` | Full-text search across all entity types |
 | `decidr_search_ludflow_documents` | Search LudFlow documents by keyword |
-| `decidr_create_organization` | Create a new organization |
+| `decidr_create_organization` | Create a new organization. During DecidR setup/onboarding, pass `creation_source: "DECIDR_ONBOARDING"`; otherwise omit it or use `GENERIC`. |
 | `decidr_list_organizations` | List organizations the user belongs to |
 | `decidr_list_members` | List all members of the current organization |
 | `decidr_manage_member` | Add, update role, or remove organization members |
