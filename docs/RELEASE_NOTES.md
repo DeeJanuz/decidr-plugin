@@ -1,3 +1,8 @@
+# 0.1.33-rc.15
+
+- **feat**: Rework organization settings into Members, GitHub Sync, and Billing tabs; show GitHub sync as coming soon; add Ludflow-style node billing summary cards plus Start billing / Manage billing actions.
+- **fix**: Align organization-settings role dropdowns with standard solid select styling instead of glass gradient dropdown treatment.
+
 # 0.1.33-rc.14
 
 - **feat**: Add deterministic owner color and initials treatment to the DecidR timeline so lane people chips, decision spans, decision markers, and scan items stay attributable even when users share initials or lack avatars.

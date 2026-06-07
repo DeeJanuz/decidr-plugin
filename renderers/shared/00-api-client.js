@@ -653,6 +653,19 @@
       return api.get('/organizations/' + orgId + '/members');
     },
 
+    getOrganizationNodeBilling: function(orgId) {
+      return api.get('/organizations/' + orgId + '/node-billing');
+    },
+
+    openOrganizationBilling: function(orgId) {
+      return api.post('/billing/portal', { organizationId: orgId }).catch(function(err) {
+        if (err && err.body && err.body.code === 'NO_CUSTOMER') {
+          return api.post('/billing/checkout', { organizationId: orgId });
+        }
+        throw err;
+      });
+    },
+
     getLudflowGitHubStatus: function() {
       return api.get('/github/ludflow/status');
     },

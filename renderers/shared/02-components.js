@@ -1849,6 +1849,7 @@
       } else if (type === 'organization-settings') {
         fetches.push({ key: 'githubStatus', promise: API.getLudflowGitHubStatus() });
         fetches.push({ key: 'githubRepositories', promise: API.listLudflowGitHubRepositories({ page: 1, limit: 100 }) });
+        fetches.push({ key: 'nodeBilling', promise: API.getOrganizationNodeBilling(id) });
       } else if (type === 'project-timeline') {
         fetches.push({ key: 'timeline', promise: API.getTimeline({ projectId: id, take: 100 }) });
       } else if (type === 'decision-timeline') {
@@ -2154,7 +2155,9 @@
       docFormTab: 'search'
     },
 
-    _organizationSettingsPanelState: {},
+    _organizationSettingsPanelState: {
+      activeTab: 'members'
+    },
 
     // ─── Detail Renderers (delegated to UI.slideOutX functions) ─────
 
@@ -3117,8 +3120,42 @@
     },
 
     _wireOrganizationSettingsEvents: function(panel, id, data) {
+      var state = UI.SlideOut._organizationSettingsPanelState;
       var API = window.__decidrAPI;
       if (!API) return;
+
+      var tabButtons = panel.querySelectorAll('[data-org-settings-tab]');
+      for (var tb = 0; tb < tabButtons.length; tb++) {
+        (function(btn) {
+          btn.onclick = function(e) {
+            e.preventDefault();
+            state.activeTab = btn.getAttribute('data-org-settings-tab') || 'members';
+            UI.SlideOut._render();
+          };
+        })(tabButtons[tb]);
+      }
+
+      var billingBtn = panel.querySelector('#decidr-so-btn-billing');
+      if (billingBtn) {
+        billingBtn.onclick = function() {
+          if (billingBtn.disabled) return;
+          if (UI.SlideOut._guardBusy()) return;
+          billingBtn.textContent = 'Opening...';
+          API.openOrganizationBilling(id).then(function(result) {
+            UI.SlideOut._busy = false;
+            if (result && result.portalUrl) {
+              window.open(result.portalUrl, '_blank');
+            } else if (result && result.url) {
+              window.open(result.url, '_blank');
+            }
+          }).catch(function(err) {
+            UI.SlideOut._busy = false;
+            console.error('[decidr] Open billing failed:', err);
+            alert('Failed to open billing. Please try again from Ludflow organization settings.');
+            UI.SlideOut._render();
+          });
+        };
+      }
 
       var connectGitHubBtn = panel.querySelector('#decidr-so-btn-connect-ludflow-github');
       if (connectGitHubBtn) {

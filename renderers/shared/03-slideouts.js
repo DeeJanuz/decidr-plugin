@@ -43,11 +43,11 @@
     return html;
   };
 
-  UI.auditEventsList = function(events, opts) {
-    opts = opts || {};
-    var items = events || [];
-    if (!items.length) {
-      return opts.emptyText ? '<div class="decidr-so-empty-hint">' + UI.escapeHtml(opts.emptyText) + '</div>' : '';
+    UI.auditEventsList = function(events, opts) {
+      opts = opts || {};
+      var items = events || [];
+      if (!items.length) {
+        return opts.emptyText ? '<div class="decidr-so-empty-hint">' + UI.escapeHtml(opts.emptyText) + '</div>' : '';
     }
     var html = '<div class="decidr-so-list">';
     for (var i = 0; i < items.length; i++) {
@@ -64,11 +64,206 @@
       }
       html += '</div>';
     }
-    html += '</div>';
-    return html;
-  };
+      html += '</div>';
+      return html;
+    };
 
-  function projectAuditTabs(activeTab, decisionCount, eventCount) {
+    function formatNumber(value) {
+      var number = Number(value || 0);
+      if (!Number.isFinite(number)) return '0';
+      return number.toLocaleString('en-US');
+    }
+
+    function formatCurrencyCents(value) {
+      var cents = Number(value || 0);
+      if (!Number.isFinite(cents)) cents = 0;
+      try {
+        return new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          maximumFractionDigits: 2
+        }).format(cents / 100);
+      } catch (e) {
+        return '$' + (cents / 100).toFixed(2);
+      }
+    }
+
+    function hasNumber(source, key) {
+      return source && typeof source[key] === 'number' && Number.isFinite(source[key]);
+    }
+
+    function billingValue(source, key, fallback) {
+      return hasNumber(source, key) ? source[key] : fallback;
+    }
+
+    function billingStatusLabel(status) {
+      return statusLabel(status || 'not_started');
+    }
+
+    function billingMetricCard(label, value, caption) {
+      var html = '<div class="decidr-so-billing-card">';
+      html += '<div class="decidr-so-billing-label">' + UI.escapeHtml(label) + '</div>';
+      html += '<div class="decidr-so-billing-value">' + UI.escapeHtml(value) + '</div>';
+      if (caption) {
+        html += '<div class="decidr-so-billing-caption">' + UI.escapeHtml(caption) + '</div>';
+      }
+      html += '</div>';
+      return html;
+    }
+
+    function billingBreakdownRow(label, value) {
+      return '<div class="decidr-so-billing-breakdown-row">'
+        + '<span>' + UI.escapeHtml(label) + '</span>'
+        + '<strong>' + UI.escapeHtml(String(value)) + '</strong>'
+        + '</div>';
+    }
+
+    function orgSettingsTabs(activeTab) {
+      var tabs = [
+        { key: 'members', label: 'Members' },
+        { key: 'github', label: 'GitHub Sync' },
+        { key: 'billing', label: 'Billing' }
+      ];
+      var html = '<div class="decidr-so-org-tabs" role="tablist">';
+      for (var i = 0; i < tabs.length; i++) {
+        html += '<button class="decidr-so-org-tab' + (activeTab === tabs[i].key ? ' active' : '') + '" '
+          + 'type="button" role="tab" data-org-settings-tab="' + UI.escapeHtml(tabs[i].key) + '">'
+          + UI.escapeHtml(tabs[i].label) + '</button>';
+      }
+      html += '</div>';
+      return html;
+    }
+
+    function renderGitHubComingSoon(githubStatus) {
+      var html = '<div class="decidr-so-section">';
+      html += UI.SlideOut._renderSectionHeader('GitHub Sync');
+      html += '<div class="decidr-so-callout"><strong>Coming soon.</strong> Repository sync controls are moving into the Ludflow-backed GitHub integration.</div>';
+      if (githubStatus) {
+        var connected = !!githubStatus.connected;
+        var summary = githubStatus.summary || {};
+        html += '<div class="decidr-so-meta" style="margin-top:var(--space-3);">';
+        html += '<span class="decidr-so-meta-item"><strong>Status:</strong> ' + UI.escapeHtml(connected ? 'Connected via Ludflow' : 'Not connected') + '</span>';
+        html += '<span class="decidr-so-meta-item"><strong>Repos:</strong> ' + UI.escapeHtml(String(summary.repositoryCount || 0)) + '</span>';
+        html += '<span class="decidr-so-meta-item"><strong>Metadata Sync:</strong> ' + UI.escapeHtml(String(summary.metadataSyncRepositoryCount || 0)) + ' enabled</span>';
+        html += '</div>';
+      }
+      html += '</div>';
+      return html;
+    }
+
+    function renderBillingSettings(nodeBilling, currentUserRole) {
+      var canManageBilling = currentUserRole === 'OWNER' || currentUserRole === 'ADMIN';
+      var status = nodeBilling && nodeBilling.billing ? nodeBilling.billing.status : 'not_started';
+      var actionLabel = status === 'not_started' ? 'Start billing' : 'Manage billing';
+      var html = '<div class="decidr-so-section">';
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);flex-wrap:wrap;">';
+      html += UI.SlideOut._renderSectionHeader('Billing');
+      html += '<button class="decidr-so-btn decidr-so-btn-primary decidr-so-btn-sm" id="decidr-so-btn-billing"'
+        + (canManageBilling ? '' : ' disabled') + '>' + UI.escapeHtml(actionLabel) + '</button>';
+      html += '</div>';
+      if (!canManageBilling) {
+        html += '<div class="decidr-so-muted-note">Only owners and admins can change billing.</div>';
+      }
+
+      if (!nodeBilling) {
+        html += '<div class="decidr-so-callout decidr-so-callout-warning">Billing details are temporarily unavailable. Refresh this panel or manage billing from Ludflow organization settings.</div>';
+        html += '</div>';
+        return html;
+      }
+
+      var nodeAccess = nodeBilling.nodeAccess || {};
+      if (nodeAccess.canCreate === false || nodeAccess.canEdit === false) {
+        html += '<div class="decidr-so-callout decidr-so-callout-warning">';
+        html += nodeAccess.canCreate === false
+          ? 'This organization is at or above its ' + formatNumber(nodeBilling.freeNodesIncluded) + '-node free limit without active billing. New nodes are blocked until billing starts.'
+          : 'This organization is over its ' + formatNumber(nodeBilling.freeNodesIncluded) + '-node free limit without active billing. Existing nodes cannot be edited until billing is fixed.';
+        html += '</div>';
+      }
+
+      if (nodeBilling.decidrUsageSource && nodeBilling.decidrUsageSource !== 'live') {
+        html += '<div class="decidr-so-callout decidr-so-callout-warning">DecidR usage is using '
+          + UI.escapeHtml(String(nodeBilling.decidrUsageSource).replace('_', ' '))
+          + ' data, so totals may be incomplete.</div>';
+      }
+
+      if (nodeBilling.billing && nodeBilling.billing.rolloutMode === 'shadow') {
+        html += '<div class="decidr-so-callout">Node billing is in shadow mode. These balances are projections only and no Stripe usage is reported.</div>';
+      }
+
+      var currentBalanceCents = billingValue(nodeBilling, 'currentBalanceCents', 0);
+      var projectedChargeCents = billingValue(nodeBilling, 'projectedChargeCents', 0);
+      var nodePriceCents = billingValue(nodeBilling, 'nodePriceCents', null);
+      var perUserCapCents = billingValue(nodeBilling, 'perUserCapCents', null);
+      var minimumInvoiceCents = billingValue(nodeBilling, 'minimumInvoiceCents', null);
+      var billableNodes = billingValue(nodeBilling, 'billableNodes', 0);
+      var peakActiveUsers = billingValue(nodeBilling, 'peakActiveUsers', 0);
+      var peakTotalNodes = billingValue(nodeBilling, 'peakTotalNodes', 0);
+      var currentTotalNodes = billingValue(nodeBilling, 'currentTotalNodes', 0);
+
+      html += '<div class="decidr-so-billing-grid">';
+      html += billingMetricCard('Peak nodes', formatNumber(peakTotalNodes), 'Highest usage this billing cycle');
+      html += billingMetricCard('Billable nodes', formatNumber(billableNodes), 'After the free allowance');
+      html += billingMetricCard('Peak active users', formatNumber(peakActiveUsers), 'Used for the monthly cap');
+      html += billingMetricCard('Current balance', formatCurrencyCents(currentBalanceCents), 'Based on usage right now');
+      html += billingMetricCard('Projected monthly charge', formatCurrencyCents(projectedChargeCents), 'Based on peak usage so far');
+      html += '</div>';
+
+      html += '<div class="decidr-so-section">';
+      html += UI.SlideOut._renderSectionHeader('Pricing rules');
+      html += '<div class="decidr-so-billing-rules">';
+      html += '<span>Status: <strong>' + UI.escapeHtml(billingStatusLabel(status)) + '</strong>.</span>';
+      html += '<span>First ' + UI.escapeHtml(formatNumber(nodeBilling.freeNodesIncluded)) + ' nodes are free for the whole organization.</span>';
+      if (nodePriceCents != null) {
+        html += '<span>' + UI.escapeHtml(formatCurrencyCents(nodePriceCents)) + ' per billable node after the free allowance.</span>';
+      }
+      if (perUserCapCents != null) {
+        html += '<span>Capped at ' + UI.escapeHtml(formatCurrencyCents(perUserCapCents)) + ' per peak active user each month.</span>';
+      }
+      if (minimumInvoiceCents != null) {
+        html += '<span>Usage is reported when projected charges reach ' + UI.escapeHtml(formatCurrencyCents(minimumInvoiceCents)) + '.</span>';
+      }
+      if (nodeBilling.periodEnd) {
+        html += '<span>Current billing period ends on ' + UI.escapeHtml(UI.formatDate(nodeBilling.periodEnd)) + '.</span>';
+      }
+      html += '<span>Current node total: ' + UI.escapeHtml(formatNumber(currentTotalNodes)) + '. Peak this month: ' + UI.escapeHtml(formatNumber(peakTotalNodes)) + '.</span>';
+      if (hasNumber(nodeBilling, 'uncappedChargeCents') && hasNumber(nodeBilling, 'userCapChargeCents')) {
+        html += '<span>Uncapped charge: ' + UI.escapeHtml(formatCurrencyCents(nodeBilling.uncappedChargeCents))
+          + '. User cap: ' + UI.escapeHtml(formatCurrencyCents(nodeBilling.userCapChargeCents)) + '.</span>';
+      }
+      html += '</div>';
+      html += '</div>';
+
+      var breakdown = nodeBilling.nodeBreakdown || {};
+      var ludflow = breakdown.ludflow || {};
+      var decidr = breakdown.decidr || {};
+      html += '<div class="decidr-so-section">';
+      html += UI.SlideOut._renderSectionHeader('Node breakdown');
+      html += '<div class="decidr-so-billing-breakdown">';
+      html += billingBreakdownRow('Documents', formatNumber(ludflow.documents));
+      html += billingBreakdownRow('Knowledge entities', formatNumber(ludflow.knowledgeEntities));
+      html += billingBreakdownRow('Data tables', formatNumber(ludflow.dataTables));
+      html += billingBreakdownRow('Synced repos', formatNumber(ludflow.syncedRepositories) + ' (' + formatNumber(ludflow.syncedRepositoryNodes) + ' nodes)');
+      html += billingBreakdownRow('Initiatives', formatNumber(decidr.initiatives));
+      html += billingBreakdownRow('Projects', formatNumber(decidr.projects));
+      html += billingBreakdownRow('Decisions', formatNumber(decidr.decisions));
+      html += billingBreakdownRow('Tasks', formatNumber(decidr.tasks));
+      html += billingBreakdownRow('Issues + PRs', formatNumber((decidr.issues || 0) + (decidr.prs || 0)));
+      html += '</div>';
+      html += '</div>';
+
+      if (nodeBilling.ai) {
+        html += '<div class="decidr-so-callout' + (nodeBilling.ai.ready ? '' : ' decidr-so-callout-warning') + '">';
+        html += nodeBilling.ai.ready
+          ? 'Provider-backed indexing and retrieval are ready for this organization.'
+          : 'Provider-backed indexing and retrieval are limited until this organization configures model keys in Ludflow.';
+        html += '</div>';
+      }
+
+      html += '</div>';
+      return html;
+    }
+
+    function projectAuditTabs(activeTab, decisionCount, eventCount) {
     var active = activeTab || 'decisions';
     var html = '<div class="decidr-so-section" style="margin-top:var(--space-4);">';
     html += '<div style="display:flex;gap:var(--space-2);border-bottom:1px solid var(--border-subtle);">';
@@ -566,100 +761,51 @@
     return html;
   };
 
-  UI.slideOutOrganizationSettings = function(payload) {
-    var organization = payload.organization || {};
-    var permissions = payload.permissions || {};
-    var members = payload.members || [];
-    var invitations = payload.invitations || [];
-    var enriched = payload._enriched || {};
-    var githubStatus = enriched.githubStatus || null;
-    var githubRepoResponse = enriched.githubRepositories || null;
-    var githubRepos = githubRepoResponse && githubRepoResponse.repositories ? githubRepoResponse.repositories : [];
-    var currentUserRole = permissions.currentUserRole || 'MEMBER';
-    var canManageGitHub = currentUserRole === 'OWNER' || currentUserRole === 'ADMIN';
-    var inviteRoleOptions = currentUserRole === 'OWNER'
-      ? ['OWNER', 'ADMIN', 'MEMBER']
-      : ['ADMIN', 'MEMBER'];
-    var html = '<div class="decidr-so-detail decidr-so-org-settings">';
+    UI.slideOutOrganizationSettings = function(payload) {
+      var state = UI.SlideOut._organizationSettingsPanelState;
+      var organization = payload.organization || {};
+      var permissions = payload.permissions || {};
+      var members = payload.members || [];
+      var invitations = payload.invitations || [];
+      var enriched = payload._enriched || {};
+      var githubStatus = enriched.githubStatus || null;
+      var nodeBilling = enriched.nodeBilling || null;
+      var currentUserRole = permissions.currentUserRole || 'MEMBER';
+      var inviteRoleOptions = currentUserRole === 'OWNER'
+        ? ['OWNER', 'ADMIN', 'MEMBER']
+        : ['ADMIN', 'MEMBER'];
+      var activeTab = state.activeTab || 'members';
+      if (activeTab !== 'members' && activeTab !== 'github' && activeTab !== 'billing') {
+        activeTab = 'members';
+        state.activeTab = activeTab;
+      }
+      var html = '<div class="decidr-so-detail decidr-so-org-settings">';
 
-    var metaItems = [
+      var metaItems = [
       { html: '<strong>' + members.length + '</strong> members' },
       { html: '<strong>' + invitations.length + '</strong> pending invites' },
       { html: '<strong>Your role:</strong> ' + UI.escapeHtml(currentUserRole) }
     ];
     if (organization.slug) {
-      metaItems.push({ html: '<strong>Slug:</strong> ' + UI.escapeHtml(organization.slug) });
-    }
-    html += UI.SlideOut._renderMeta(metaItems);
-
-    html += '<div class="decidr-so-section">';
-    html += UI.SlideOut._renderSectionHeader('GitHub Sync');
-    if (githubStatus) {
-      var connected = !!githubStatus.connected;
-      var ghSummary = githubStatus.summary || {};
-      html += '<div class="decidr-so-meta" style="margin-bottom:var(--space-3);">';
-      html += '<span class="decidr-so-meta-item"><strong>Status:</strong> ' + UI.escapeHtml(connected ? 'Connected via Ludflow' : 'Not connected') + '</span>';
-      html += '<span class="decidr-so-meta-item"><strong>Repos:</strong> ' + UI.escapeHtml(String(ghSummary.repositoryCount || 0)) + '</span>';
-      html += '<span class="decidr-so-meta-item"><strong>Metadata Sync:</strong> ' + UI.escapeHtml(String(ghSummary.metadataSyncRepositoryCount || 0)) + ' enabled</span>';
-      html += '</div>';
-
-      if (githubStatus.installations && githubStatus.installations.length) {
-        html += '<div class="decidr-so-empty-hint" style="margin-bottom:var(--space-2);">Connected account: '
-          + UI.escapeHtml(githubStatus.installations[0].accountLogin || 'GitHub') + '</div>';
+        metaItems.push({ html: '<strong>Slug:</strong> ' + UI.escapeHtml(organization.slug) });
       }
+      html += UI.SlideOut._renderMeta(metaItems);
+      html += orgSettingsTabs(activeTab);
 
-      if (canManageGitHub) {
-        html += '<div class="decidr-so-quick-actions">';
-        html += '<button class="decidr-so-btn decidr-so-btn-sm" id="decidr-so-btn-connect-ludflow-github">'
-          + (connected ? 'Reconnect GitHub' : 'Connect GitHub')
-          + '</button>';
+      if (activeTab === 'github') {
+        html += renderGitHubComingSoon(githubStatus);
         html += '</div>';
+        return html;
       }
 
-      if (connected) {
-        if (githubRepos.length > 0) {
-          for (var gr = 0; gr < githubRepos.length; gr++) {
-            var repo = githubRepos[gr];
-            html += '<div class="decidr-so-doc-item" style="align-items:flex-start;gap:10px;">';
-            html += '<div style="flex:1 1 auto;">';
-            html += '<div class="decidr-so-doc-link" style="pointer-events:none;">' + UI.escapeHtml(repo.fullName || ((repo.owner || '') + '/' + (repo.name || ''))) + '</div>';
-            html += '<div class="decidr-so-empty-hint">';
-            html += UI.escapeHtml(repo.metadataSyncEnabled ? 'Hourly metadata sync enabled' : 'Metadata sync disabled');
-            if (repo.lastMetadataSyncedAt) {
-              html += ' · Last sync ' + UI.escapeHtml(UI.formatDate(repo.lastMetadataSyncedAt));
-            } else {
-              html += ' · Never synced';
-            }
-            if (repo.metadataSyncStatus) {
-              html += ' · Status ' + UI.escapeHtml(repo.metadataSyncStatus);
-            }
-            html += '</div>';
-            html += '</div>';
-            if (canManageGitHub) {
-              html += '<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">';
-              html += '<button class="decidr-so-btn decidr-so-btn-sm" data-ludflow-github-toggle-id="' + UI.escapeHtml(repo.id) + '" data-ludflow-github-toggle-enabled="' + (repo.metadataSyncEnabled ? '1' : '0') + '">'
-                + (repo.metadataSyncEnabled ? 'Disable Sync' : 'Enable Sync')
-                + '</button>';
-              html += '<button class="decidr-so-btn decidr-so-btn-sm" data-ludflow-github-refresh-id="' + UI.escapeHtml(repo.id) + '">Refresh Now</button>';
-              html += '</div>';
-            }
-            html += '</div>';
-          }
-        } else {
-          html += '<div class="decidr-so-empty-hint">GitHub is connected, but no repositories have been fetched in Ludflow yet.</div>';
-        }
-      } else {
-        html += '<div class="decidr-so-empty-hint">Connect GitHub through Ludflow to manage automatic repository metadata sync.</div>';
+      if (activeTab === 'billing') {
+        html += renderBillingSettings(nodeBilling, currentUserRole);
+        html += '</div>';
+        return html;
       }
-    } else if (!payload._enrichmentDone) {
-      html += '<div class="decidr-so-empty-hint">Loading GitHub sync settings...</div>';
-    } else {
-      html += '<div class="decidr-so-empty-hint">Unable to load GitHub sync settings right now.</div>';
-    }
-    html += '</div>';
 
-    html += '<div class="decidr-so-section">';
-    html += UI.SlideOut._renderSectionHeader('Invite Member');
+      html += '<div class="decidr-so-section">';
+      html += UI.SlideOut._renderSectionHeader('Invite Member');
     if (permissions.canInviteMembers) {
       html += '<div class="decidr-so-org-invite-form">';
       html += '<input class="decidr-so-org-input" type="email" id="decidr-so-input-org-invite-email" placeholder="name@company.com">';
@@ -725,16 +871,16 @@
       for (var i = 0; i < invitations.length; i++) {
         var invitation = invitations[i];
         var canManageInvite = permissions.canInviteMembers && (currentUserRole === 'OWNER' || invitation.role !== 'OWNER');
-        html += '<div class="decidr-so-org-row">';
-        html += '<div class="decidr-so-org-person">';
-        html += '<div class="decidr-so-org-person-copy">';
-        html += '<div class="decidr-so-org-person-name">' + UI.escapeHtml(invitation.email) + '</div>';
-        html += '<div class="decidr-so-org-person-meta">Role ' + UI.escapeHtml(invitation.role)
-          + ' · ' + UI.escapeHtml(invitation.targetProduct || 'DECIDR')
-          + ' · Expires ' + UI.escapeHtml(UI.formatDate(invitation.expiresAt))
-          + '</div>';
-        html += '</div>';
-        html += '</div>';
+          html += '<div class="decidr-so-org-row">';
+          html += '<div class="decidr-so-org-person">';
+          html += '<div class="decidr-so-org-person-copy">';
+          html += '<div class="decidr-so-org-person-name">' + UI.escapeHtml(invitation.email) + '</div>';
+          html += '<div class="decidr-so-org-person-meta">Role ' + UI.escapeHtml(invitation.role)
+            + ' - ' + UI.escapeHtml(invitation.targetProduct || 'DECIDR')
+            + ' - Expires ' + UI.escapeHtml(UI.formatDate(invitation.expiresAt))
+            + '</div>';
+          html += '</div>';
+          html += '</div>';
         html += '<div class="decidr-so-org-actions">';
         html += '<span class="decidr-so-org-inline-note">Invited by ' + UI.escapeHtml(invitation.invitedByName || 'Unknown') + '</span>';
         html += '<button class="decidr-so-btn decidr-so-btn-sm" data-resend-invitation-id="' + UI.escapeHtml(invitation.id) + '"' + (canManageInvite ? '' : ' disabled') + '>Resend</button>';
