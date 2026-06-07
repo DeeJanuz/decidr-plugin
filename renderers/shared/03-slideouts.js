@@ -131,6 +131,46 @@
     return html;
   }
 
+  function responsibilityUserLabel(user, userId, emptyText) {
+    if (user && (user.name || user.email || user.id)) {
+      return UI.userChip(user);
+    }
+    if (userId) {
+      return '<span class="decidr-so-responsibility-user">'
+        + UI.escapeHtml(userId.slice(0, 8)) + '</span>';
+    }
+    return '<span class="decidr-so-empty-hint">' + UI.escapeHtml(emptyText) + '</span>';
+  }
+
+  function renderResponsibilityRow(kind, label, user, userId, emptyText) {
+    var safeKind = UI.escapeHtml(kind);
+    var safeCurrent = UI.escapeHtml(userId || '');
+    var selectId = 'decidr-so-' + safeKind + '-select';
+    return '<div class="decidr-so-responsibility-row" data-responsibility-kind="' + safeKind + '">'
+      + '<div class="decidr-so-responsibility-main">'
+      + '<span class="decidr-so-responsibility-title">' + UI.escapeHtml(label) + '</span>'
+      + '<span class="decidr-so-responsibility-current">' + responsibilityUserLabel(user, userId, emptyText) + '</span>'
+      + '</div>'
+      + '<select class="decidr-so-responsibility-select" id="' + selectId + '" data-current-value="' + safeCurrent + '" disabled>'
+      + '<option value="">Loading members...</option>'
+      + '</select>'
+      + '</div>';
+  }
+
+  function renderDecisionResponsibilities(decision) {
+    var ownerId = decision.ownerId || (decision.owner && decision.owner.id) || '';
+    var implementerId = decision.implementerId || (decision.implementer && decision.implementer.id) || '';
+    var html = '<div class="decidr-so-responsibilities-card">';
+    html += '<div class="decidr-so-reviewers-label">RESPONSIBILITIES</div>';
+    html += renderResponsibilityRow('owner', 'Owner', decision.owner, ownerId, 'No owner assigned');
+    html += renderResponsibilityRow('implementer', 'Implementer', decision.implementer, implementerId, 'No implementer assigned');
+    html += '<div class="decidr-so-responsibility-actions">'
+      + '<button class="decidr-so-btn decidr-so-btn-sm decidr-so-btn-primary" id="decidr-so-btn-save-responsibilities" disabled>Save responsibilities</button>'
+      + '</div>';
+    html += '</div>';
+    return html;
+  }
+
   /**
    * Render issue slide-out detail panel.
    * @param {Object} issue - Issue data with _enriched sub-objects
@@ -987,6 +1027,8 @@
     html += '<span class="decidr-so-spacer"></span>';
     html += '<button class="decidr-so-btn decidr-so-btn-danger" id="decidr-so-btn-archive">' + ICON_TRASH + ' Archive</button>';
     html += '</div>';
+
+    html += renderDecisionResponsibilities(decision);
 
     if (!isCatchUp) {
       // Reviewers & Approval Progress

@@ -1,3 +1,9 @@
+# 0.1.33-rc.17
+
+- **feat**: Expand dashboard Next Steps groups by default and move Active Decisions behind a collapsed toggle so true user-specific work stays visually primary.
+- **feat**: Add decision responsibility controls to the slideout, letting users assign explicit owner and implementer responsibilities from active organization members.
+- **fix**: Align DecidR guidance with explicit `owner_id` and `implementer_id` responsibility fields so reviewer approval and implementation ownership stay separate.
+
 # 0.1.33-rc.16
 
 - **feat**: Default DecidR MCPViews organization connect flows to in-app six-digit email-code auth, with browser OAuth reserved for explicit advanced recovery.

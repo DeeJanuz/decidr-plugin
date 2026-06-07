@@ -67,7 +67,7 @@ When the user mentions people who should own, review, join, or be assigned to wo
 - Call `decidr_list_members` before using any user ID field.
 - Match people to active members by name or email.
 - If a person is not an active member and you know their email, call `decidr_invite_member`.
-- Do not use pending invitation IDs as `owner_id`, `member_ids`, `assignee_id`, or `reviewer_id`.
+- Do not use pending invitation IDs as `owner_id`, `implementer_id`, `member_ids`, `assignee_id`, or `reviewer_id`.
 - Leave those assignment fields unset until the invite is accepted unless the user chooses an existing active member.
 - If the user names someone but does not provide an email, ask for their email or ask which active member should own the work for now.
 
@@ -195,7 +195,7 @@ Summarize what was created:
 | `decidr_search_ludflow_documents` | Search LudFlow documents by keyword |
 | `decidr_create_organization` | Create a new organization. During DecidR setup/onboarding, pass `creation_source: "DECIDR_ONBOARDING"`; otherwise omit it or use `GENERIC`. |
 | `decidr_list_organizations` | List organizations the user belongs to |
-| `decidr_list_members` | List active members; use returned user IDs for owner, member, assignee, or reviewer fields |
+| `decidr_list_members` | List active members; use returned user IDs for owner, implementer, member, assignee, or reviewer fields |
 | `decidr_list_member_invites` | List pending invites; invitation IDs are not assignable user IDs |
 | `decidr_invite_member` | Invite a new team member by email; leave assignments unset until they accept |
 | `decidr_manage_member` | Add, update role, or remove organization members |

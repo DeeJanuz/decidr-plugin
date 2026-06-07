@@ -2474,6 +2474,87 @@
         updateFn: API.updateDecision
       });
 
+      function responsibilityMemberId(member) {
+        if (!member) return '';
+        if (member.userId) return member.userId;
+        if (member.user && member.user.id) return member.user.id;
+        return member.id || '';
+      }
+
+      function responsibilityMemberName(member) {
+        if (!member) return 'Unknown';
+        if (member.name) return member.name;
+        if (member.user && member.user.name) return member.user.name;
+        if (member.email) return member.email;
+        if (member.user && member.user.email) return member.user.email;
+        return responsibilityMemberId(member) || 'Unknown';
+      }
+
+      function isAssignableResponsibilityMember(member) {
+        var memberId = responsibilityMemberId(member);
+        if (!memberId) return false;
+        if (member.isActive === false || member.active === false) return false;
+        var status = String(member.status || member.membershipStatus || member.inviteStatus || member.invitationStatus || 'ACTIVE').toUpperCase();
+        if (status.indexOf('PENDING') !== -1 || status.indexOf('INVITE') !== -1) return false;
+        return true;
+      }
+
+      function fillResponsibilitySelect(select, members, currentId, emptyLabel) {
+        if (!select) return;
+        var html = '<option value="">' + UI.escapeHtml(emptyLabel) + '</option>';
+        for (var m = 0; m < members.length; m++) {
+          var member = members[m];
+          var memberId = responsibilityMemberId(member);
+          if (!memberId) continue;
+          html += '<option value="' + UI.escapeHtml(memberId) + '"' + (memberId === currentId ? ' selected' : '') + '>'
+            + UI.escapeHtml(responsibilityMemberName(member)) + '</option>';
+        }
+        select.innerHTML = html;
+        select.disabled = false;
+      }
+
+      function wireDecisionResponsibilities() {
+        var ownerSelect = panel.querySelector('#decidr-so-owner-select');
+        var implementerSelect = panel.querySelector('#decidr-so-implementer-select');
+        var saveBtn = panel.querySelector('#decidr-so-btn-save-responsibilities');
+        if (!ownerSelect || !implementerSelect || !saveBtn || !API || !API.listMembers) return;
+
+        var currentOwnerId = ownerSelect.getAttribute('data-current-value') || '';
+        var currentImplementerId = implementerSelect.getAttribute('data-current-value') || '';
+
+        API.listMembers().then(function(result) {
+          var members = (result && result.data) || result || [];
+          if (!Array.isArray(members)) members = [];
+          var assignable = [];
+          for (var mi = 0; mi < members.length; mi++) {
+            if (isAssignableResponsibilityMember(members[mi])) assignable.push(members[mi]);
+          }
+          fillResponsibilitySelect(ownerSelect, assignable, currentOwnerId, 'No owner assigned');
+          fillResponsibilitySelect(implementerSelect, assignable, currentImplementerId, 'No implementer assigned');
+          saveBtn.disabled = false;
+        }).catch(function(err) {
+          ownerSelect.innerHTML = '<option value="">Failed to load members</option>';
+          implementerSelect.innerHTML = '<option value="">Failed to load members</option>';
+          console.error('[decidr] List members failed:', err);
+        });
+
+        saveBtn.onclick = function() {
+          if (!API || !API.updateDecision) return;
+          if (UI.SlideOut._guardBusy()) return;
+          API.updateDecision(id, {
+            ownerId: ownerSelect.value || null,
+            implementerId: implementerSelect.value || null
+          }).then(function() {
+            UI.SlideOut._refetchAndRender();
+          }).catch(function(err) {
+            UI.SlideOut._busy = false;
+            console.error('[decidr] Update decision responsibilities failed:', err);
+          });
+        };
+      }
+
+      wireDecisionResponsibilities();
+
       // Status dropdown toggle
       var statusBtn = panel.querySelector('#decidr-so-btn-status');
       if (statusBtn) {

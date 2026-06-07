@@ -29,6 +29,7 @@
       error: null,
       // New section state
       activeDecisionFilters: { BACKLOG: false, DRAFT: true, PROPOSED: true, IN_PROGRESS: true, STAGED: true, APPROVED: true, REJECTED: true },
+      activeDecisionsVisible: false,
       nextStepsExpanded: false,
       nextStepsGroupExpanded: {},
       decisionsExpanded: false,
@@ -421,33 +422,12 @@
         pull_request: 'Pull Requests'
       };
 
-      // Issues are surfaced via my_action_items (entityType 'issue') with strict
-      // per-entity ownership. The renderer no longer injects from dashState.allIssues
-      // to avoid duplicate rows and to respect ownership semantics.
-      var CLOSED_PR_STATUSES = { MERGED: true, CLOSED: true };
-      var prs = dashState.allPRs || [];
-
-      // Inject open PRs (skip merged/closed)
-      for (var pi = 0; pi < prs.length; pi++) {
-        var prItem = prs[pi];
-        if (CLOSED_PR_STATUSES[prItem.status]) continue;
-        if (!groups['pull_request']) { groups['pull_request'] = []; groupOrder.push('pull_request'); }
-        groups['pull_request'].push({
-          entityType: 'pull_request',
-          entityId: prItem.id,
-          id: prItem.id,
-          title: '#' + (prItem.githubPrNumber || '') + ' ' + (prItem.branchName || 'Unknown branch'),
-          status: prItem.status || 'OPEN',
-          createdAt: prItem.createdAt
-        });
-      }
-
       var html = '';
       for (var g = 0; g < groupOrder.length; g++) {
         var groupType = groupOrder[g];
         var groupItems = groups[groupType];
         var label = ENTITY_LABELS[groupType] || (groupType.charAt(0).toUpperCase() + groupType.slice(1).toLowerCase() + 's');
-        var isExpanded = !!dashState.nextStepsGroupExpanded[groupType];
+        var isExpanded = dashState.nextStepsGroupExpanded[groupType] !== false;
         var chevron = isExpanded ? '\u25BC' : '\u25B6';
 
         // Build status breakdown
@@ -533,6 +513,18 @@
     }
 
     function renderActiveDecisionsSection() {
+      var decisions = getActiveDecisions();
+      var visible = !!dashState.activeDecisionsVisible;
+      var toggleLabel = visible ? 'Hide active decisions' : 'Show active decisions';
+      var html = '<div class="decidr-active-decisions-toggle-row">'
+        + '<button class="decidr-dash-show-more" id="decidr-active-decisions-toggle" aria-expanded="' + (visible ? 'true' : 'false') + '">'
+        + UI.escapeHtml(toggleLabel) + '</button>'
+        + '</div>';
+
+      if (!visible) {
+        return UI.section('decision', 'Active Decisions', decisions.length, html);
+      }
+
       // Scan all decisions for unique statuses
       var statusSet = {};
       for (var i = 0; i < dashState.allDecisions.length; i++) {
@@ -565,8 +557,8 @@
       }
       pillBar += '</div>';
 
-      return UI.section('decision', 'Active Decisions', null,
-        pillBar + '<div id="decidr-active-decisions-container">' + renderActiveDecisionsContent() + '</div>');
+      return UI.section('decision', 'Active Decisions', decisions.length,
+        html + pillBar + '<div id="decidr-active-decisions-container">' + renderActiveDecisionsContent() + '</div>');
     }
 
     function renderInitiativeSections() {
@@ -733,6 +725,7 @@
 
     function wireInteractions() {
       wireNextStepsShowMore();
+      wireActiveDecisionsToggle();
       wireDecisionStatusPills();
       wireDecisionsShowMore();
       wireInitiativeToggle();
@@ -842,7 +835,7 @@
           header._decidrWired = true;
           header.addEventListener('click', function() {
             var groupType = header.getAttribute('data-next-steps-group');
-            dashState.nextStepsGroupExpanded[groupType] = !dashState.nextStepsGroupExpanded[groupType];
+            dashState.nextStepsGroupExpanded[groupType] = !(dashState.nextStepsGroupExpanded[groupType] !== false);
             var cont = container.querySelector('#decidr-next-steps-container');
             if (cont) {
               cont.innerHTML = renderNextStepsContent();
@@ -852,6 +845,24 @@
           });
         })(groupHeaders[i]);
       }
+    }
+
+    function wireActiveDecisionsToggle() {
+      var toggle = container.querySelector('#decidr-active-decisions-toggle');
+      if (!toggle || toggle._decidrWired) return;
+      toggle._decidrWired = true;
+      toggle.addEventListener('click', function() {
+        dashState.activeDecisionsVisible = !dashState.activeDecisionsVisible;
+        dashState.decisionsExpanded = false;
+        var parent = toggle.closest('.decidr-section');
+        if (parent) {
+          parent.outerHTML = renderActiveDecisionsSection();
+          wireActiveDecisionsToggle();
+          wireDecisionStatusPills();
+          wireDecisionsShowMore();
+          wireEntityClicks(container);
+        }
+      });
     }
 
     function wireDecisionStatusPills() {
@@ -873,6 +884,7 @@
               var parent = sectionEl.closest('.decidr-section');
               if (parent) {
                 parent.outerHTML = renderActiveDecisionsSection();
+                wireActiveDecisionsToggle();
                 wireDecisionStatusPills();
                 wireDecisionsShowMore();
                 wireEntityClicks(container);
