@@ -105,6 +105,10 @@
     return window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function';
   }
 
+  function _statusHasUsableToken(status) {
+    return status === 'valid' || status === 'expired_refreshable';
+  }
+
   function _refreshToken() {
     if (!_hasTauri()) {
       return Promise.reject(new Error('Tauri IPC not available for token refresh'));
@@ -717,6 +721,54 @@
       return window.__TAURI__.core.invoke('list_plugin_orgs', { pluginName: 'decidr' });
     },
 
+    listPluginOrgAuth: function() {
+      if (!_hasTauri()) return Promise.resolve([]);
+      return window.__TAURI__.core.invoke('list_plugin_org_auth', { pluginName: 'decidr' })
+        .catch(function() {
+          return api.listPluginOrgs().then(function(orgs) {
+            return (orgs || []).map(function(orgId) {
+              return { org_id: orgId, status: 'valid', refreshable: false };
+            });
+          });
+        });
+    },
+
+    refreshOrgToken: function(orgId) {
+      if (!_hasTauri()) return Promise.reject(new Error('Tauri IPC not available for token refresh'));
+      return window.__TAURI__.core.invoke('get_plugin_auth_header', {
+        pluginName: 'decidr',
+        orgId: orgId
+      });
+    },
+
+    openPluginAuth: function(orgId) {
+      var data = {
+        plugin_name: 'decidr',
+        plugin_label: 'DecidR',
+        organization_id: orgId || null
+      };
+      var utils = window.__companionUtils || {};
+      if (typeof utils.openSession === 'function') {
+        utils.openSession({
+          sessionKey: 'plugin-auth-decidr-' + (orgId || 'default'),
+          toolName: 'plugin_email_code_auth',
+          contentType: 'plugin_email_code_auth',
+          data: data,
+          meta: { headerTitle: 'Sign in to DecidR' },
+          toolArgs: { plugin_name: 'decidr', organization_id: orgId || null }
+        });
+        return Promise.resolve();
+      }
+      if (_hasTauri()) {
+        return window.__TAURI__.core.invoke('start_plugin_auth', {
+          pluginName: 'decidr',
+          orgId: orgId || null,
+          authFlow: 'email_code'
+        });
+      }
+      return Promise.reject(new Error('MCPViews authentication UI is not available.'));
+    },
+
     switchOrg: function(orgId) {
       _activeOrgId = orgId || null;
       _token = '';
@@ -758,19 +810,19 @@
       var pushedOrgId = opts.pushedOrgId || null;
       return Promise.all([
         api.listOrganizations().catch(function() { return []; }),
-        api.listPluginOrgs().catch(function() { return []; }),
+        api.listPluginOrgAuth().catch(function() { return []; }),
         api.getUserPreferences().catch(function() { return null; })
       ]).then(function(results) {
         var orgs = results[0] || [];
-        var pluginOrgs = results[1] || [];
+        var pluginOrgAuth = results[1] || [];
         var prefs = results[2] || null;
 
-        var pluginOrgSet = {};
-        for (var i = 0; i < pluginOrgs.length; i++) {
-          pluginOrgSet[pluginOrgs[i]] = true;
-        }
-        for (var o = 0; o < orgs.length; o++) {
-          orgs[o].tokenStatus = pluginOrgSet[orgs[o].id] ? 'valid' : 'no-token';
+        var pluginOrgStatus = {};
+        for (var i = 0; i < pluginOrgAuth.length; i++) {
+          var entry = pluginOrgAuth[i] || {};
+          var entryOrgId = entry.org_id || entry.orgId;
+          if (!entryOrgId) continue;
+          pluginOrgStatus[entryOrgId] = entry.status || (entry.refreshable ? 'expired_refreshable' : 'valid');
         }
 
         var defaultOrgId = (prefs && prefs.defaultOrganizationId) || null;
@@ -783,21 +835,40 @@
         if (!currentlyBound) {
           if (pushedOrgId) {
             targetOrgId = pushedOrgId;
-          } else if (defaultOrgId && pluginOrgSet[defaultOrgId]) {
+          } else if (defaultOrgId && _statusHasUsableToken(pluginOrgStatus[defaultOrgId])) {
             targetOrgId = defaultOrgId;
           }
         }
 
-        var switchPromise = Promise.resolve();
-        if (targetOrgId) {
-          switchPromise = api.switchOrg(targetOrgId).catch(function() {
-            // Fall through to whatever token autoInit last bound. The
-            // backend resolver fallback can still route MCP calls to the
-            // user's default via their session preference.
-          });
+        var refreshes = [];
+        for (var r = 0; r < orgs.length; r++) {
+          (function(org) {
+            var status = pluginOrgStatus[org.id] || 'no-token';
+            if (status !== 'expired_refreshable') return;
+            refreshes.push(api.refreshOrgToken(org.id).then(function() {
+              pluginOrgStatus[org.id] = 'valid';
+            }).catch(function() {
+              pluginOrgStatus[org.id] = 'expired_unrefreshable';
+            }));
+          })(orgs[r]);
         }
 
-        return switchPromise.then(function() {
+        return Promise.all(refreshes).then(function() {
+          for (var o = 0; o < orgs.length; o++) {
+            orgs[o].tokenStatus = pluginOrgStatus[orgs[o].id] || 'no-token';
+          }
+
+          var switchPromise = Promise.resolve();
+          if (targetOrgId && _statusHasUsableToken(pluginOrgStatus[targetOrgId])) {
+            switchPromise = api.switchOrg(targetOrgId).catch(function() {
+              // Fall through to whatever token autoInit last bound. The
+              // backend resolver fallback can still route MCP calls to the
+              // user's default via their session preference.
+            });
+          }
+
+          return switchPromise;
+        }).then(function() {
           return {
             organizations: orgs,
             defaultOrgId: defaultOrgId,

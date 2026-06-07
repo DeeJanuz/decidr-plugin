@@ -3557,11 +3557,14 @@
       var isDefault = org.id === defaultOrgId;
       var canManageOrg = org.role && String(org.role).toUpperCase() !== 'MEMBER';
       var tokenStatus = org.tokenStatus || 'no-token';
+      var needsConnect = tokenStatus === 'no-token'
+        || tokenStatus === 'missing'
+        || tokenStatus === 'expired_unrefreshable';
       var safeName = UI.escapeHtml(org.name || org.id);
       var safeId = UI.escapeHtml(org.id);
       var rowClasses = 'decidr-org-picker-option-row'
         + (isActive ? ' is-active' : '')
-        + (tokenStatus === 'no-token' ? ' is-untrusted' : '');
+        + (needsConnect ? ' is-untrusted' : '');
       var starTitle = isDefault ? 'Current default organization' : 'Set as default';
       var safeStarTitle = UI.escapeHtml(starTitle);
 
@@ -3574,9 +3577,12 @@
         + '<button class="decidr-org-picker-option" data-org-id="' + safeId + '" title="' + safeName + '">'
         + '<span class="decidr-org-picker-check-slot">' + (isActive ? ICON_CHECK_BOLD : '') + '</span>'
         + '<span class="decidr-org-picker-name">' + safeName + '</span>'
-        + (tokenStatus === 'no-token'
+        + (needsConnect
             ? '<span class="decidr-org-picker-badge">Connect</span>'
+            : (tokenStatus === 'expired_refreshable'
+              ? '<span class="decidr-org-picker-badge">Refreshable</span>'
             : (isDefault ? '<span class="decidr-org-picker-badge is-default-badge">Default</span>' : ''))
+          )
         + '</button>'
         + '<button class="decidr-org-picker-star' + (isDefault ? ' is-default' : '') + '"'
         + ' data-org-id="' + safeId + '" data-action="set-default"'

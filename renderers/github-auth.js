@@ -107,9 +107,9 @@
         if (status === 401) {
           return {
             variant: 'warning',
-            html: '<strong>Not signed in to DecidR.</strong><br>'
+              html: '<strong>Not signed in to DecidR.</strong><br>'
               + 'Your PAT was not rejected &mdash; the companion could not authenticate to DecidR at all. '
-              + 'Complete the DecidR plugin sign-in (Ludflow OAuth) in MCPViews, then try again.'
+              + 'Complete DecidR sign-in in MCPViews, then try again.'
           };
         }
         if (status === 403) {
@@ -158,7 +158,7 @@
           showStatus(
             '<strong>Not signed in to DecidR yet.</strong><br>'
               + 'The companion has no DecidR session, so your PAT cannot be saved. '
-              + 'Complete the DecidR plugin sign-in (Ludflow OAuth) in MCPViews, then reopen this form.',
+              + 'Complete DecidR sign-in in MCPViews, then reopen this form.',
             'warning'
           );
           return;

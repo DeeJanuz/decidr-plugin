@@ -86,6 +86,7 @@
     "Use create_catch_up_decision or mark_decision_as_catch_up for small already-implemented work that needs post-implementation rationale capture without the full standard decision workflow. Catch-up decisions are directly IMPLEMENTED, require a rationale, and should not be used for active approval/status transitions.",
     "When creating supporting LudFlow documents for DecidR work, place them in an existing relevant folder structure or, if none exists, in a folder named for the DecidR project; fetch governance_lifecycle for details.",
     "When updating a LudFlow document linked to an implemented DecidR decision, or a LudFlow document that is already published, preserve the existing implemented content and append new findings as a dated addendum unless the user explicitly asks for a rewrite.",
+    "DecidR MCPViews auth uses in-app six-digit email-code authentication by default. If org auth is missing or expired_unrefreshable, call start_plugin_auth with plugin_name 'decidr' and the organization_id. Treat expired_refreshable as connected/refreshable while MCPViews refreshes it; use auth_flow 'browser' only for advanced OAuth recovery.",
     "When a GitHub write tool fails with 'GitHub connection not found' or the user asks to connect a GitHub PAT for outbound writes, push the decidr_github_auth renderer \u2014 do not call connect_github with a PAT collected in chat. For org-level GitHub connection and metadata-sync settings, use the organization settings GitHub section backed by Ludflow, not the PAT flow.",
     "When the user asks what happened on a project or needs an auditable project ledger, use list_audit_events or get_audit_event and push to decidr_list when the user asked to see the results.",
     "Use update_decision_stage_time and update_task_stage_time only to correct historical stage occurrence timestamps. They must not be used to transition live status; use update_decision or update_task for actual status changes.",
@@ -535,6 +536,9 @@
       "client_id": "fc99d041-1923-416c-8173-a4c02ae9b3a7",
       "auth_url": "https://app.ludflow.com/oauth/authorize",
       "token_url": "https://app.ludflow.com/oauth/token",
+      "email_code_auth": {
+        "enabled": true
+      },
       "scopes": [
         "mcp:tools"
       ]
