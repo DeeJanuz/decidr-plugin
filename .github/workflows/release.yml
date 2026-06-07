@@ -54,6 +54,22 @@ jobs:
               --generate-notes
           fi
 
+      - name: Trigger DecidR MCPViews installer rebuild
+        if: steps.version.outputs.changed == 'true' && !contains(steps.version.outputs.current, '-')
+        env:
+          GH_TOKEN: ${{ secrets.MCPVIEWS_RELEASE_DISPATCH_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::MCPVIEWS_RELEASE_DISPATCH_TOKEN is not configured; skipping MCPViews installer rebuild dispatch."
+            exit 0
+          fi
+          VERSION="${{ steps.version.outputs.current }}"
+          jq -n \
+            --arg source_repo "DeeJanuz/decidr-plugin" \
+            --arg source_tag "$VERSION" \
+            '{event_type:"branded-bundle-refresh", client_payload:{source_repo:$source_repo, source_tag:$source_tag}}' \
+            | gh api repos/DeeJanuz/mcpviews/dispatches --method POST --input -
+
       - name: Clear release notes after stable release
         if: steps.version.outputs.changed == 'true' && !contains(steps.version.outputs.current, '-')
         env:
