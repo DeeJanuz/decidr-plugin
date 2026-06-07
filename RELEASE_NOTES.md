@@ -1,4 +1,4 @@
-# 0.1.33-rc.17
+# 0.1.33
 
 - **feat**: Expand dashboard Next Steps groups by default and move Active Decisions behind a collapsed toggle so true user-specific work stays visually primary.
 - **feat**: Add decision responsibility controls to the slideout, letting users assign explicit owner and implementer responsibilities from active organization members.
