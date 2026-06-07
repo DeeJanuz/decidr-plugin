@@ -1,3 +1,8 @@
+# 0.1.33-rc.16
+
+- **feat**: Default DecidR MCPViews organization connect flows to in-app six-digit email-code auth, with browser OAuth reserved for explicit advanced recovery.
+- **fix**: Treat refreshable expired organization grants as connected while MCPViews refreshes them, so dashboards, timelines, graphs, and audit views avoid unnecessary re-auth prompts.
+
 # 0.1.33-rc.15
 
 - **feat**: Add the direct `invite_member` DecidR organization tool to plugin metadata so agents can invite team members without routing through `manage_member(action=add)`.
