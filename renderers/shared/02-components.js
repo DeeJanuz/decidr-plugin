@@ -115,6 +115,19 @@
       .replace(/'/g, '&#39;');
   };
 
+  function encodeBase64Utf8(str) {
+    var text = String(str || '');
+    try {
+      if (typeof btoa === 'function') {
+        return btoa(unescape(encodeURIComponent(text)));
+      }
+      if (typeof Buffer !== 'undefined') {
+        return Buffer.from(text, 'utf8').toString('base64');
+      }
+    } catch (e) {}
+    return '';
+  }
+
   UI.sanitizeColor = function(c) {
     return (typeof c === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(c)) ? c : '#6b7280';
   };
@@ -161,6 +174,11 @@
     return '';
   }
 
+  function safeLanguageClass(value) {
+    var lang = String(value || '').trim().toLowerCase();
+    return /^[a-z0-9_-]{1,32}$/.test(lang) ? lang : '';
+  }
+
   function renderInlineMarkdown(str) {
     var placeholders = [];
     var source = String(str || '');
@@ -169,6 +187,26 @@
       placeholders.push(html);
       return '\u0000' + (placeholders.length - 1) + '\u0000';
     }
+
+    source = source.replace(/\{\{link:([^|}]+)\|([^}]+)\}\}/g, function(match, target, label) {
+      var safeUrl = safeMarkdownUrl(target);
+      var safeLabel = UI.escapeHtml(label);
+      if (!safeUrl) {
+        return stash('<span class="decidr-rich-ref">' + safeLabel + '</span>');
+      }
+      return stash('<a href="' + UI.escapeHtml(safeUrl) + '" target="_blank" rel="noopener noreferrer">' + safeLabel + '</a>');
+    });
+
+    source = source.replace(/\[\[([a-zA-Z0-9_-]+):([^\]|]+)(?:\|([^\]]+))?\]\]/g, function(match, refType, refValue, label) {
+      var display = label || refValue || refType;
+      return stash('<span class="decidr-rich-ref"><span class="decidr-rich-ref-type">' + UI.escapeHtml(refType) + '</span>' + UI.escapeHtml(display) + '</span>');
+    });
+
+    source = source.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, function(match, alt, url) {
+      var safeUrl = safeMarkdownUrl(url);
+      if (!safeUrl) return UI.escapeHtml(alt || '');
+      return stash('<img src="' + UI.escapeHtml(safeUrl) + '" alt="' + UI.escapeHtml(alt || '') + '" loading="lazy" />');
+    });
 
     source = source.replace(/`([^`]+)`/g, function(match, code) {
       return stash('<code>' + UI.escapeHtml(code) + '</code>');
@@ -180,10 +218,17 @@
       return stash('<a href="' + UI.escapeHtml(safeUrl) + '" target="_blank" rel="noopener noreferrer">' + UI.escapeHtml(label) + '</a>');
     });
 
+    source = source.replace(/<((?:https?:\/\/|mailto:)[^>\s]+)>/g, function(match, url) {
+      var safeUrl = safeMarkdownUrl(url);
+      if (!safeUrl) return match;
+      return stash('<a href="' + UI.escapeHtml(safeUrl) + '" target="_blank" rel="noopener noreferrer">' + UI.escapeHtml(url) + '</a>');
+    });
+
     var html = UI.escapeHtml(source);
 
     html = html.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>');
     html = html.replace(/__([^_\n]+)__/g, '<strong>$1</strong>');
+    html = html.replace(/~~([^~\n]+)~~/g, '<del>$1</del>');
     html = html.replace(/(^|[\s(])\*([^*\n]+)\*/g, '$1<em>$2</em>');
     html = html.replace(/(^|[\s(])_([^_\n]+)_/g, '$1<em>$2</em>');
 
@@ -212,12 +257,122 @@
     return String(line || '').match(/^\s{0,3}>\s?(.*)$/);
   }
 
+  function horizontalRuleMatch(line) {
+    return String(line || '').match(/^\s{0,3}(?:-{3,}|\*{3,}|_{3,})\s*$/);
+  }
+
+  function isPotentialTableRow(line) {
+    var text = String(line || '').trim();
+    return text.indexOf('|') !== -1 && text.length > 2;
+  }
+
+  function splitTableRow(line) {
+    var text = String(line || '').trim();
+    if (text.charAt(0) === '|') text = text.slice(1);
+    if (text.charAt(text.length - 1) === '|') text = text.slice(0, -1);
+    var cells = [];
+    var cell = '';
+    var escaped = false;
+    for (var i = 0; i < text.length; i++) {
+      var ch = text.charAt(i);
+      if (escaped) {
+        cell += ch;
+        escaped = false;
+      } else if (ch === '\\') {
+        escaped = true;
+      } else if (ch === '|') {
+        cells.push(cell.trim());
+        cell = '';
+      } else {
+        cell += ch;
+      }
+    }
+    cells.push(cell.trim());
+    return cells;
+  }
+
+  function tableDividerCells(line) {
+    if (!isPotentialTableRow(line)) return null;
+    var cells = splitTableRow(line);
+    if (cells.length === 0) return null;
+    for (var i = 0; i < cells.length; i++) {
+      if (!/^:?-{3,}:?$/.test(cells[i])) return null;
+    }
+    return cells;
+  }
+
+  function tableAlignments(dividerCells) {
+    var alignments = [];
+    for (var i = 0; i < dividerCells.length; i++) {
+      var cell = dividerCells[i];
+      if (/^:-+:$/.test(cell)) alignments.push('center');
+      else if (/^-+:$/.test(cell)) alignments.push('right');
+      else if (/^:-+$/.test(cell)) alignments.push('left');
+      else alignments.push('');
+    }
+    return alignments;
+  }
+
+  function isTableStart(lines, index) {
+    return index + 1 < lines.length &&
+      isPotentialTableRow(lines[index]) &&
+      tableDividerCells(lines[index + 1]);
+  }
+
   function isBlockStart(line) {
     return /^\s*```/.test(line || '') ||
+      horizontalRuleMatch(line) ||
       unorderedListMatch(line) ||
       orderedListMatch(line) ||
       headingMatch(line) ||
       blockquoteMatch(line);
+  }
+
+  function renderListItemContent(item) {
+    var task = String(item || '').match(/^\[( |x|X)\]\s+([\s\S]+)$/);
+    if (!task) return renderInlineMarkdown(item).replace(/\n/g, '<br>');
+    var checked = task[1].toLowerCase() === 'x';
+    return '<span class="decidr-rich-task-item"><input type="checkbox" disabled ' + (checked ? 'checked ' : '') + 'aria-hidden="true" />'
+      + '<span>' + renderInlineMarkdown(task[2]).replace(/\n/g, '<br>') + '</span></span>';
+  }
+
+  function renderTable(lines, startIndex) {
+    var headers = splitTableRow(lines[startIndex]);
+    var divider = tableDividerCells(lines[startIndex + 1]) || [];
+    var alignments = tableAlignments(divider);
+    var rows = [];
+    var i = startIndex + 2;
+    while (i < lines.length && isPotentialTableRow(lines[i]) && !isBlankLine(lines[i])) {
+      rows.push(splitTableRow(lines[i]));
+      i++;
+    }
+
+    var html = '<div class="decidr-rich-table-wrap"><table><thead><tr>';
+    for (var h = 0; h < headers.length; h++) {
+      var hAlign = alignments[h] ? ' style="text-align:' + alignments[h] + ';"' : '';
+      html += '<th' + hAlign + '>' + renderInlineMarkdown(headers[h]) + '</th>';
+    }
+    html += '</tr></thead><tbody>';
+    for (var r = 0; r < rows.length; r++) {
+      html += '<tr>';
+      for (var c = 0; c < headers.length; c++) {
+        var align = alignments[c] ? ' style="text-align:' + alignments[c] + ';"' : '';
+        html += '<td' + align + '>' + renderInlineMarkdown(rows[r][c] || '') + '</td>';
+      }
+      html += '</tr>';
+    }
+    html += '</tbody></table></div>';
+    return { html: html, nextIndex: i };
+  }
+
+  function renderMermaidBlock(source) {
+    var encoded = encodeBase64Utf8(source);
+    if (!encoded) {
+      return '<pre data-language="mermaid"><code class="language-mermaid">' + UI.escapeHtml(source) + '</code></pre>';
+    }
+    return '<div class="mermaid-placeholder" data-mermaid="' + UI.escapeHtml(encoded) + '">'
+      + '<div class="mermaid-loading">Rendering diagram...</div>'
+      + '</div>';
   }
 
   function renderMarkdownLines(lines) {
@@ -232,21 +387,41 @@
         continue;
       }
 
-      if (/^\s*```/.test(line)) {
+      var fence = String(line || '').match(/^\s*```([A-Za-z0-9_-]+)?/);
+      if (fence) {
         var codeLines = [];
+        var lang = safeLanguageClass(fence[1] || '');
         i++;
         while (i < lines.length && !/^\s*```/.test(lines[i])) {
           codeLines.push(lines[i]);
           i++;
         }
         if (i < lines.length) i++;
-        html += '<pre><code>' + UI.escapeHtml(codeLines.join('\n')) + '</code></pre>';
+        if (String(lang || '').toLowerCase() === 'mermaid') {
+          html += renderMermaidBlock(codeLines.join('\n'));
+        } else {
+          html += '<pre' + (lang ? ' data-language="' + UI.escapeHtml(lang) + '"' : '') + '><code' + (lang ? ' class="language-' + UI.escapeHtml(lang) + '"' : '') + '>' + UI.escapeHtml(codeLines.join('\n')) + '</code></pre>';
+        }
+        continue;
+      }
+
+      if (horizontalRuleMatch(line)) {
+        html += '<hr />';
+        i++;
+        continue;
+      }
+
+      if (isTableStart(lines, i)) {
+        var table = renderTable(lines, i);
+        html += table.html;
+        i = table.nextIndex;
         continue;
       }
 
       var heading = headingMatch(line);
       if (heading) {
-        html += '<p class="decidr-rich-heading">' + renderInlineMarkdown(heading[2]) + '</p>';
+        var level = Math.min(6, heading[1].length);
+        html += '<h' + level + '>' + renderInlineMarkdown(heading[2]) + '</h' + level + '>';
         i++;
         continue;
       }
@@ -285,14 +460,14 @@
         }
         html += '<' + listTag + '>';
         for (var li = 0; li < items.length; li++) {
-          html += '<li>' + renderInlineMarkdown(items[li]).replace(/\n/g, '<br>') + '</li>';
+          html += '<li>' + renderListItemContent(items[li]) + '</li>';
         }
         html += '</' + listTag + '>';
         continue;
       }
 
       var paragraphLines = [];
-      while (i < lines.length && !isBlankLine(lines[i]) && !isBlockStart(lines[i])) {
+      while (i < lines.length && !isBlankLine(lines[i]) && !isBlockStart(lines[i]) && !isTableStart(lines, i)) {
         paragraphLines.push(lines[i]);
         i++;
       }
@@ -302,18 +477,193 @@
     return html;
   }
 
+  function renderHostMarkdownHtml(text, className) {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return '';
+    var utils = window.__companionUtils || {};
+    if (typeof utils.renderMarkdown !== 'function') return '';
+    try {
+      var rendered = utils.renderMarkdown(text);
+      if (!rendered || rendered.nodeType !== 1) return '';
+      var wrapper = document.createElement('div');
+      wrapper.className = className;
+      wrapper.appendChild(rendered);
+      return wrapper.outerHTML;
+    } catch (e) {
+      console.warn('[decidr] Host rich text renderer failed, using fallback:', e);
+      return '';
+    }
+  }
+
   UI.richDescription = function(str, opts) {
     if (!str) return '';
     opts = opts || {};
     var className = 'decidr-rich-text';
     if (opts.className) className += ' ' + UI.escapeHtml(opts.className);
-    return '<div class="' + className + '">' + renderMarkdownLines(normalizeDescriptionText(str).split('\n')) + '</div>';
+    var text = normalizeDescriptionText(str);
+    var hostHtml = opts.useHostRenderer === false ? '' : renderHostMarkdownHtml(text, className);
+    if (hostHtml) return hostHtml;
+    return '<div class="' + className + '">' + renderMarkdownLines(text.split('\n')) + '</div>';
   };
 
+  UI.renderRichEmbeds = function(container) {
+    if (!container || typeof container.querySelectorAll !== 'function') return;
+
+    var tables = container.querySelectorAll('.decidr-rich-text table');
+    for (var i = 0; i < tables.length; i++) {
+      var table = tables[i];
+      if (table.parentNode && table.parentNode.classList && table.parentNode.classList.contains('decidr-rich-table-wrap')) {
+        continue;
+      }
+      var wrap = document.createElement('div');
+      wrap.className = 'decidr-rich-table-wrap';
+      table.parentNode.insertBefore(wrap, table);
+      wrap.appendChild(table);
+    }
+
+    var utils = window.__companionUtils || {};
+    if (typeof utils.renderMermaidBlocks === 'function') {
+      try {
+        utils.renderMermaidBlocks(container);
+      } catch (e) {
+        console.warn('[decidr] Mermaid render failed:', e);
+      }
+    }
+  };
+
+  function parseMcpToolResponse(result) {
+    if (!result) throw new Error('No response returned from MCP proxy.');
+    if (result.isError) {
+      var errorText = result.content && result.content[0] && result.content[0].text;
+      throw new Error(errorText || 'MCP tool returned an error.');
+    }
+    if (!result.content || !result.content[0] || typeof result.content[0].text !== 'string') return result;
+    try {
+      return JSON.parse(result.content[0].text) || {};
+    } catch (e) {
+      throw new Error('Failed to parse MCP payload.');
+    }
+  }
+
+  function localMcpToolFetch(toolName, args) {
+    if (typeof fetch !== 'function') return Promise.reject(new Error('MCP fetch unavailable.'));
+    return fetch('http://localhost:4200/mcp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: {
+          name: toolName,
+          arguments: args || {}
+        }
+      })
+    }).then(function(res) {
+      if (!res.ok) throw new Error('MCP request failed: ' + res.status);
+      return res.json();
+    }).then(function(payload) {
+      if (payload && payload.error && payload.error.message) throw new Error(payload.error.message);
+      return parseMcpToolResponse(payload && payload.result ? payload.result : payload);
+    });
+  }
+
+  function mcpToolFetch(toolName, args) {
+    var utils = window.__companionUtils || {};
+    if (typeof utils.companionFetch === 'function') {
+      return utils.companionFetch(toolName, args || {})
+        .then(parseMcpToolResponse)
+        .catch(function() {
+          return localMcpToolFetch(toolName, args || {});
+        });
+    }
+    return localMcpToolFetch(toolName, args || {});
+  }
+
+  function normalizeMcpData(payload) {
+    return payload && payload.data ? payload.data : payload;
+  }
+
+  function ludflowVersionHasContent(version) {
+    return !!(version && (version.content || version.body || version.extractedText));
+  }
+
+  function normalizeLudflowVersionMeta(version, fallbackDoc) {
+    var meta = version || {};
+    var fallback = fallbackDoc || {};
+    return {
+      id: meta.id || '',
+      content: meta.content || meta.body || meta.extractedText || '',
+      format: meta.format || fallback.format || 'MARKDOWN',
+      mimeType: meta.mimeType || meta.mime_type || fallback.mimeType || fallback.mime_type || '',
+      versionNumber: meta.versionNumber || meta.version_number,
+      label: meta.label || null,
+      sourceArtifactVersion: meta.sourceArtifactVersion || meta.source_artifact_version || fallback.sourceArtifactVersion || fallback.source_artifact_version || null,
+      createdAt: meta.createdAt || meta.created_at || null
+    };
+  }
+
+  UI.fetchLudflowDocumentVersions = function(documentId, baseDoc) {
+    if (!documentId) return Promise.resolve([]);
+    var existing = baseDoc || {};
+    return mcpToolFetch('ludflow__get_document', {
+      document_id: documentId,
+      include_links: false,
+      include_children: false
+    }).then(function(payload) {
+      var doc = normalizeMcpData(payload) || {};
+      var versions = Array.isArray(doc.versions) ? doc.versions.slice() : [];
+      if (!versions.length) return [];
+      versions.sort(function(left, right) {
+        return Number(right.versionNumber || right.version_number || 0) - Number(left.versionNumber || left.version_number || 0);
+      });
+      return Promise.all(versions.map(function(version) {
+        var normalized = normalizeLudflowVersionMeta(version, doc);
+        var versionNumber = Number(version && (version.versionNumber || version.version_number));
+        if (!versionNumber || ludflowVersionHasContent(version)) {
+          return normalized;
+        }
+        return mcpToolFetch('ludflow__get_document', {
+          document_id: documentId,
+          version_number: versionNumber,
+          include_links: false,
+          include_children: false
+        }).then(function(versionPayload) {
+          var versionDoc = normalizeMcpData(versionPayload) || {};
+          normalized.content = versionDoc.content || '';
+          normalized.format = normalized.format || versionDoc.format || doc.format || existing.format || 'MARKDOWN';
+          normalized.mimeType = normalized.mimeType || versionDoc.mimeType || versionDoc.mime_type || doc.mimeType || doc.mime_type || existing.mimeType || existing.mime_type || '';
+          normalized.sourceArtifactVersion = normalized.sourceArtifactVersion || versionDoc.sourceArtifactVersion || versionDoc.source_artifact_version || null;
+          return normalized;
+        }).catch(function(err) {
+          console.warn('[decidr] Failed to load Ludflow document version content:', err);
+          return normalized;
+        });
+      }));
+    });
+  };
+
+  function validDate(value) {
+    if (!value) return null;
+    if (value instanceof Date) {
+      return isNaN(value.getTime()) ? null : value;
+    }
+    if (typeof value === 'object') {
+      if (typeof value.toISOString === 'function') {
+        return validDate(value.toISOString());
+      }
+      return null;
+    }
+    var d = new Date(value);
+    return isNaN(d.getTime()) ? null : d;
+  }
+
   UI.timeAgo = function(dateStr) {
-    if (!dateStr) return '';
+    var then = validDate(dateStr);
+    if (!then) return '';
     var now = new Date();
-    var then = new Date(dateStr);
     var diffMs = now - then;
     var diffSec = Math.floor(diffMs / 1000);
     var diffMin = Math.floor(diffSec / 60);
@@ -334,10 +684,10 @@
   };
 
   UI.formatDate = function(dateStr) {
-    if (!dateStr) return '';
+    var d = validDate(dateStr);
+    if (!d) return '';
     var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    var d = new Date(dateStr);
     return months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
   };
 
@@ -1430,6 +1780,8 @@
     _contextSeq: 0,
     _currentContextKey: null,
     _contextScopeDepth: 0,
+    _lastRenderedContextKey: null,
+    _ludflowOutsideClickHandlerBound: false,
 
     _resolveHost: function(source) {
       var node = source && source.nodeType === 1 ? source : null;
@@ -1462,8 +1814,32 @@
       return key;
     },
 
+    _baseContextKey: function(contextKey) {
+      return String(contextKey || '').replace(/:ludflow-document-preview$/, '');
+    },
+
+    _panelContextKey: function(type, baseContextKey) {
+      var key = UI.SlideOut._baseContextKey(baseContextKey);
+      return type === 'ludflow_document' ? key + ':ludflow-document-preview' : key;
+    },
+
+    _isLudflowDocumentContextKey: function(contextKey) {
+      return /:ludflow-document-preview$/.test(String(contextKey || ''));
+    },
+
     _resolveContextKey: function(sourceOrKey) {
       if (typeof sourceOrKey === 'string' && sourceOrKey) return sourceOrKey;
+      if (sourceOrKey && sourceOrKey.nodeType === 1) {
+        var explicitKey = null;
+        if (typeof sourceOrKey.getAttribute === 'function') {
+          explicitKey = sourceOrKey.getAttribute('data-decidr-so-context');
+        }
+        if (!explicitKey && typeof sourceOrKey.closest === 'function') {
+          var scoped = sourceOrKey.closest('[data-decidr-so-context]');
+          if (scoped) explicitKey = scoped.getAttribute('data-decidr-so-context');
+        }
+        if (explicitKey) return explicitKey;
+      }
       if (UI.SlideOut._contextScopeDepth > 0 && UI.SlideOut._currentContextKey) {
         return UI.SlideOut._currentContextKey;
       }
@@ -1491,6 +1867,44 @@
       return context;
     },
 
+    _activeLudflowDocumentContext: function(target) {
+      var targetElement = target && target.nodeType === 1 ? target : (target && target.parentElement ? target.parentElement : null);
+      var targetHost = UI.SlideOut._resolveHost(targetElement);
+      var fallback = null;
+      for (var key in UI.SlideOut._contexts) {
+        if (!Object.prototype.hasOwnProperty.call(UI.SlideOut._contexts, key)) continue;
+        if (!UI.SlideOut._isLudflowDocumentContextKey(key)) continue;
+        var context = UI.SlideOut._contexts[key];
+        if (!context || !context.stack || context.stack.length === 0 || !context.panel || !context.panel.isConnected) continue;
+        var open = context.panel.classList && context.panel.classList.contains('decidr-so-open');
+        if (!open && context.panel.style.display === 'none') continue;
+        if (targetHost && context.host === targetHost) return { key: key, context: context };
+        if (!fallback) fallback = { key: key, context: context };
+      }
+      return fallback;
+    },
+
+    _ensureLudflowOutsideClickHandler: function() {
+      if (UI.SlideOut._ludflowOutsideClickHandlerBound) return;
+      document.addEventListener('click', function(e) {
+        var active = UI.SlideOut._activeLudflowDocumentContext(e.target);
+        if (!active || !active.context || !active.context.panel) return;
+        if (active.context.panel.contains(e.target)) return;
+
+        var targetElement = e.target && e.target.nodeType === 1 ? e.target : (e.target && e.target.parentElement ? e.target.parentElement : null);
+        var docLink = targetElement && typeof targetElement.closest === 'function'
+          ? targetElement.closest('[data-entity-type="ludflow_document"][data-entity-id]')
+          : null;
+        if (docLink) return;
+
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+        UI.SlideOut.close(active.key);
+      }, true);
+      UI.SlideOut._ludflowOutsideClickHandlerBound = true;
+    },
+
     _withContextKey: function(contextKey, fn) {
       var prevKey = UI.SlideOut._currentContextKey;
       var prevDepth = UI.SlideOut._contextScopeDepth;
@@ -1507,7 +1921,14 @@
     open: function(type, id, opts) {
       type = (type || '').toLowerCase();
       var o = opts || {};
-      var contextKey = UI.SlideOut._resolveContextKey(o.contextKey || o.source);
+      var rawContextKey = UI.SlideOut._resolveContextKey(o.contextKey || o.source);
+      var baseContextKey = UI.SlideOut._baseContextKey(rawContextKey);
+      var baseContext = UI.SlideOut._getContext(baseContextKey);
+      if (!baseContext.host) {
+        baseContext.host = UI.SlideOut._resolveHost(o.source);
+      }
+      var contextKey = UI.SlideOut._panelContextKey(type, baseContextKey);
+      UI.SlideOut._getContext(contextKey, baseContext.host);
 
       UI.SlideOut._withContextKey(contextKey, function() {
         // Store onClose callback only when opening root panel
@@ -1541,6 +1962,7 @@
         else if (type === 'initiative') fetchFn = API.getInitiative;
         else if (type === 'audit_event') fetchFn = API.getAuditEvent;
         else if (type === 'organization-settings') fetchFn = API.getOrganizationMemberSettings;
+        else if (type === 'ludflow_document') fetchFn = API.getLudflowDocument;
         else if (type === 'issue') fetchFn = function(id) { return API.getIssue(id); };
         else if (type === 'pull_request') fetchFn = function(id) { return API.getPR(id); };
         else if (type === 'repo') fetchFn = function(id) { return API.getRepo(id); };
@@ -1581,6 +2003,11 @@
         var top = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
         var els = UI.SlideOut._ensureDOM(resolvedKey);
         if (!els) return;
+        var isLeftPanel = top.type === 'ludflow_document';
+        UI.SlideOut._lastRenderedContextKey = resolvedKey;
+        els.panel.classList.toggle('decidr-so-panel-left', isLeftPanel);
+        els.overlay.classList.toggle('decidr-so-overlay-left', isLeftPanel);
+        if (isLeftPanel) UI.SlideOut._ensureLudflowOutsideClickHandler();
 
         // Header
         var hasStack = UI.SlideOut._stack.length > 1;
@@ -1593,6 +2020,7 @@
           project: 'Project', decision: 'Decision',
           audit_event: 'Audit Event',
           task: 'Task', bridge: 'Bridge', initiative: 'Initiative',
+          ludflow_document: 'LudFlow Document',
           'project-timeline': 'Timeline', 'decision-timeline': 'Timeline',
           'organization-settings': 'Organization'
         };
@@ -1623,6 +2051,7 @@
 
         // Wire events
         UI.SlideOut._wirePanel(els.panel);
+        UI.renderRichEmbeds(els.content);
 
         // Show
         els.overlay.style.display = 'block';
@@ -1654,6 +2083,7 @@
       task: function(data) { return UI.slideOutTask(data); },
       bridge: function(data) { return UI.slideOutBridge(data); },
       initiative: function(data) { return UI.slideOutInitiative(data); },
+      ludflow_document: function(data) { return UI.slideOutLudflowDocument(data); },
       'organization-settings': function(data) { return UI.slideOutOrganizationSettings(data); },
       'project-timeline': function(data) { return UI.slideOutTimeline(data, 'project'); },
       'decision-timeline': function(data) { return UI.slideOutTimeline(data, 'decision'); },
@@ -2204,6 +2634,9 @@
         if (!els) return;
         els.overlay.classList.remove('decidr-so-open');
         els.panel.classList.remove('decidr-so-open');
+        if (UI.SlideOut._lastRenderedContextKey === contextKey) {
+          UI.SlideOut._lastRenderedContextKey = null;
+        }
         var callback = UI.SlideOut._onCloseCallback;
         UI.SlideOut._onCloseCallback = null;
         UI.SlideOut._onMutateCallback = null;
@@ -2265,6 +2698,12 @@
           panel = document.createElement('div');
           panel.className = 'decidr-so-panel';
           panel.setAttribute('data-decidr-so-context', resolvedKey);
+          panel.addEventListener('mousedown', function() {
+            UI.SlideOut._lastRenderedContextKey = resolvedKey;
+          });
+          panel.addEventListener('focusin', function() {
+            UI.SlideOut._lastRenderedContextKey = resolvedKey;
+          });
 
           var header = document.createElement('div');
           header.className = 'decidr-so-header';
@@ -2284,6 +2723,7 @@
             var activeHost = UI.SlideOut._resolveHost();
             if (activeHost !== host) return;
             var activeContext = UI.SlideOut._getContext(resolvedKey, host);
+            if (UI.SlideOut._lastRenderedContextKey && UI.SlideOut._lastRenderedContextKey !== resolvedKey) return;
             if (activeContext.stack.length > 0) {
               UI.SlideOut.close(resolvedKey);
             }
@@ -2302,16 +2742,19 @@
 
     _wirePanel: function(panel) {
       var API = window.__decidrAPI;
+      var panelContextKey = UI.SlideOut._resolveContextKey(panel);
 
       // Back / close button
       var backBtn = panel.querySelector('#decidr-so-btn-back');
       if (backBtn) {
         backBtn.onclick = function() {
-          if (UI.SlideOut._stack.length > 1) {
-            UI.SlideOut.back(panel);
-          } else {
-            UI.SlideOut.close(panel);
-          }
+          UI.SlideOut._withContextKey(panelContextKey, function() {
+            if (UI.SlideOut._stack.length > 1) {
+              UI.SlideOut.back(panelContextKey);
+            } else {
+              UI.SlideOut.close(panelContextKey);
+            }
+          });
         };
       }
 
@@ -2365,6 +2808,11 @@
       // --- Initiative events ---
       if (top.type === 'initiative') {
         UI.SlideOut._wireInitiativeEvents(panel, top.id, top.data);
+      }
+
+      // --- LudFlow document preview events ---
+      if (top.type === 'ludflow_document') {
+        UI.SlideOut._wireLudflowDocumentEvents(panel, top.id, top.data);
       }
 
       // --- Organization settings events ---
@@ -2450,6 +2898,76 @@
           };
         })(bridgeHeaders[i]);
       }
+    },
+
+    _wireLudflowDocumentEvents: function(panel, id, data) {
+      var contextKey = UI.SlideOut._resolveContextKey(panel);
+      var versionButtons = panel.querySelectorAll('[data-ludflow-version-id]');
+      for (var i = 0; i < versionButtons.length; i++) {
+        (function(btn) {
+          btn.onclick = function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var versionId = btn.getAttribute('data-ludflow-version-id') || '__current';
+            UI.SlideOut._withContextKey(contextKey, function() {
+              var top = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
+              if (!top || top.type !== 'ludflow_document' || top.id !== id || !top.data) return;
+              top.data._selectedVersionId = versionId;
+              UI.SlideOut._render(contextKey);
+            });
+          };
+        })(versionButtons[i]);
+      }
+      UI.SlideOut._loadLudflowDocumentVersions(panel, id, data);
+    },
+
+    _shouldLoadLudflowDocumentVersions: function(data) {
+      if (!data || data._versionFetchState === 'loading' || data._versionFetchState === 'loaded') return false;
+      var versions = Array.isArray(data.versions) ? data.versions : [];
+      if (versions.length === 0) return true;
+      for (var i = 0; i < versions.length; i++) {
+        if (!ludflowVersionHasContent(versions[i])) return true;
+      }
+      return false;
+    },
+
+    _loadLudflowDocumentVersions: function(panel, id, data) {
+      if (!UI.SlideOut._shouldLoadLudflowDocumentVersions(data)) return;
+      if (typeof UI.fetchLudflowDocumentVersions !== 'function') return;
+
+      var contextKey = UI.SlideOut._resolveContextKey(panel);
+      data._versionFetchState = 'loading';
+      setTimeout(function() {
+        UI.SlideOut._withContextKey(contextKey, function() {
+          var top = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
+          if (!top || top.type !== 'ludflow_document' || top.id !== id || !top.data) return;
+          if (top.data._versionFetchState === 'loading') UI.SlideOut._render(contextKey);
+        });
+      }, 0);
+      UI.fetchLudflowDocumentVersions(id, data).then(function(versions) {
+        UI.SlideOut._withContextKey(contextKey, function() {
+          var top = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
+          if (!top || top.type !== 'ludflow_document' || top.id !== id || !top.data) return;
+          top.data._versionFetchState = 'loaded';
+          top.data._versionFetchError = '';
+          if (Array.isArray(versions) && versions.length > 0) {
+            top.data.versions = versions;
+            if (!top.data._selectedVersionId || top.data._selectedVersionId === '__current') {
+              top.data._selectedVersionId = versions[0].id || '__current';
+            }
+          }
+          UI.SlideOut._render(contextKey);
+        });
+      }).catch(function(err) {
+        console.warn('[decidr] Failed to load Ludflow document versions:', err);
+        UI.SlideOut._withContextKey(contextKey, function() {
+          var top = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
+          if (!top || top.type !== 'ludflow_document' || top.id !== id || !top.data) return;
+          top.data._versionFetchState = 'error';
+          top.data._versionFetchError = err && err.message ? err.message : 'Failed to load version history';
+          UI.SlideOut._render(contextKey);
+        });
+      });
     },
 
     _wireDecisionEvents: function(panel, id, data) {
@@ -3336,10 +3854,10 @@
               + ' <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>'
               + '</a>';
           } else if (isLudflow) {
-            html += '<span class="decidr-so-doc-link decidr-so-doc-ludflow" data-ludflow-doc-id="' + UI.escapeHtml(doc.ludflowDocumentId || doc.id) + '">'
+            html += '<button type="button" class="decidr-so-doc-link decidr-so-doc-ludflow" data-entity-type="ludflow_document" data-entity-id="' + UI.escapeHtml(doc.ludflowDocumentId || doc.id) + '">'
               + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> '
               + UI.escapeHtml(doc.title || 'LudFlow Document')
-              + '</span>';
+              + '</button>';
           } else {
             html += '<span class="decidr-so-doc-link">' + UI.escapeHtml(doc.title || 'Untitled') + '</span>';
           }
@@ -3394,8 +3912,6 @@
         + '</div>';
       html += '</div>';
       html += '</div>';
-
-      // (LudFlow docs open in slide-out panel via entity navigation)
 
       html += '</div>';
       return html;
@@ -3552,34 +4068,6 @@
         })(unlinkBtns[ub]);
       }
 
-      // LudFlow doc click — fetch content and push to companion as rich_content
-      var ludflowLinks = panel.querySelectorAll('[data-ludflow-doc-id]');
-      for (var lf = 0; lf < ludflowLinks.length; lf++) {
-        (function(link) {
-          link.onclick = function(e) {
-            e.stopPropagation();
-            var ludflowId = link.getAttribute('data-ludflow-doc-id');
-            if (!ludflowId || !API) return;
-            API.getLudflowDocument(ludflowId).then(function(doc) {
-              var title = (doc && doc.title) || 'LudFlow Document';
-              var body = (doc && (doc.content || doc.body)) || 'No content available';
-              // Push to companion as rich_content
-              fetch('http://localhost:4200/api/push', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  toolName: 'rich_content',
-                  result: { data: { title: title, body: body } }
-                })
-              }).catch(function(err) {
-                console.error('[decidr] Failed to push doc to companion:', err);
-              });
-            }).catch(function(err) {
-              console.error('[decidr] Failed to fetch LudFlow doc:', err);
-            });
-          };
-        })(ludflowLinks[lf]);
-      }
     },
 
     _wireTimelineFilters: function(panel, entityType) {

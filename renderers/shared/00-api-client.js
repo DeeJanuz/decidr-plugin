@@ -936,6 +936,7 @@
         bridge: api.getBridge,
         audit_event: api.getAuditEvent,
         'organization-settings': api.getOrganizationMemberSettings,
+        ludflow_document: api.getLudflowDocument,
         issue: function(id) { return api.getIssue(id); },
         pull_request: function(id) { return api.getPR(id); },
         repo: function(id) { return api.getRepo(id); }

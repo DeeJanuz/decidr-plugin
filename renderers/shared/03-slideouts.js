@@ -134,6 +134,160 @@
       return html;
     }
 
+    function ludflowContent(value) {
+      if (value == null) return '';
+      if (typeof value === 'string') return value;
+      try {
+        return JSON.stringify(value, null, 2);
+      } catch (e) {
+        return String(value || '');
+      }
+    }
+
+    function ludflowVersionLabel(version) {
+      if (!version) return 'Current';
+      if (version.label) return version.label;
+      if (version.versionNumber != null) return 'Version ' + version.versionNumber;
+      if (version.version_number != null) return 'Version ' + version.version_number;
+      return 'Version';
+    }
+
+    function ludflowVersionDate(value) {
+      if (!value) return '';
+      try {
+        return UI.formatDate(value) || '';
+      } catch (e) {
+        return '';
+      }
+    }
+
+    function ludflowField(record, camelKey, snakeKey) {
+      if (!record) return undefined;
+      if (record[camelKey] != null) return record[camelKey];
+      if (snakeKey && record[snakeKey] != null) return record[snakeKey];
+      return undefined;
+    }
+
+    function ludflowVersionItems(doc) {
+      var versions = Array.isArray(doc.versions) ? doc.versions : [];
+      if (versions.length === 0) {
+        var updatedDate = ludflowVersionDate(doc.updatedAt || doc.updated_at);
+        return [{
+          id: '__current',
+          label: 'Current',
+          detail: updatedDate ? 'Updated ' + updatedDate : '',
+          content: ludflowContent(doc.content || doc.body || ''),
+          format: doc.format || 'MARKDOWN',
+          mimeType: doc.mimeType || doc.mime_type || '',
+          dateLabel: updatedDate ? 'Updated ' + updatedDate : '',
+          current: true
+        }];
+      }
+
+      var items = [];
+      for (var i = 0; i < versions.length; i++) {
+        var version = versions[i] || {};
+        var current = i === 0;
+        var versionNumber = ludflowField(version, 'versionNumber', 'version_number');
+        var createdDate = ludflowVersionDate(version.createdAt || version.created_at);
+        var format = ludflowField(version, 'format');
+        var mimeType = ludflowField(version, 'mimeType', 'mime_type') || doc.mimeType || doc.mime_type || '';
+        var sourceArtifactVersion = ludflowField(version, 'sourceArtifactVersion', 'source_artifact_version');
+        var detailParts = [];
+        if (current) detailParts.push('Current');
+        if (versionNumber != null) detailParts.push('Version ' + versionNumber);
+        if (createdDate) detailParts.push(createdDate);
+        items.push({
+          id: version.id || ('__version_' + i),
+          label: version.label || (current ? 'Current' : ludflowVersionLabel(version)),
+          detail: detailParts.join(' · '),
+          content: ludflowContent(version.content || version.body || version.extractedText || (current ? (doc.content || doc.body || '') : '')),
+          format: format || doc.format || 'MARKDOWN',
+          mimeType: mimeType,
+          versionNumber: versionNumber,
+          sourceArtifactVersion: sourceArtifactVersion,
+          dateLabel: createdDate,
+          current: current
+        });
+      }
+      return items;
+    }
+
+    function ludflowLooksMarkdown(item) {
+      var format = String((item && item.format) || '').toLowerCase();
+      var mimeType = String((item && item.mimeType) || '').toLowerCase();
+      return !format ||
+        format === 'markdown' ||
+        format === 'md' ||
+        format === 'text' ||
+        format === 'plain_text' ||
+        mimeType.indexOf('markdown') !== -1 ||
+        mimeType.indexOf('text/plain') !== -1;
+    }
+
+    function ludflowPreviewHtml(item) {
+      var content = ludflowContent(item && item.content);
+      if (!content || !content.trim()) {
+        return '<div class="decidr-so-empty-hint">No content available for this version</div>';
+      }
+      if (ludflowLooksMarkdown(item)) {
+        return UI.richDescription(content, { className: 'decidr-so-doc-preview-rich' });
+      }
+      return '<pre class="decidr-so-doc-preview-raw"><code>' + UI.escapeHtml(content) + '</code></pre>';
+    }
+
+    function ludflowSelectedVersion(doc, items) {
+      var selectedId = doc._selectedVersionId || (items[0] && items[0].id) || '__current';
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].id === selectedId) return items[i];
+      }
+      return items[0];
+    }
+
+    UI.slideOutLudflowDocument = function(doc) {
+      var items = ludflowVersionItems(doc || {});
+      var selected = ludflowSelectedVersion(doc || {}, items);
+      var html = '<div class="decidr-so-detail decidr-so-doc-preview">';
+
+      html += '<h3 class="decidr-so-detail-title">' + UI.escapeHtml((doc && doc.title) || 'LudFlow Document') + '</h3>';
+      var metaItems = [];
+      var selectedVersionMeta = selected.current
+        ? 'Current document'
+        : (selected.versionNumber != null ? 'Version ' + selected.versionNumber : (selected.label || 'Version'));
+      metaItems.push({ html: UI.escapeHtml(selectedVersionMeta) });
+      if (selected.format) metaItems.push({ html: UI.escapeHtml(String(selected.format).replace(/_/g, ' ')) });
+      if (selected.mimeType) metaItems.push({ html: UI.escapeHtml(selected.mimeType) });
+      if (selected.dateLabel) metaItems.push({ html: UI.escapeHtml(selected.dateLabel) });
+      if (selected.sourceArtifactVersion) metaItems.push({ html: 'Source ' + UI.escapeHtml(selected.sourceArtifactVersion) });
+      html += UI.SlideOut._renderMeta(metaItems);
+
+      html += '<div class="decidr-so-section">';
+      html += UI.SlideOut._renderSectionHeader('Versions', items.length);
+      html += '<div class="decidr-so-version-list">';
+      for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        var active = item.id === selected.id;
+        html += '<button type="button" class="decidr-so-version-item' + (active ? ' active' : '') + '" data-ludflow-version-id="' + UI.escapeHtml(item.id) + '">';
+        html += '<span class="decidr-so-version-title">' + UI.escapeHtml(item.label) + '</span>';
+        if (item.detail) html += '<span class="decidr-so-version-detail">' + UI.escapeHtml(item.detail) + '</span>';
+        html += '</button>';
+      }
+      html += '</div></div>';
+      if (doc && doc._versionFetchState === 'loading') {
+        html += '<div class="decidr-so-empty-hint">Loading Ludflow version history...</div>';
+      } else if (doc && doc._versionFetchState === 'error') {
+        html += '<div class="decidr-so-empty-hint">Version history could not be loaded.</div>';
+      }
+
+      html += '<div class="decidr-so-section">';
+      html += UI.SlideOut._renderSectionHeader('Preview');
+      html += ludflowPreviewHtml(selected);
+      html += '</div>';
+
+      html += '</div>';
+      return html;
+    };
+
     function renderGitHubComingSoon(githubStatus) {
       var html = '<div class="decidr-so-section">';
       html += UI.SlideOut._renderSectionHeader('GitHub Sync');
