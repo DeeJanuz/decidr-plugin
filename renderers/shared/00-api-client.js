@@ -657,7 +657,10 @@
       return api.get('/organizations/' + orgId + '/node-billing');
     },
 
-    openOrganizationBilling: function(orgId) {
+    openOrganizationBilling: function(orgId, billingStatus) {
+      if (billingStatus && billingStatus !== 'active') {
+        return api.post('/billing/checkout', { organizationId: orgId });
+      }
       return api.post('/billing/portal', { organizationId: orgId }).catch(function(err) {
         if (err && err.body && err.body.code === 'NO_CUSTOMER') {
           return api.post('/billing/checkout', { organizationId: orgId });

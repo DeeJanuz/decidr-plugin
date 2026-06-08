@@ -308,11 +308,12 @@
     function renderBillingSettings(nodeBilling, currentUserRole) {
       var canManageBilling = currentUserRole === 'OWNER' || currentUserRole === 'ADMIN';
       var status = nodeBilling && nodeBilling.billing ? nodeBilling.billing.status : 'not_started';
-      var actionLabel = status === 'not_started' ? 'Start billing' : 'Manage billing';
+      var actionLabel = status === 'active' ? 'Manage billing' : 'Start billing';
       var html = '<div class="decidr-so-section">';
       html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3);flex-wrap:wrap;">';
       html += UI.SlideOut._renderSectionHeader('Billing');
       html += '<button class="decidr-so-btn decidr-so-btn-primary decidr-so-btn-sm" id="decidr-so-btn-billing"'
+        + ' data-billing-status="' + UI.escapeHtml(status) + '"'
         + (canManageBilling ? '' : ' disabled') + '>' + UI.escapeHtml(actionLabel) + '</button>';
       html += '</div>';
       if (!canManageBilling) {
@@ -320,7 +321,11 @@
       }
 
       if (!nodeBilling) {
-        html += '<div class="decidr-so-callout decidr-so-callout-warning">Billing details are temporarily unavailable. Refresh this panel or manage billing from Ludflow organization settings.</div>';
+        html += '<div class="decidr-so-callout">';
+        html += canManageBilling
+          ? 'Billing has not been set up yet. Start billing to add a payment method and enable organization-wide node billing. Usage details will appear after billing is connected.'
+          : 'Billing has not been set up yet. Ask an owner or admin to start billing. Usage details will appear after billing is connected.';
+        html += '</div>';
         html += '</div>';
         return html;
       }

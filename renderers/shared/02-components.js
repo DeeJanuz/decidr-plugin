@@ -3659,17 +3659,22 @@
           if (billingBtn.disabled) return;
           if (UI.SlideOut._guardBusy()) return;
           billingBtn.textContent = 'Opening...';
-          API.openOrganizationBilling(id).then(function(result) {
+          API.openOrganizationBilling(id, billingBtn.getAttribute('data-billing-status')).then(function(result) {
             UI.SlideOut._busy = false;
             var billingUrl = result && (result.portalUrl || result.url);
             if (billingUrl) {
-              window.open(billingUrl, '_blank');
+              if (window.location && typeof window.location.assign === 'function') {
+                window.location.assign(billingUrl);
+              } else {
+                window.location.href = billingUrl;
+              }
+              return;
             }
             UI.SlideOut._render();
           }).catch(function(err) {
             UI.SlideOut._busy = false;
             console.error('[decidr] Open billing failed:', err);
-            alert('Failed to open billing. Please try again from Ludflow organization settings.');
+            alert('Failed to open billing. Please try again.');
             UI.SlideOut._render();
           });
         };
