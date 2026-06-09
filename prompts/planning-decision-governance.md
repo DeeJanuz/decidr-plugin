@@ -8,12 +8,13 @@ You are an agent creating or implementing a plan that appears related to DecidR-
 2. **Do not guess the organization.** Use available org/token context and `decidr_list_organizations` to identify the correct organization. If the correct org or context is unclear, ask the user for pointers.
 3. **Search before creating.** Look for existing initiatives, projects, decisions, tasks, and LudFlow documents before creating new DecidR records.
 4. **Prefer continuity.** Update existing decisions and linked docs when the plan refines, implements, supersedes, or documents prior work. Create new decisions, tasks, and supporting docs only when no suitable existing record exists.
-5. **Run the implementation start gate.** Before leaving discovery or planning for governed implementation, search for a matching decision/task and verify or propose the governing record before the first repo edit, packaging command, deployment prep, or external write.
-6. **Stage built work, implement deployed code.** When committing code and DecidR has registered/authenticated organizations, search existing matching decisions and move confident matches to `STAGED` after the commit. `STAGED` means built/configured and in test/review or non-production validation, not approval-to-build. Reserve `IMPLEMENTED` for live or production-equivalent work: production deployment, push/merge to a branch that is the repository's live release source such as `main`, `master`, `prod`, or `production`, or publication of a versioned release, tag, or package users or downstream systems can install. Do not treat `main` or `master` as `IMPLEMENTED` when that branch is only staging or pre-production.
-7. **Backlog future work.** Use `BACKLOG` status for future, deferred, or intentionally non-actionable decisions and tasks. Backlog records document possible work without putting it in Next Steps or action-item queues.
-8. **Create low-risk records directly, review risky ones.** If governed implementation work has no confident matching decision or task, create clear low-risk standard decisions, catch-up decisions, or tasks directly after search/context checks. Use catch-up decisions for small already-implemented work that needs rationale/governance capture after the fact without the full standard decision workflow. Use MCPViews review only for significant, ambiguous, destructive, high-impact, hard-to-undo, cross-organization, customer/production-visible, or row-level approval-worthy changes.
-9. **Preserve implemented records.** When a linked LudFlow document is already published or its DecidR decision is already implemented, fetch the current content first and append new information as a dated addendum. Do not replace or restructure the implemented record unless the user explicitly asks for a rewrite.
-10. **Review by risk, not by count alone.** Do not require MCPViews review solely because there are several related DecidR/LudFlow mutations. Creating one new decision with a linked discovery document, or updating one decision and its accompanying documents, can proceed directly when the user intent, organization, parent entity, and target documents are clear.
+5. **Save lifecycle document versions.** For standard decisions, save accepted plans with `save_decision_document_version` stage `PLAN`, staged implementation state with stage `STAGED`, and live implemented state with stage `IMPLEMENTED`. Approval remains DecidR status/progress, not LudFlow version metadata.
+6. **Run the implementation start gate.** Before leaving discovery or planning for governed implementation, search for a matching decision/task and verify or propose the governing record before the first repo edit, packaging command, deployment prep, or external write.
+7. **Stage built work, implement deployed code.** When committing code and DecidR has registered/authenticated organizations, search existing matching decisions, save `STAGED` document versions, and move confident matches to `STAGED` after the commit. `STAGED` means built/configured and in test/review or non-production validation, not approval-to-build. Reserve `IMPLEMENTED` for live or production-equivalent work: production deployment, push/merge to a branch that is the repository's live release source such as `main`, `master`, `prod`, or `production`, or publication of a versioned release, tag, or package users or downstream systems can install. Do not treat `main` or `master` as `IMPLEMENTED` when that branch is only staging or pre-production.
+8. **Backlog future work.** Use `BACKLOG` status for future, deferred, or intentionally non-actionable decisions and tasks. Backlog records document possible work without putting it in Next Steps or action-item queues.
+9. **Create low-risk records directly, review risky ones.** If governed implementation work has no confident matching decision or task, create clear low-risk standard decisions, catch-up decisions, or tasks directly after search/context checks. Use catch-up decisions for small already-implemented work that needs rationale/governance capture after the fact without the full standard decision workflow. Use MCPViews review only for significant, ambiguous, destructive, high-impact, hard-to-undo, cross-organization, customer/production-visible, or row-level approval-worthy changes.
+10. **Preserve implemented records.** When a linked LudFlow document is already published or its DecidR decision is already implemented, fetch the current content first and append new information as a dated addendum. Do not replace or restructure the implemented record unless the user explicitly asks for a rewrite.
+11. **Review by risk, not by count alone.** Do not require MCPViews review solely because there are several related DecidR/LudFlow mutations. Creating one new decision with a linked discovery document, or updating one decision and its accompanying documents, can proceed directly when the user intent, organization, parent entity, and target documents are clear.
 
 ## Trigger
 
@@ -50,10 +51,10 @@ Use these defaults:
 | Situation | Action |
 |---|---|
 | Plan implements or refines an existing decision | Update that decision and its linked docs. |
-| Human accepts discovery as the durable direction | Create or update the decision and link the discovery artifact; do not mark it `STAGED` until implementation exists. |
+| Human accepts discovery as the durable direction | Create or update the decision and save the discovery artifact with `save_decision_document_version` stage `PLAN`; do not mark it `STAGED` until implementation exists. |
 | Implementation is about to start after discovery/planning | Search for a matching decision/task. If none confidently exists, create a clear low-risk governing decision/task directly after context checks, or use MCPViews review when the target, parent, or impact is significant or ambiguous. |
-| A commit implements an existing decision in a test/review environment | Update that decision to `STAGED` after the commit. |
-| Work is migrated into the deployment codebase, pushed/merged to the repository's production release branch, or published as an installable versioned release/tag/package | Update the matching `STAGED` decision to `IMPLEMENTED`. |
+| A commit implements an existing decision in a test/review environment | Save a `STAGED` document version, then update that decision to `STAGED` after the commit. |
+| Work is migrated into the deployment codebase, pushed/merged to the repository's production release branch, or published as an installable versioned release/tag/package | Save an `IMPLEMENTED` document version, then update the matching `STAGED` decision to `IMPLEMENTED`. |
 | Plan records future or deferred work that should not appear as immediately actionable | Create or update the relevant decision or task with status `BACKLOG`. |
 | Plan supersedes a previous direction | Update or supersede the existing decision; link the new supporting doc. |
 | Plan fills in missing implementation detail for an existing project/task | Create or update a child decision under the relevant project, bridge, or task context. |
@@ -62,7 +63,7 @@ Use these defaults:
 | No matching decision or task exists after search and the work is lightweight implementation follow-up or execution detail that did not need a decision/rationale record | Create a task under the relevant project or existing decision directly when the target is clear and low-risk; use MCPViews review for significant or ambiguous tasks. |
 | No suitable parent entity exists | Ask the user where this should live before creating anything. |
 
-Before transitioning a standard decision out of `DRAFT`, confirm it has at least one linked supporting document unless the target is `BACKLOG`. Use `decidr_list_entity_documents` to inspect existing links and `decidr_link_document` to attach the supporting doc. For accepted discovery/planning, create or update the decision and linked artifact without marking it `STAGED`. For already-built standard workflow work, transition `DRAFT -> STAGED`, not `DRAFT -> IMPLEMENTED`. If the blocker is disproportionate for small already-implemented work, propose a catch-up decision path instead. For future work that should not be actionable yet, use `BACKLOG`.
+Before transitioning a standard decision out of `DRAFT`, confirm it has a linked LudFlow document with a `PLAN` version unless the target is `BACKLOG`. Use `decidr_save_decision_document_version` after accepted discovery/planning; it creates and links the first plan document when needed. For accepted discovery/planning, create or update the decision and save a `PLAN` version without marking it `STAGED`. For already-built standard workflow work, save `PLAN` and `STAGED` versions, then transition `DRAFT -> STAGED`, not `DRAFT -> IMPLEMENTED`. If the blocker is disproportionate for small already-implemented work, propose a catch-up decision path instead. For future work that should not be actionable yet, use `BACKLOG`.
 
 ### 3a. Implementation start gate
 
@@ -74,7 +75,7 @@ When the user approves a plan, exits plan mode, asks you to implement, or you ar
 4. If exactly one or more confident existing decisions/tasks match, attach the implementation work to those records and proceed.
 5. If matches are ambiguous, report candidate decisions/tasks and ask the user which records govern the work before editing code or running implementation commands.
 6. If no confident matching decision or task exists, classify the work and create clear low-risk standard decisions, catch-up decisions, or tasks directly after context checks. Use MCPViews review before creating records or starting implementation only when the change is significant, ambiguous, destructive, high-impact, hard to undo, cross-organization, customer/production-visible, or needs row-level approval.
-7. Do not mark accepted discovery or an implementation plan as `STAGED`. Use `STAGED` only after the work is built/configured and in test/review or non-production validation.
+7. Do not mark accepted discovery or an implementation plan as `STAGED`. Save accepted plans as `PLAN` document versions. Use `STAGED` only after the work is built/configured and in test/review or non-production validation.
 
 ### 3b. Commit governance
 
@@ -83,7 +84,7 @@ When the user asks you to commit code, or you otherwise reach the commit step in
 1. Check the MCPViews session/org-token context for installed DecidR organizations.
 2. If no DecidR organization is registered or authenticated, continue the commit normally and do not invent DecidR context.
 3. If DecidR organizations are available, search existing decisions and tasks by branch name, issue/PR title, commit summary, changed subsystem names, and user-provided task language.
-4. If exactly one or more confident existing decisions match the committed work, update those decisions to `STAGED` after the commit succeeds. Do not create new decisions solely because a commit happened.
+4. If exactly one or more confident existing decisions match the committed work, save `STAGED` document versions and update those decisions to `STAGED` after the commit succeeds. Do not create new decisions solely because a commit happened.
 5. If one or more confident existing tasks match the committed work, update or reference those tasks instead of proposing a duplicate task.
 6. If matches are ambiguous, report candidate decisions/tasks and ask the user which records to update.
 7. If no confident matching decision or task exists, classify the committed work before creating anything:
@@ -100,7 +101,7 @@ When the workflow includes pushing, merging, deploying, or publishing after the 
 
 1. Verify the push, merge, deployment, tag, package, or release publication actually succeeded.
 2. Decide whether that action is production-equivalent for the repository or process. Production-equivalent examples include a production deployment, a push/merge to a live release branch such as `main`, `master`, `prod`, or `production`, or a published versioned release/tag/package that users or downstream systems can install.
-3. If the action is production-equivalent, search for confident matching `STAGED` decisions and move them to `IMPLEMENTED`.
+3. If the action is production-equivalent, search for confident matching `STAGED` decisions, save `IMPLEMENTED` document versions, and move them to `IMPLEMENTED`.
 4. If the branch or release target is only staging, development, QA, preview, or pre-production, keep matching decisions in `STAGED` and note the remaining production release step.
 
 ### 4. Document the plan
@@ -112,10 +113,10 @@ For each logged plan, ensure there is supporting documentation:
 - Reuse an existing relevant folder hierarchy when one already exists.
 - If no relevant folder structure exists, create or use a folder named after the best matching DecidR project.
 - If no project context is identifiable, ask the user where the document should live before creating it.
-- If document creation tooling is available, create or update the supporting document before linking it, then move the document into the selected folder if the write tool created it elsewhere.
+- For standard decision lifecycle snapshots, use `decidr_save_decision_document_version` instead of direct LudFlow writes. This keeps `PLAN`, `STAGED`, and `IMPLEMENTED` snapshots on one linked document.
 - If the supporting document is already `PUBLISHED`, or if the linked DecidR decision is already `IMPLEMENTED`, treat the existing document as the historical deployment record. Fetch the current content with `ludflow_get_document`, preserve that content, and append new findings, validation notes, follow-up decisions, or corrections as a dated addendum. If the document was published before the update, publish the appended version after the required review flow.
 - If no document can be created from the current toolset, ask the user for the document URL or LudFlow document to link.
-- Link supporting documents to the DecidR decision or parent entity with `decidr_link_document`.
+- Use `decidr_link_document` for ordinary supporting links that are not lifecycle snapshots.
 
 The document should capture the plan summary, important tradeoffs, selected approach, rejected alternatives when useful, implementation notes, and test/acceptance criteria.
 

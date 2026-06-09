@@ -601,6 +601,8 @@
       versionNumber: meta.versionNumber || meta.version_number,
       label: meta.label || null,
       sourceArtifactVersion: meta.sourceArtifactVersion || meta.source_artifact_version || fallback.sourceArtifactVersion || fallback.source_artifact_version || null,
+      decisionId: meta.decisionId || meta.decision_id || fallback.decisionId || fallback.decision_id || null,
+      decisionLifecycleStage: meta.decisionLifecycleStage || meta.decision_lifecycle_stage || fallback.decisionLifecycleStage || fallback.decision_lifecycle_stage || null,
       createdAt: meta.createdAt || meta.created_at || null
     };
   }

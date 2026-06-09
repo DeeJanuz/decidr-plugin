@@ -161,6 +161,22 @@
       }
     }
 
+    function ludflowLifecycleStage(value) {
+      if (!value) return '';
+      var normalized = String(value).toUpperCase();
+      return normalized === 'PLAN' || normalized === 'STAGED' || normalized === 'IMPLEMENTED'
+        ? normalized
+        : '';
+    }
+
+    function ludflowLifecycleBadge(value) {
+      var stage = ludflowLifecycleStage(value);
+      if (!stage) return '';
+      return '<span class="decidr-so-lifecycle-badge decidr-stage-' + UI.escapeHtml(stage.toLowerCase()) + '">'
+        + UI.escapeHtml(stage)
+        + '</span>';
+    }
+
     function ludflowField(record, camelKey, snakeKey) {
       if (!record) return undefined;
       if (record[camelKey] != null) return record[camelKey];
@@ -179,6 +195,8 @@
           content: ludflowContent(doc.content || doc.body || ''),
           format: doc.format || 'MARKDOWN',
           mimeType: doc.mimeType || doc.mime_type || '',
+          decisionId: doc.decisionId || doc.decision_id || null,
+          decisionLifecycleStage: ludflowLifecycleStage(doc.decisionLifecycleStage || doc.decision_lifecycle_stage),
           dateLabel: updatedDate ? 'Updated ' + updatedDate : '',
           current: true
         }];
@@ -193,6 +211,8 @@
         var format = ludflowField(version, 'format');
         var mimeType = ludflowField(version, 'mimeType', 'mime_type') || doc.mimeType || doc.mime_type || '';
         var sourceArtifactVersion = ludflowField(version, 'sourceArtifactVersion', 'source_artifact_version');
+        var decisionId = ludflowField(version, 'decisionId', 'decision_id');
+        var decisionLifecycleStage = ludflowLifecycleStage(ludflowField(version, 'decisionLifecycleStage', 'decision_lifecycle_stage'));
         var detailParts = [];
         if (current) detailParts.push('Current');
         if (versionNumber != null) detailParts.push('Version ' + versionNumber);
@@ -206,6 +226,8 @@
           mimeType: mimeType,
           versionNumber: versionNumber,
           sourceArtifactVersion: sourceArtifactVersion,
+          decisionId: decisionId,
+          decisionLifecycleStage: decisionLifecycleStage,
           dateLabel: createdDate,
           current: current
         });
@@ -257,6 +279,7 @@
       metaItems.push({ html: UI.escapeHtml(selectedVersionMeta) });
       if (selected.format) metaItems.push({ html: UI.escapeHtml(String(selected.format).replace(/_/g, ' ')) });
       if (selected.mimeType) metaItems.push({ html: UI.escapeHtml(selected.mimeType) });
+      if (selected.decisionLifecycleStage) metaItems.push({ html: ludflowLifecycleBadge(selected.decisionLifecycleStage) });
       if (selected.dateLabel) metaItems.push({ html: UI.escapeHtml(selected.dateLabel) });
       if (selected.sourceArtifactVersion) metaItems.push({ html: 'Source ' + UI.escapeHtml(selected.sourceArtifactVersion) });
       html += UI.SlideOut._renderMeta(metaItems);
@@ -268,7 +291,10 @@
         var item = items[i];
         var active = item.id === selected.id;
         html += '<button type="button" class="decidr-so-version-item' + (active ? ' active' : '') + '" data-ludflow-version-id="' + UI.escapeHtml(item.id) + '">';
+        html += '<span class="decidr-so-version-title-wrap">';
         html += '<span class="decidr-so-version-title">' + UI.escapeHtml(item.label) + '</span>';
+        html += ludflowLifecycleBadge(item.decisionLifecycleStage);
+        html += '</span>';
         if (item.detail) html += '<span class="decidr-so-version-detail">' + UI.escapeHtml(item.detail) + '</span>';
         html += '</button>';
       }
