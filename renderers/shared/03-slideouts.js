@@ -1198,7 +1198,12 @@
     var decisions = (enriched.decisions && enriched.decisions.data) || enriched.decisions || [];
     if (Array.isArray(decisions)) {
       html += '<div class="decidr-so-section">';
-      html += UI.SlideOut._renderSectionHeader('Decisions', decisions.length);
+      html += UI.SlideOut._renderSectionHeader(
+        'Decisions',
+        decisions.length,
+        UI.headerActions([{ label: '+ Decision', id: 'decidr-so-btn-add-project-decision', title: 'Create decision' }])
+      );
+      html += UI.projectDecisionCreateForm(state.addDecisionFormOpen);
       if (decisions.length === 0) {
         html += '<div class="decidr-so-empty-hint">No decisions</div>';
       } else {

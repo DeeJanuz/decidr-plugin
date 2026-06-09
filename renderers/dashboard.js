@@ -33,6 +33,7 @@
       nextStepsExpanded: false,
       nextStepsGroupExpanded: {},
       decisionsExpanded: false,
+      createDialog: null,
       // Org picker
       organizations: [],
       activeOrgId: null,
@@ -286,7 +287,11 @@
       var results = [];
       for (var j = 0; j < dashState.allDecisions.length; j++) {
         var dec = dashState.allDecisions[j];
-        if (projectIds[dec.projectId] || (dec.entityType === 'project' && projectIds[dec.entityId])) {
+        var entityType = dec.entityType ? String(dec.entityType).toUpperCase() : '';
+        if (dec.initiativeId === initiativeId ||
+            (entityType === 'INITIATIVE' && (dec.entityId === initiativeId || dec.initiativeId === initiativeId)) ||
+            projectIds[dec.projectId] ||
+            (entityType === 'PROJECT' && projectIds[dec.entityId])) {
           results.push(dec);
         }
       }
@@ -353,6 +358,152 @@
         }
       }
       return results;
+    }
+
+    function findDecisionById(id) {
+      for (var i = 0; i < dashState.allDecisions.length; i++) {
+        if (dashState.allDecisions[i].id === id) return dashState.allDecisions[i];
+      }
+      return null;
+    }
+
+    function createDialogError(err) {
+      if (!err) return 'Failed to create item.';
+      return err.bodyMessage || err.message || String(err);
+    }
+
+    function newEntityId(result) {
+      if (!result) return null;
+      if (result.id) return result.id;
+      if (result.data && result.data.id) return result.data.id;
+      return null;
+    }
+
+    function openCreateDialog(type, opts) {
+      opts = opts || {};
+      dashState.createDialog = {
+        type: type,
+        parentType: opts.parentType || null,
+        parentId: opts.parentId || null,
+        error: null,
+        busy: false
+      };
+      renderDashboard();
+    }
+
+    function closeCreateDialog() {
+      dashState.createDialog = null;
+      renderDashboard();
+    }
+
+    function renderCreateDialog() {
+      if (!dashState.createDialog) return '';
+      var projects = getAllProjects();
+      return UI.createEntityDialog({
+        type: dashState.createDialog.type,
+        initiatives: dashState.initiatives,
+        projects: projects,
+        decisions: dashState.allDecisions,
+        parentType: dashState.createDialog.parentType,
+        parentId: dashState.createDialog.parentId,
+        error: dashState.createDialog.error,
+        busy: dashState.createDialog.busy
+      });
+    }
+
+    function submitCreateForm(form) {
+      if (!form || !dashState.createDialog || dashState.createDialog.busy) return;
+      var type = dashState.createDialog.type;
+      var titleInput = form.querySelector('#decidr-create-title-input');
+      var nameInput = form.querySelector('#decidr-create-name');
+      var descInput = form.querySelector('#decidr-create-description');
+      var title = titleInput ? titleInput.value.trim() : '';
+      var name = nameInput ? nameInput.value.trim() : '';
+      var description = descInput ? descInput.value.trim() : '';
+      var payload = {};
+      var createPromise = null;
+      var openType = type;
+
+      if (type === 'initiative') {
+        if (!name) return;
+        payload = { name: name };
+        if (description) payload.description = description;
+        createPromise = API.createInitiative(payload);
+      } else if (type === 'project') {
+        var initiativeSelect = form.querySelector('#decidr-create-initiative-id');
+        var initiativeId = initiativeSelect ? initiativeSelect.value : '';
+        if (!name || !initiativeId) return;
+        payload = { name: name, initiativeId: initiativeId };
+        if (description) payload.description = description;
+        createPromise = API.createProject(payload);
+      } else if (type === 'decision') {
+        var parentTypeSelect = form.querySelector('#decidr-create-parent-type');
+        var parentType = parentTypeSelect ? parentTypeSelect.value : 'PROJECT';
+        var statusSelect = form.querySelector('#decidr-create-status');
+        var status = statusSelect ? statusSelect.value : 'DRAFT';
+        payload = {
+          title: title,
+          entityType: parentType,
+          status: status || 'DRAFT'
+        };
+        if (description) payload.description = description;
+        if (parentType === 'INITIATIVE') {
+          var parentInitiative = form.querySelector('#decidr-create-parent-initiative-id');
+          payload.initiativeId = parentInitiative ? parentInitiative.value : '';
+          if (!title || !payload.initiativeId) return;
+        } else {
+          var parentProject = form.querySelector('#decidr-create-parent-project-id');
+          payload.projectId = parentProject ? parentProject.value : '';
+          if (!title || !payload.projectId) return;
+        }
+        createPromise = API.createDecision(payload);
+      } else if (type === 'task') {
+        var taskParentTypeSelect = form.querySelector('#decidr-create-task-parent-type');
+        var taskParentType = taskParentTypeSelect ? taskParentTypeSelect.value : 'PROJECT';
+        var taskStatusSelect = form.querySelector('#decidr-create-task-status');
+        payload = {
+          title: title,
+          status: taskStatusSelect ? taskStatusSelect.value : 'TODO'
+        };
+        if (description) payload.description = description;
+        if (taskParentType === 'DECISION') {
+          var decisionSelect = form.querySelector('#decidr-create-task-decision-id');
+          payload.decisionId = decisionSelect ? decisionSelect.value : '';
+          var parentDecision = findDecisionById(payload.decisionId);
+          if (parentDecision && parentDecision.projectId) payload.projectId = parentDecision.projectId;
+          if (!title || !payload.decisionId) return;
+        } else {
+          var taskProjectSelect = form.querySelector('#decidr-create-task-project-id');
+          payload.projectId = taskProjectSelect ? taskProjectSelect.value : '';
+          if (!title || !payload.projectId) return;
+        }
+        createPromise = API.createTask(payload);
+      }
+
+      if (!createPromise) return;
+      dashState.createDialog.busy = true;
+      dashState.createDialog.error = null;
+      var submitBtn = form.querySelector('#decidr-create-submit');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Creating...';
+      }
+      createPromise.then(function(result) {
+        var createdId = newEntityId(result);
+        dashState.createDialog = null;
+        return refreshDashboard().then(function() {
+          if (createdId) {
+            UI.SlideOut.open(openType, createdId, {
+              source: container,
+              onMutate: function() { refreshDashboard(); }
+            });
+          }
+        });
+      }).catch(function(err) {
+        dashState.createDialog.busy = false;
+        dashState.createDialog.error = createDialogError(err);
+        renderDashboard();
+      });
     }
 
     // ── Section Renderers ──────────────────────────────────
@@ -478,7 +629,8 @@
 
     function renderNextStepsSection() {
       return UI.section('calendar', 'Next Steps', dashState.actionItems.length,
-        '<div id="decidr-next-steps-container">' + renderNextStepsContent() + '</div>');
+        '<div id="decidr-next-steps-container">' + renderNextStepsContent() + '</div>',
+        { actions: [{ label: '+ Task', action: 'task', title: 'Create task' }] });
     }
 
     function renderActiveDecisionsContent() {
@@ -522,7 +674,8 @@
         + '</div>';
 
       if (!visible) {
-        return UI.section('decision', 'Active Decisions', decisions.length, html);
+        return UI.section('decision', 'Active Decisions', decisions.length, html,
+          { actions: [{ label: '+ Decision', action: 'decision', title: 'Create decision' }] });
       }
 
       // Scan all decisions for unique statuses
@@ -558,19 +711,26 @@
       pillBar += '</div>';
 
       return UI.section('decision', 'Active Decisions', decisions.length,
-        html + pillBar + '<div id="decidr-active-decisions-container">' + renderActiveDecisionsContent() + '</div>');
+        html + pillBar + '<div id="decidr-active-decisions-container">' + renderActiveDecisionsContent() + '</div>',
+        { actions: [{ label: '+ Decision', action: 'decision', title: 'Create decision' }] });
     }
 
     function renderInitiativeSections() {
       var initiatives = dashState.initiatives;
+      var initiativeActions = [
+        { label: '+ Initiative', action: 'initiative', title: 'Create initiative' },
+        { label: '+ Project', action: 'project', title: 'Create project', disabled: initiatives.length === 0 }
+      ];
       if (initiatives.length === 0) {
-        return UI.section('Initiatives', null, UI.emptyState('No initiatives found.'));
+        return UI.section('Initiatives', initiatives.length, UI.emptyState('No initiatives found.'), { actions: initiativeActions });
       }
 
       // Section header
       var html = '<div class="decidr-section-header">'
+        + '<span class="decidr-section-title-text">'
         + UI.escapeHtml('Initiatives')
-        + ' <span class="decidr-section-count">(' + initiatives.length + ')</span>'
+        + ' <span class="decidr-section-count">(' + initiatives.length + ')</span></span>'
+        + UI.headerActions(initiativeActions)
         + '</div>';
       var animIdx = 0;
 
@@ -653,7 +813,8 @@
         });
       }
 
-      return UI.section('decision', 'Recent Decisions', recent.length, html);
+      return UI.section('decision', 'Recent Decisions', recent.length, html,
+        { actions: [{ label: '+ Decision', action: 'decision', title: 'Create decision' }] });
     }
 
     function renderPendingApprovalsSection() {
@@ -716,6 +877,7 @@
       }
 
       html += '</div>';
+      html += renderCreateDialog();
 
       container.innerHTML = html;
       wireInteractions();
@@ -729,8 +891,61 @@
       wireDecisionStatusPills();
       wireDecisionsShowMore();
       wireInitiativeToggle();
+      wireCreateActions();
+      wireCreateDialog();
       wireEntityClicks(container);
       wireOrgPicker();
+    }
+
+    function wireCreateActions() {
+      var buttons = container.querySelectorAll('[data-create-action]');
+      for (var i = 0; i < buttons.length; i++) {
+        (function(btn) {
+          if (btn._decidrWired) return;
+          btn._decidrWired = true;
+          btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (btn.disabled) return;
+            openCreateDialog(btn.getAttribute('data-create-action') || '');
+          });
+        })(buttons[i]);
+      }
+    }
+
+    function wireCreateDialog() {
+      var form = container.querySelector('#decidr-create-form');
+      if (!form) return;
+      var cancel = container.querySelector('#decidr-create-cancel');
+      var cancelSecondary = container.querySelector('#decidr-create-cancel-secondary');
+      var overlay = container.querySelector('.decidr-create-overlay');
+      var parentType = container.querySelector('#decidr-create-parent-type') || container.querySelector('#decidr-create-task-parent-type');
+
+      function syncParentSelects(value) {
+        var groups = container.querySelectorAll('.decidr-create-parent-select');
+        for (var i = 0; i < groups.length; i++) {
+          var group = groups[i];
+          group.style.display = group.getAttribute('data-parent-select') === value ? 'block' : 'none';
+        }
+      }
+
+      if (cancel) cancel.addEventListener('click', closeCreateDialog);
+      if (cancelSecondary) cancelSecondary.addEventListener('click', closeCreateDialog);
+      if (overlay) {
+        overlay.addEventListener('click', function(e) {
+          if (e.target === overlay) closeCreateDialog();
+        });
+      }
+      if (parentType) {
+        parentType.addEventListener('change', function() {
+          syncParentSelects(parentType.value);
+        });
+        syncParentSelects(parentType.value);
+      }
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        submitCreateForm(form);
+      });
     }
 
     function wireOrgPicker() {

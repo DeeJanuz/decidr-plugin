@@ -494,6 +494,187 @@
     }
   }
 
+  function renderSelectOptions(items, labelKey, selectedId, emptyLabel) {
+    var html = '';
+    if (emptyLabel) {
+      html += '<option value="">' + UI.escapeHtml(emptyLabel) + '</option>';
+    }
+    items = Array.isArray(items) ? items : [];
+    for (var i = 0; i < items.length; i++) {
+      var item = items[i] || {};
+      var id = item.id || '';
+      if (!id) continue;
+      var label = item[labelKey] || item.title || item.name || id;
+      html += '<option value="' + UI.escapeHtml(id) + '"' + (id === selectedId ? ' selected' : '') + '>'
+        + UI.escapeHtml(label) + '</option>';
+    }
+    return html;
+  }
+
+  UI.headerActionButton = function(opts) {
+    var o = opts || {};
+    var label = o.label || 'Add';
+    var classes = 'decidr-header-action';
+    if (o.variant === 'primary') classes += ' decidr-header-action-primary';
+    if (o.className) classes += ' ' + UI.escapeHtml(o.className);
+    var attrs = '';
+    if (o.id) attrs += ' id="' + UI.escapeHtml(o.id) + '"';
+    if (o.action) attrs += ' data-create-action="' + UI.escapeHtml(o.action) + '"';
+    if (o.contextId) attrs += ' data-context-id="' + UI.escapeHtml(o.contextId) + '"';
+    if (o.title) attrs += ' title="' + UI.escapeHtml(o.title) + '"';
+    if (o.disabled) attrs += ' disabled aria-disabled="true"';
+    return '<button type="button" class="' + classes + '"' + attrs + '>'
+      + '<span class="decidr-header-action-plus">+</span>'
+      + '<span>' + UI.escapeHtml(label.replace(/^\+\s*/, '')) + '</span>'
+      + '</button>';
+  };
+
+  UI.headerActions = function(actions) {
+    actions = Array.isArray(actions) ? actions : [];
+    if (!actions.length) return '';
+    var html = '<div class="decidr-header-actions">';
+    for (var i = 0; i < actions.length; i++) {
+      html += UI.headerActionButton(actions[i]);
+    }
+    html += '</div>';
+    return html;
+  };
+
+  UI.createEntityDialog = function(opts) {
+    var o = opts || {};
+    var type = o.type || '';
+    if (!type) return '';
+
+    var initiatives = Array.isArray(o.initiatives) ? o.initiatives : [];
+    var projects = Array.isArray(o.projects) ? o.projects : [];
+    var decisions = Array.isArray(o.decisions) ? o.decisions : [];
+    var titleMap = {
+      initiative: 'New Initiative',
+      project: 'New Project',
+      decision: 'New Decision',
+      task: 'New Task'
+    };
+    var labelMap = {
+      initiative: 'Create initiative',
+      project: 'Create project',
+      decision: 'Create decision',
+      task: 'Create task'
+    };
+    var needsProjectParent = type === 'project' && initiatives.length === 0;
+    var needsDecisionParent = type === 'decision' && initiatives.length === 0 && projects.length === 0;
+    var needsTaskParent = type === 'task' && projects.length === 0 && decisions.length === 0;
+    var disableSubmit = !!o.busy || needsProjectParent || needsDecisionParent || needsTaskParent;
+    var parentType = o.parentType || (projects.length ? 'PROJECT' : (initiatives.length ? 'INITIATIVE' : 'DECISION'));
+    var taskParentType = o.parentType || (projects.length ? 'PROJECT' : 'DECISION');
+
+    var html = '<div class="decidr-create-overlay" role="presentation">'
+      + '<div class="decidr-create-dialog" role="dialog" aria-modal="true" aria-labelledby="decidr-create-title">'
+      + '<form id="decidr-create-form" data-create-type="' + UI.escapeHtml(type) + '">'
+      + '<div class="decidr-create-header">'
+      + '<h2 id="decidr-create-title">' + UI.escapeHtml(titleMap[type] || 'New Item') + '</h2>'
+      + '<button type="button" class="decidr-create-close" id="decidr-create-cancel" aria-label="Close">&times;</button>'
+      + '</div>';
+
+    if (o.error) {
+      html += '<div class="decidr-create-error">' + UI.escapeHtml(o.error) + '</div>';
+    }
+
+    if (type === 'initiative' || type === 'project') {
+      html += '<label for="decidr-create-name">Name</label>'
+        + '<input id="decidr-create-name" name="name" type="text" autocomplete="off" required autofocus>';
+    } else {
+      html += '<label for="decidr-create-title-input">Title</label>'
+        + '<input id="decidr-create-title-input" name="title" type="text" autocomplete="off" required autofocus>';
+    }
+
+    html += '<label for="decidr-create-description">Description</label>'
+      + '<textarea id="decidr-create-description" name="description" rows="4" placeholder="Optional context..."></textarea>';
+
+    if (type === 'project') {
+      html += '<label for="decidr-create-initiative-id">Initiative</label>'
+        + '<select id="decidr-create-initiative-id" name="initiativeId" required' + (needsProjectParent ? ' disabled' : '') + '>'
+        + renderSelectOptions(initiatives, 'name', o.parentId || '', needsProjectParent ? 'Create an initiative first' : 'Choose initiative')
+        + '</select>';
+    }
+
+    if (type === 'decision') {
+      html += '<div class="decidr-create-grid">'
+        + '<div><label for="decidr-create-parent-type">Parent</label>'
+        + '<select id="decidr-create-parent-type" name="parentType">'
+        + '<option value="PROJECT"' + (parentType === 'PROJECT' ? ' selected' : '') + (projects.length ? '' : ' disabled') + '>Project</option>'
+        + '<option value="INITIATIVE"' + (parentType === 'INITIATIVE' ? ' selected' : '') + (initiatives.length ? '' : ' disabled') + '>Initiative</option>'
+        + '</select></div>'
+        + '<div><label for="decidr-create-status">Initial status</label>'
+        + '<select id="decidr-create-status" name="status">'
+        + '<option value="DRAFT">Draft</option>'
+        + '<option value="BACKLOG">Backlog</option>'
+        + '</select></div>'
+        + '</div>'
+        + '<div class="decidr-create-help">Only Draft and Backlog are available until you create and link a document for this decision.</div>'
+        + '<div class="decidr-create-parent-select" data-parent-select="PROJECT" style="display:' + (parentType === 'PROJECT' ? 'block' : 'none') + ';">'
+        + '<label for="decidr-create-parent-project-id">Project</label>'
+        + '<select id="decidr-create-parent-project-id" name="projectId" ' + (projects.length ? '' : 'disabled') + '>'
+        + renderSelectOptions(projects, 'name', o.parentType === 'PROJECT' ? o.parentId : '', projects.length ? 'Choose project' : 'No projects available')
+        + '</select></div>'
+        + '<div class="decidr-create-parent-select" data-parent-select="INITIATIVE" style="display:' + (parentType === 'INITIATIVE' ? 'block' : 'none') + ';">'
+        + '<label for="decidr-create-parent-initiative-id">Initiative</label>'
+        + '<select id="decidr-create-parent-initiative-id" name="initiativeId" ' + (initiatives.length ? '' : 'disabled') + '>'
+        + renderSelectOptions(initiatives, 'name', o.parentType === 'INITIATIVE' ? o.parentId : '', initiatives.length ? 'Choose initiative' : 'No initiatives available')
+        + '</select></div>';
+    }
+
+    if (type === 'task') {
+      html += '<div class="decidr-create-grid">'
+        + '<div><label for="decidr-create-task-parent-type">Parent</label>'
+        + '<select id="decidr-create-task-parent-type" name="parentType">'
+        + '<option value="PROJECT"' + (taskParentType === 'PROJECT' ? ' selected' : '') + (projects.length ? '' : ' disabled') + '>Project</option>'
+        + '<option value="DECISION"' + (taskParentType === 'DECISION' ? ' selected' : '') + (decisions.length ? '' : ' disabled') + '>Decision</option>'
+        + '</select></div>'
+        + '<div><label for="decidr-create-task-status">Initial status</label>'
+        + '<select id="decidr-create-task-status" name="status">'
+        + '<option value="TODO">To Do</option>'
+        + '<option value="BACKLOG">Backlog</option>'
+        + '</select></div>'
+        + '</div>'
+        + '<div class="decidr-create-parent-select" data-parent-select="PROJECT" style="display:' + (taskParentType === 'PROJECT' ? 'block' : 'none') + ';">'
+        + '<label for="decidr-create-task-project-id">Project</label>'
+        + '<select id="decidr-create-task-project-id" name="projectId" ' + (projects.length ? '' : 'disabled') + '>'
+        + renderSelectOptions(projects, 'name', o.parentType === 'PROJECT' ? o.parentId : '', projects.length ? 'Choose project' : 'No projects available')
+        + '</select></div>'
+        + '<div class="decidr-create-parent-select" data-parent-select="DECISION" style="display:' + (taskParentType === 'DECISION' ? 'block' : 'none') + ';">'
+        + '<label for="decidr-create-task-decision-id">Decision</label>'
+        + '<select id="decidr-create-task-decision-id" name="decisionId" ' + (decisions.length ? '' : 'disabled') + '>'
+        + renderSelectOptions(decisions, 'title', o.parentType === 'DECISION' ? o.parentId : '', decisions.length ? 'Choose decision' : 'No decisions available')
+        + '</select></div>';
+    }
+
+    html += '<div class="decidr-create-actions">'
+      + '<button type="button" class="decidr-create-secondary" id="decidr-create-cancel-secondary">Cancel</button>'
+      + '<button type="submit" class="decidr-create-primary" id="decidr-create-submit"' + (disableSubmit ? ' disabled' : '') + '>'
+      + UI.escapeHtml(o.busy ? 'Creating...' : (labelMap[type] || 'Create'))
+      + '</button>'
+      + '</div>'
+      + '</form></div></div>';
+    return html;
+  };
+
+  UI.projectDecisionCreateForm = function(open) {
+    var html = '<div class="decidr-so-inline-form' + (open ? ' visible' : '') + '" id="decidr-so-form-add-project-decision">';
+    html += '<input type="text" id="decidr-so-input-project-decision-title" placeholder="Decision title...">';
+    html += '<textarea id="decidr-so-input-project-decision-description" placeholder="Optional context..." rows="3"></textarea>';
+    html += '<label for="decidr-so-input-project-decision-status">Status</label>';
+    html += '<select id="decidr-so-input-project-decision-status">'
+      + '<option value="DRAFT">Draft</option>'
+      + '<option value="BACKLOG">Backlog</option>'
+      + '</select>';
+    html += '<div class="decidr-so-form-help">Only Draft and Backlog are available until you create and link a document for this decision.</div>';
+    html += '<div class="decidr-so-form-actions">'
+      + '<button class="decidr-so-btn decidr-so-btn-sm" id="decidr-so-btn-cancel-project-decision">Cancel</button>'
+      + '<button class="decidr-so-btn decidr-so-btn-primary decidr-so-btn-sm" id="decidr-so-btn-save-project-decision">Save</button>'
+      + '</div></div>';
+    return html;
+  };
+
   UI.richDescription = function(str, opts) {
     if (!str) return '';
     opts = opts || {};
@@ -1726,16 +1907,16 @@
     approval: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l2 2 4-4"/><circle cx="8" cy="8" r="6"/></svg>'
   };
 
-  // UI.section(title, count, content) — backward-compatible
-  // UI.section(icon, title, count, content) — with icon
-  UI.section = function(a, b, c, d) {
-    var icon, title, count, content;
+  // UI.section(title, count, content, opts) — backward-compatible
+  // UI.section(icon, title, count, content, opts) — with icon
+  UI.section = function(a, b, c, d, e) {
+    var icon, title, count, content, opts;
     if (typeof b === 'string') {
       // Called with icon: section(icon, title, count, content)
-      icon = a; title = b; count = c; content = d;
+      icon = a; title = b; count = c; content = d; opts = e || {};
     } else {
       // Called without icon: section(title, count, content)
-      icon = null; title = a; count = b; content = c;
+      icon = null; title = a; count = b; content = c; opts = d || {};
     }
     var iconHtml = icon && SECTION_ICONS[icon]
       ? '<span class="decidr-section-icon">' + SECTION_ICONS[icon] + '</span>'
@@ -1743,9 +1924,11 @@
     var countHtml = (count !== null && count !== undefined)
       ? ' <span class="decidr-section-count">(' + count + ')</span>'
       : '';
+    var actionsHtml = opts.actionsHtml || UI.headerActions(opts.actions || []);
     return '<div class="decidr-section">'
       + '<div class="decidr-section-header">'
-      + iconHtml + UI.escapeHtml(title) + countHtml
+      + '<span class="decidr-section-title-text">' + iconHtml + UI.escapeHtml(title) + countHtml + '</span>'
+      + actionsHtml
       + '</div>'
       + '<div class="decidr-section-content">'
       + (content || '')
@@ -2518,8 +2701,14 @@
       return html;
     },
 
-    _renderSectionHeader: function(title, count) {
+    _renderSectionHeader: function(title, count, actionsHtml) {
       var countHtml = (count != null) ? ' <span class="decidr-so-section-count">(' + count + ')</span>' : '';
+      if (actionsHtml) {
+        return '<div class="decidr-so-section-title-row">'
+          + '<div class="decidr-so-section-title">' + UI.escapeHtml(title) + countHtml + '</div>'
+          + actionsHtml
+          + '</div>';
+      }
       return '<div class="decidr-so-section-title">' + UI.escapeHtml(title) + countHtml + '</div>';
     },
 
@@ -2569,6 +2758,7 @@
       timelineFilter: 'all',
       addDocFormOpen: false,
       addTaskFormOpen: false,
+      addDecisionFormOpen: false,
       docFormTab: 'search'
     },
 
@@ -3562,6 +3752,61 @@
             state.addTaskFormOpen = false;
             UI.SlideOut._refetchAndRender();
           }).catch(function(err) { UI.SlideOut._busy = false; console.error('[decidr] Create task failed:', err); });
+        };
+      }
+
+      // Add Decision form (project)
+      var addDecisionBtn = panel.querySelector('#decidr-so-btn-add-project-decision');
+      if (addDecisionBtn) {
+        addDecisionBtn.onclick = function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          state.addDecisionFormOpen = true;
+          UI.SlideOut._render();
+        };
+      }
+      var cancelDecisionBtn = panel.querySelector('#decidr-so-btn-cancel-project-decision');
+      if (cancelDecisionBtn) {
+        cancelDecisionBtn.onclick = function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          state.addDecisionFormOpen = false;
+          UI.SlideOut._render();
+        };
+      }
+      var saveDecisionBtn = panel.querySelector('#decidr-so-btn-save-project-decision');
+      if (saveDecisionBtn) {
+        saveDecisionBtn.onclick = function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          var titleInput = panel.querySelector('#decidr-so-input-project-decision-title');
+          var descriptionInput = panel.querySelector('#decidr-so-input-project-decision-description');
+          var statusInput = panel.querySelector('#decidr-so-input-project-decision-status');
+          var title = titleInput ? titleInput.value.trim() : '';
+          if (!title || !API) return;
+          if (UI.SlideOut._guardBusy()) return;
+          API.createDecision({
+            title: title,
+            description: descriptionInput ? descriptionInput.value.trim() : '',
+            entityType: 'PROJECT',
+            projectId: id,
+            status: statusInput ? statusInput.value : 'DRAFT'
+          }).then(function(result) {
+            UI.SlideOut._busy = false;
+            state.addDecisionFormOpen = false;
+            var createdId = result && (result.id || (result.data && result.data.id));
+            var stack = UI.SlideOut._stack || [];
+            var top = stack.length ? stack[stack.length - 1] : null;
+            if (top && top.type === 'project' && top.id === id) top.stale = true;
+            if (UI.SlideOut._onMutateCallback) {
+              try { UI.SlideOut._onMutateCallback('decision', createdId || id); } catch(err) { console.error('[decidr] onMutate callback error:', err); }
+            }
+            if (createdId) {
+              UI.SlideOut.open('decision', createdId, { source: panel });
+            } else {
+              UI.SlideOut._refetchAndRender();
+            }
+          }).catch(function(err) { UI.SlideOut._busy = false; console.error('[decidr] Create decision failed:', err); });
         };
       }
 
