@@ -1,3 +1,9 @@
+# 0.1.39
+
+- **feat**: Split DecidR workflow breadcrumbs into compact global `plugin_rules` and filterable `plugin_rule_definitions`.
+- **feat**: Scope governance lifecycle, document versioning, member assignment, GitHub, audit, archive, and status-transition guidance to relevant tools/groups so `get_plugin_docs` stays token-efficient.
+- **fix**: Shorten the DecidR governance-mode setup persisted rule so upgraded installs do not keep replaying full lifecycle text in every init response.
+
 # 0.1.38
 
 - **fix**: Add a visible Status label to the project slideout decision creation dropdown.

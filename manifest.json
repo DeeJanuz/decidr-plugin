@@ -1,6 +1,6 @@
 {
   "name": "decidr",
-  "version": "0.1.38",
+  "version": "0.1.39",
   "prompt_definitions": [
     {
       "name": "initiative_planning",
@@ -72,26 +72,9 @@
   "plugin_rules": [
     "When the user asks for action items, to-do items, pending work, or what needs attention: call my_action_items and push to decidr_list. Never open decidr_dashboard for these requests.",
     "When the user asks for a DecidR governance check-in, pending approvals, approval reminders, or assigned decision reviews, fetch governance_checkin and follow it.",
-    "During MCPViews setup or persisted-rule refresh, if no default DecidR governance mode rule is already persisted, fetch governance_lifecycle, ask its mode-selection question, and persist only the selected compact rule: either 'Default DecidR governance mode is team. For governed DecidR decision lifecycle work, fetch the DecidR governance_lifecycle prompt and use mode=team unless the user explicitly chooses solo_builder. Before starting implementation after discovery/planning, fetch governance_lifecycle and verify or propose the governing decision/task. For standard decisions, save accepted plans as PLAN versions, staged implementation state as STAGED versions, and live implemented state as IMPLEMENTED versions with save_decision_document_version before matching status transitions. Use STAGED only for built/configured work in testing or non-production validation, and IMPLEMENTED only after production/live release, including a successful push/merge to the repo live release branch (main/master/prod/production) or an installable versioned release; do not treat staging-only main/master as IMPLEMENTED.' or 'Default DecidR governance mode is solo_builder. For governed DecidR decision lifecycle work, fetch the DecidR governance_lifecycle prompt and use mode=solo_builder unless the user explicitly chooses team. Before starting implementation after discovery/planning, fetch governance_lifecycle and verify or propose the governing decision/task. For standard decisions, save accepted plans as PLAN versions, staged implementation state as STAGED versions, and live implemented state as IMPLEMENTED versions with save_decision_document_version before matching status transitions. Use STAGED only for built/configured work in testing or non-production validation, and IMPLEMENTED only after production/live release, including a successful push/merge to the repo live release branch (main/master/prod/production) or an installable versioned release; do not treat staging-only main/master as IMPLEMENTED.'",
-    "Use BACKLOG status for future or intentionally non-actionable decisions and tasks; BACKLOG records should not be treated as Next Steps or immediate action items.",
-    "When a user references people by name or email while creating or updating DecidR records, resolve them with list_members before setting user ID fields such as owner_id, implementer_id, member_ids, assignee_id, or reviewer_id. If no active member matches and an email is known, call invite_member and leave assignment fields unset until that invite is accepted unless the user chooses an existing member. Pending invitation IDs are not assignable user IDs. If no email is known, ask for the email or ask which active member should own the work.",
-    "When using search, list_decisions, or get_decision only for agent discovery, do not push decidr_list. Push decidr_list only when the user explicitly asks to see decision results or details.",
-    "When the user asks to see entity details (get_initiative, get_project, get_decision, get_task, get_bridge): push to decidr_list. Only open decidr_dashboard when the user explicitly asks for the User Dashboard, dashboard, or overview.",
-    "When the user asks for a timeline, roadmap, schedule, portfolio timing, or how initiatives shape up over time: push decidr_timeline directly. Do not call list tools first; the renderer fetches its own data.",
-    "Before taking any action on a GitHub issue or PR linked to DecidR (create_issue, create_pr, review_pr, merge_pr, or prompt generation), fetch the github_pr_lifecycle prompt and follow it. Inbound GitHub sync is automatic through Ludflow-backed metadata. Use get_repo_last_sync or refresh_repo_metadata when the user asks about freshness, and never reintroduce manual sync or reconciliation instructions.",
-    "When creating, updating, approving, staging, implementing, or logging DecidR-governed decision work, fetch governance_lifecycle and use the persisted governance mode unless the user explicitly chooses another mode.",
-    "When leaving discovery or planning for governed feature/process implementation, fetch governance_lifecycle before the first repo edit, packaging command, deployment prep, or external write.",
-    "When a workflow successfully pushes or merges work to the repository live release branch (for example main, master, prod, or production), or publishes an installable versioned release, tag, or package, move confident matching STAGED decisions to IMPLEMENTED. If that target is staging, QA, preview, or pre-production only, keep them STAGED.",
-    "When governed implementation work has no confident matching DecidR decision or task, fetch governance_lifecycle and choose the right path: create clear low-risk records directly after search/context checks, but use MCPViews review for significant, ambiguous, destructive, high-impact, or hard-to-undo mutations.",
-    "Use create_catch_up_decision or mark_decision_as_catch_up for small already-implemented work that needs post-implementation rationale capture without the full standard decision workflow. Catch-up decisions are directly IMPLEMENTED, require a rationale, and should not be used for active approval/status transitions.",
-    "For standard decision lifecycle documents, use save_decision_document_version: save accepted plans as PLAN versions, staged implementation state as STAGED versions, and live implemented state as IMPLEMENTED versions. Approval remains DecidR status/progress, not Ludflow version metadata.",
-    "When creating supporting LudFlow documents for DecidR work, place them in an existing relevant folder structure or, if none exists, in a folder named for the DecidR project; fetch governance_lifecycle for details.",
-    "When updating a LudFlow document linked to an implemented DecidR decision, or a LudFlow document that is already published, preserve the existing implemented content and append new findings as a dated addendum unless the user explicitly asks for a rewrite.",
-    "DecidR MCPViews auth uses in-app six-digit email-code authentication by default. If org auth is missing or expired_unrefreshable, call start_plugin_auth with plugin_name 'decidr' and the organization_id. Treat expired_refreshable as connected/refreshable while MCPViews refreshes it; use auth_flow 'browser' only for advanced OAuth recovery.",
-    "When a GitHub write tool fails with 'GitHub connection not found' or the user asks to connect a GitHub PAT for outbound writes, push the decidr_github_auth renderer \u2014 do not call connect_github with a PAT collected in chat. For org-level GitHub connection and metadata-sync settings, use the organization settings GitHub section backed by Ludflow, not the PAT flow.",
-    "When the user asks what happened on a project or needs an auditable project ledger, use list_audit_events or get_audit_event and push to decidr_list when the user asked to see the results.",
-    "Use update_decision_stage_time and update_task_stage_time only to correct historical stage occurrence timestamps. They must not be used to transition live status; use update_decision or update_task for actual status changes.",
-    "Audit dashboard, audit report, and graph renderers are currently hidden from this DecidR plugin line; use list/get tools with decidr_list for audit ledger and relationship visibility until those renderers move to future plugin lines."
+    "When creating, updating, approving, staging, implementing, or logging DecidR-governed decision work, call get_plugin_docs for the relevant DecidR tool or group, then fetch governance_lifecycle when instructed.",
+    "When using DecidR search, list, or detail tools only for agent discovery, keep results private. Push decidr_list only when the user explicitly asks to see results or details.",
+    "When the user asks for a timeline, roadmap, schedule, portfolio timing, or how initiatives shape up over time: push decidr_timeline directly. Do not call list tools first; the renderer fetches its own data."
   ],
   "setup_questions": [
     {
@@ -105,18 +88,18 @@
           "value": "team",
           "label": "Yes - team approvals",
           "description": "Use discovery -> PROPOSED -> APPROVED -> implementation -> STAGED for testing/non-prod validation -> IMPLEMENTED after production-equivalent push, merge, deployment, or release.",
-          "persisted_rule": "Default DecidR governance mode is team. For governed DecidR decision lifecycle work, fetch the DecidR governance_lifecycle prompt and use mode=team unless the user explicitly chooses solo_builder. Before starting implementation after discovery/planning, fetch governance_lifecycle and verify or propose the governing decision/task. For standard decisions, save accepted plans as PLAN versions, staged implementation state as STAGED versions, and live implemented state as IMPLEMENTED versions with save_decision_document_version before matching status transitions. Use STAGED only for built/configured work in testing or non-production validation, and IMPLEMENTED only after production/live release, including a successful push/merge to the repo live release branch (main/master/prod/production) or an installable versioned release; do not treat staging-only main/master as IMPLEMENTED."
+          "persisted_rule": "Default DecidR governance mode is team. For governed DecidR decision lifecycle work, fetch governance_lifecycle with mode=team before implementation or status transitions. Use save_decision_document_version for PLAN, STAGED, and IMPLEMENTED snapshots; STAGED means built and validating, IMPLEMENTED means live or production-equivalent release."
         },
         {
           "value": "solo_builder",
           "label": "No - solo builder",
           "description": "Use discovery -> accepted decision artifact -> implementation -> STAGED for testing/non-prod validation -> IMPLEMENTED after production-equivalent push, merge, deployment, or release.",
-          "persisted_rule": "Default DecidR governance mode is solo_builder. For governed DecidR decision lifecycle work, fetch the DecidR governance_lifecycle prompt and use mode=solo_builder unless the user explicitly chooses team. Before starting implementation after discovery/planning, fetch governance_lifecycle and verify or propose the governing decision/task. For standard decisions, save accepted plans as PLAN versions, staged implementation state as STAGED versions, and live implemented state as IMPLEMENTED versions with save_decision_document_version before matching status transitions. Use STAGED only for built/configured work in testing or non-production validation, and IMPLEMENTED only after production/live release, including a successful push/merge to the repo live release branch (main/master/prod/production) or an installable versioned release; do not treat staging-only main/master as IMPLEMENTED."
+          "persisted_rule": "Default DecidR governance mode is solo_builder. For governed DecidR decision lifecycle work, fetch governance_lifecycle with mode=solo_builder before implementation or status transitions. Use save_decision_document_version for PLAN, STAGED, and IMPLEMENTED snapshots; STAGED means built and validating, IMPLEMENTED means live or production-equivalent release."
         }
       ]
     }
   ],
-  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.38/decidr.zip",
+  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.39/decidr.zip",
   "registry_index": {
     "summary": "Decision governance \u2014 initiatives, projects, decisions, tasks, and bridges with approval workflows",
     "tags": [
@@ -550,5 +533,307 @@
       ]
     },
     "tool_prefix": "decidr__"
-  }
+  },
+  "plugin_rule_definitions": [
+    {
+      "id": "decidr_auth_status",
+      "rule": "DecidR MCPViews auth uses in-app six-digit email-code authentication by default. Use init_session org_tokens to inspect org auth. If target org auth is missing or expired_unrefreshable, call start_plugin_auth with plugin_name 'decidr' and organization_id before retrying. Treat expired_refreshable as connected while MCPViews refreshes it; use auth_flow 'browser' only for advanced OAuth recovery.",
+      "tags": [
+        "auth",
+        "organization"
+      ],
+      "always_include": true
+    },
+    {
+      "id": "backlog_non_actionable",
+      "rule": "Use BACKLOG status for future or intentionally non-actionable decisions and tasks. BACKLOG records should not be treated as Next Steps or immediate action items.",
+      "tools": [
+        "list_decisions",
+        "list_tasks",
+        "create_decision",
+        "create_task",
+        "update_decision",
+        "update_task",
+        "my_action_items"
+      ],
+      "groups": [
+        "Action Items",
+        "Browse",
+        "Create & Update"
+      ],
+      "tags": [
+        "status",
+        "governance"
+      ]
+    },
+    {
+      "id": "member_resolution",
+      "rule": "When a user references people by name or email while creating or updating DecidR records, resolve them with list_members before setting user ID fields such as owner_id, implementer_id, member_ids, assignee_id, or reviewer_id. If no active member matches and an email is known, call invite_member and leave assignment fields unset until that invite is accepted unless the user chooses an existing member. Pending invitation IDs are not assignable user IDs. If no email is known, ask for the email or ask which active member should own the work.",
+      "tools": [
+        "create_project",
+        "update_project",
+        "create_decision",
+        "update_decision",
+        "create_task",
+        "update_task",
+        "create_pr",
+        "list_members",
+        "invite_member",
+        "manage_member"
+      ],
+      "groups": [
+        "Create & Update",
+        "Organization",
+        "GitHub"
+      ],
+      "tags": [
+        "members",
+        "assignment"
+      ]
+    },
+    {
+      "id": "detail_renderer_routing",
+      "rule": "When the user asks to see entity details from get_initiative, get_project, get_decision, get_task, or get_bridge, push to decidr_list. Only open decidr_dashboard when the user explicitly asks for the User Dashboard, dashboard, or overview.",
+      "tools": [
+        "get_initiative",
+        "get_project",
+        "get_decision",
+        "get_task",
+        "get_bridge"
+      ],
+      "groups": [
+        "Details"
+      ],
+      "tags": [
+        "renderer",
+        "details"
+      ]
+    },
+    {
+      "id": "governance_lifecycle_gate",
+      "rule": "When creating, updating, approving, staging, implementing, or logging DecidR-governed decision work, fetch governance_lifecycle and use the persisted governance mode unless the user explicitly chooses another mode. When leaving discovery or planning for governed feature/process implementation, fetch governance_lifecycle before the first repo edit, packaging command, deployment prep, or external write.",
+      "tools": [
+        "create_decision",
+        "update_decision",
+        "replace_decisions",
+        "create_task",
+        "update_task",
+        "create_project",
+        "update_project",
+        "create_bridge",
+        "update_bridge",
+        "mark_decision_as_catch_up",
+        "create_catch_up_decision",
+        "save_decision_document_version",
+        "list_decisions",
+        "get_decision",
+        "search"
+      ],
+      "groups": [
+        "Browse",
+        "Details",
+        "Create & Update",
+        "Documents"
+      ],
+      "tags": [
+        "governance",
+        "lifecycle"
+      ]
+    },
+    {
+      "id": "release_status_transitions",
+      "rule": "When a workflow successfully pushes or merges work to the repository live release branch such as main, master, prod, or production, or publishes an installable versioned release, tag, or package, move confident matching STAGED decisions to IMPLEMENTED. If that target is staging, QA, preview, or pre-production only, keep them STAGED.",
+      "tools": [
+        "update_decision",
+        "save_decision_document_version",
+        "get_decision",
+        "list_decisions"
+      ],
+      "groups": [
+        "Browse",
+        "Details",
+        "Create & Update",
+        "Documents"
+      ],
+      "tags": [
+        "governance",
+        "release"
+      ]
+    },
+    {
+      "id": "missing_governance_record",
+      "rule": "When governed implementation work has no confident matching DecidR decision or task, fetch governance_lifecycle and choose the right path: create clear low-risk records directly after search/context checks, but use MCPViews review for significant, ambiguous, destructive, high-impact, or hard-to-undo mutations.",
+      "tools": [
+        "search",
+        "list_decisions",
+        "list_tasks",
+        "create_decision",
+        "create_task"
+      ],
+      "groups": [
+        "Browse",
+        "Create & Update"
+      ],
+      "tags": [
+        "governance",
+        "review"
+      ]
+    },
+    {
+      "id": "catch_up_decisions",
+      "rule": "Use create_catch_up_decision or mark_decision_as_catch_up for small already-implemented work that needs post-implementation rationale capture without the full standard decision workflow. Catch-up decisions are directly IMPLEMENTED, require a rationale, and should not be used for active approval/status transitions.",
+      "tools": [
+        "create_catch_up_decision",
+        "mark_decision_as_catch_up",
+        "create_decision",
+        "update_decision"
+      ],
+      "groups": [
+        "Create & Update"
+      ],
+      "tags": [
+        "governance",
+        "catch-up"
+      ]
+    },
+    {
+      "id": "decision_lifecycle_documents",
+      "rule": "For standard decision lifecycle documents, use save_decision_document_version: save accepted plans as PLAN versions, staged implementation state as STAGED versions, and live implemented state as IMPLEMENTED versions. Approval remains DecidR status/progress, not Ludflow version metadata. When creating supporting LudFlow documents for DecidR work, place them in an existing relevant folder structure or, if none exists, in a folder named for the DecidR project; fetch governance_lifecycle for details.",
+      "tools": [
+        "save_decision_document_version",
+        "link_document",
+        "list_entity_documents",
+        "search_ludflow_documents",
+        "find_entities_by_ludflow_document",
+        "create_decision",
+        "update_decision",
+        "get_decision"
+      ],
+      "groups": [
+        "Documents",
+        "Create & Update",
+        "Details"
+      ],
+      "tags": [
+        "documents",
+        "governance"
+      ]
+    },
+    {
+      "id": "implemented_document_addendum",
+      "rule": "When updating a LudFlow document linked to an implemented DecidR decision, or a LudFlow document that is already published, preserve the existing implemented content and append new findings as a dated addendum unless the user explicitly asks for a rewrite.",
+      "tools": [
+        "save_decision_document_version",
+        "link_document",
+        "list_entity_documents",
+        "find_entities_by_ludflow_document"
+      ],
+      "groups": [
+        "Documents"
+      ],
+      "tags": [
+        "documents",
+        "implemented"
+      ]
+    },
+    {
+      "id": "github_pr_lifecycle",
+      "rule": "Before taking any action on a GitHub issue or PR linked to DecidR with create_issue, create_pr, review_pr, merge_pr, or prompt generation, fetch github_pr_lifecycle and follow it. Inbound GitHub sync is automatic through Ludflow-backed metadata. Use get_repo_last_sync or refresh_repo_metadata when the user asks about freshness, and never reintroduce manual sync or reconciliation instructions.",
+      "tools": [
+        "create_issue",
+        "create_pr",
+        "review_pr",
+        "merge_pr",
+        "generate_fix_prompt",
+        "generate_review_prompt",
+        "get_repo_last_sync",
+        "refresh_repo_metadata",
+        "list_repos",
+        "list_issues",
+        "list_prs",
+        "link_issue",
+        "unlink_issue",
+        "list_issue_links"
+      ],
+      "groups": [
+        "GitHub"
+      ],
+      "tags": [
+        "github",
+        "governance"
+      ]
+    },
+    {
+      "id": "github_auth_renderer",
+      "rule": "When a GitHub write tool fails with 'GitHub connection not found' or the user asks to connect a GitHub PAT for outbound writes, push the decidr_github_auth renderer. Do not call connect_github with a PAT collected in chat. For org-level GitHub connection and metadata-sync settings, use the organization settings GitHub section backed by Ludflow, not the PAT flow.",
+      "tools": [
+        "connect_github",
+        "disconnect_github",
+        "create_issue",
+        "create_pr",
+        "review_pr",
+        "merge_pr"
+      ],
+      "groups": [
+        "GitHub"
+      ],
+      "tags": [
+        "github",
+        "auth"
+      ]
+    },
+    {
+      "id": "audit_ledger_visibility",
+      "rule": "When the user asks what happened on a project or needs an auditable project ledger, use list_audit_events or get_audit_event and push to decidr_list when the user asked to see the results. Audit dashboard, audit report, and graph renderers are currently hidden from this DecidR plugin line; use list/get tools with decidr_list for audit ledger and relationship visibility until those renderers move to future plugin lines.",
+      "tools": [
+        "list_audit_events",
+        "get_audit_event",
+        "create_audit_event",
+        "update_audit_event",
+        "manage_audit_category",
+        "link_decision_audit_event"
+      ],
+      "groups": [
+        "Browse",
+        "Details",
+        "Create & Update"
+      ],
+      "tags": [
+        "audit",
+        "renderer"
+      ]
+    },
+    {
+      "id": "stage_time_corrections",
+      "rule": "Use update_decision_stage_time and update_task_stage_time only to correct historical stage occurrence timestamps. They must not be used to transition live status; use update_decision or update_task for actual status changes.",
+      "tools": [
+        "update_decision_stage_time",
+        "update_task_stage_time",
+        "update_decision",
+        "update_task"
+      ],
+      "groups": [
+        "Create & Update"
+      ],
+      "tags": [
+        "status",
+        "timeline"
+      ]
+    },
+    {
+      "id": "archive_restore",
+      "rule": "Archive and restore tools are soft-delete workflows. Use them only when the user clearly wants an entity removed or restored, and prefer MCPViews review for destructive, ambiguous, high-impact, or hard-to-undo batches.",
+      "tools": [
+        "archive_entity",
+        "restore_entity"
+      ],
+      "groups": [
+        "Archive & Restore"
+      ],
+      "tags": [
+        "archive",
+        "review"
+      ]
+    }
+  ]
 }

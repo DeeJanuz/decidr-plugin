@@ -87,17 +87,18 @@ For graph, preflight lives OUTSIDE `_fetchGraphData` so refetches triggered by e
 - Every MCP tool must map to a renderer in the `renderers` object.
 - `renderer_definitions` must include `data_hint` describing the expected data shape.
 - `tool_prefix` must be `"decidr_"`.
-- `plugin_rules` is an array of plain-English behavioral rules injected into agent sessions. Use for renderer routing guidance (e.g., which renderer to use for action items vs dashboards) AND for short always-on guardrail pointers at behavioral runbooks. Keep rules short and unambiguous.
-- `tool_rules` provide per-tool routing hints. Must be consistent with `plugin_rules` — if a plugin rule says "always use decidr_list for X", the corresponding tool_rule must not suggest an alternative.
+- `plugin_rules` is an array of compact global workflow breadcrumbs returned by `init_session` and `get_plugin_docs`. Use it only for routing guidance that should always be visible, such as action item vs dashboard renderer routing or a short prompt-fetch pointer.
+- `plugin_rule_definitions` is the filterable breadcrumb layer for detailed workflow guidance. Use `tools` and/or `groups` so `get_plugin_docs({ tools: [...] })` returns only relevant DecidR instructions. Set `always_include` only for genuinely global short guidance.
+- `tool_rules` provide per-tool routing hints. Must be consistent with both `plugin_rules` and matching `plugin_rule_definitions`.
 - `prompt_definitions` hosts two flavors of prompt:
   1. **Task prompts** (e.g. `initiative_planning`, `fix_generation`, `review_generation`) — take arguments and walk the agent through one specific task. The prompt file is written as imperative instructions to the agent.
-  2. **Behavioral runbooks** (e.g. `github_pr_lifecycle`) — argument-less reference contracts that an agent fetches and follows before acting on a governed lifecycle. The prompt file is written as a runbook with role detection, sequence diagrams, a reconciliation/safety protocol, and explicit non-goals. Always paired with a short `plugin_rules` line telling agents when to fetch the runbook.
+  2. **Behavioral runbooks** (e.g. `github_pr_lifecycle`) — argument-less reference contracts that an agent fetches and follows before acting on a governed lifecycle. The prompt file is written as a runbook with role detection, sequence diagrams, a reconciliation/safety protocol, and explicit non-goals. Pair broad routing with a short `plugin_rules` line only when it should be visible in init; otherwise use `plugin_rule_definitions` scoped to the relevant tools/groups.
 
 ## Adding a Behavioral Runbook Prompt
 
 1. Write the runbook at `prompts/<lifecycle-name>.md`. Start with prime directives, then role detection, then per-role sequence (mermaid diagrams use `<br/>` for line breaks in nodes, never `\n`), then any cross-cutting protocol (reconciliation, rollback), then failure modes, then explicit non-goals.
 2. Register it in `manifest.json` `prompt_definitions` with `arguments: []` and a description that explains what lifecycle it governs.
-3. Add a single short line to `plugin_rules` telling agents when to fetch and follow it. Do not restate the runbook content in `plugin_rules` — the rule is a pointer, not a summary.
+3. Add a targeted `plugin_rule_definitions` entry telling agents when to fetch and follow it. Use `plugin_rules` only if the pointer must be visible in init. Do not restate the runbook content in breadcrumbs — the rule is a pointer, not a summary.
 4. Bump `version` and `download_url`, add a release note, rebuild.
 
 ## Adding New Components
