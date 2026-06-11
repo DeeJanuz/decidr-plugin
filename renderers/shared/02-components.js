@@ -494,6 +494,22 @@
     }
   }
 
+  function openExternalUrlInMcpviewsTab(url, options) {
+    if (!url) return false;
+    options = options || {};
+    var host = window.__mcpviewsHost || {};
+    var utils = window.__companionUtils || {};
+    var opener = typeof host.openExternalUrlInTab === 'function'
+      ? host.openExternalUrlInTab
+      : utils.openExternalUrlInTab;
+    if (typeof opener !== 'function') return false;
+    opener(url, {
+      title: options.title || 'Stripe Billing',
+      returnOrigins: Array.isArray(options.returnOrigins) ? options.returnOrigins : []
+    });
+    return true;
+  }
+
   function renderSelectOptions(items, labelKey, selectedId, emptyLabel) {
     var html = '';
     if (emptyLabel) {
@@ -3910,7 +3926,9 @@
             UI.SlideOut._busy = false;
             var billingUrl = result && (result.portalUrl || result.url);
             if (billingUrl) {
-              if (window.location && typeof window.location.assign === 'function') {
+              if (openExternalUrlInMcpviewsTab(billingUrl, { title: 'Stripe Billing' })) {
+                UI.SlideOut._render();
+              } else if (window.location && typeof window.location.assign === 'function') {
                 window.location.assign(billingUrl);
               } else {
                 window.location.href = billingUrl;
