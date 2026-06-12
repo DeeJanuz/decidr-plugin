@@ -1002,6 +1002,7 @@
   var ICON_CHEVRON_DOWN = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6l5 5 5-5"/></svg>';
   var ICON_TRASH = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h10"/><path d="M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1"/><path d="M4.5 4l.5 9a1 1 0 001 1h4a1 1 0 001-1l.5-9"/></svg>';
   var ICON_CALENDAR = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="12" height="11" rx="1.5"/><line x1="2" y1="7" x2="14" y2="7"/><line x1="5" y1="1.5" x2="5" y2="4.5"/><line x1="11" y1="1.5" x2="11" y2="4.5"/></svg>';
+  var ICON_COPY = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M3 11V4.5A1.5 1.5 0 014.5 3H11"/></svg>';
   var ICON_BUILDING = '<svg class="decidr-org-picker-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21V7l9-4 9 4v14"/><path d="M9 21V12h6v9"/></svg>';
   var ICON_CHEVRON_SMALL = '<svg class="decidr-org-picker-chevron" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5L6 7.5L9 4.5"/></svg>';
   var ICON_SETTINGS = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3.2"></circle><path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a1 1 0 0 1 0 1.4l-1.2 1.2a1 1 0 0 1-1.4 0l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a1 1 0 0 1-1 1h-1.7a1 1 0 0 1-1-1v-.2a1 1 0 0 0-.6-.9 1 1 0 0 0-1.1.2l-.1.1a1 1 0 0 1-1.4 0l-1.2-1.2a1 1 0 0 1 0-1.4l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a1 1 0 0 1-1-1v-1.7a1 1 0 0 1 1-1h.2a1 1 0 0 0 .9-.6 1 1 0 0 0-.2-1.1l-.1-.1a1 1 0 0 1 0-1.4l1.2-1.2a1 1 0 0 1 1.4 0l.1.1a1 1 0 0 0 1.1.2 1 1 0 0 0 .6-.9V4a1 1 0 0 1 1-1h1.7a1 1 0 0 1 1 1v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a1 1 0 0 1 1.4 0l1.2 1.2a1 1 0 0 1 0 1.4l-.1.1a1 1 0 0 0-.2 1.1 1 1 0 0 0 .9.6h.2a1 1 0 0 1 1 1v1.7a1 1 0 0 1-1 1h-.2a1 1 0 0 0-.9.6z"></path></svg>';
@@ -1012,6 +1013,124 @@
   function entityIcon(type) {
     return ENTITY_ICONS[type] || ENTITY_ICONS.project;
   }
+
+  function fallbackCopyText(text) {
+    return new Promise(function(resolve, reject) {
+      if (typeof document === 'undefined' || !document.body) {
+        reject(new Error('Clipboard fallback unavailable'));
+        return;
+      }
+      var textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      textarea.style.top = '0';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      try {
+        if (document.execCommand('copy')) resolve();
+        else reject(new Error('Copy command failed'));
+      } catch (err) {
+        reject(err);
+      } finally {
+        document.body.removeChild(textarea);
+      }
+    });
+  }
+
+  UI.copyRefType = function(type) {
+    var norm = normalizeStatus(type || '');
+    var map = {
+      initiative: 'initiative',
+      initiatives: 'initiative',
+      project: 'project',
+      projects: 'project',
+      decision: 'decision',
+      decisions: 'decision',
+      task: 'task',
+      tasks: 'task'
+    };
+    return map[norm] || '';
+  };
+
+  UI.copyRefText = function(type, id) {
+    var norm = UI.copyRefType(type);
+    if (!norm || !id) return '';
+    return norm + ' ' + String(id);
+  };
+
+  UI.copyRefButton = function(type, id) {
+    var norm = UI.copyRefType(type);
+    if (!norm || !id) return '';
+    var label = 'Copy ' + norm + ' ID';
+    return '<button type="button" class="decidr-copy-ref-btn" '
+      + 'data-decidr-copy-ref="1" '
+      + 'data-decidr-copy-type="' + UI.escapeHtml(norm) + '" '
+      + 'data-decidr-copy-id="' + UI.escapeHtml(id) + '" '
+      + 'title="' + UI.escapeHtml(label) + '" '
+      + 'aria-label="' + UI.escapeHtml(label) + '">'
+      + ICON_COPY
+      + '</button>';
+  };
+
+  UI.copyRefToClipboard = function(type, id) {
+    var text = UI.copyRefText(type, id);
+    if (!text) return Promise.reject(new Error('Unsupported DecidR reference'));
+    if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text).catch(function() {
+        return fallbackCopyText(text);
+      }).then(function() {
+        return text;
+      });
+    }
+    return fallbackCopyText(text).then(function() {
+      return text;
+    });
+  };
+
+  UI.wireCopyRefButtons = function(root) {
+    if (!root || !root.querySelectorAll) return;
+    var buttons = root.querySelectorAll('[data-decidr-copy-ref]');
+    for (var i = 0; i < buttons.length; i++) {
+      (function(btn) {
+        if (btn._decidrCopyWired) return;
+        btn._decidrCopyWired = true;
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+          var type = btn.getAttribute('data-decidr-copy-type');
+          var id = btn.getAttribute('data-decidr-copy-id');
+          UI.copyRefToClipboard(type, id).then(function() {
+            btn.classList.remove('decidr-copy-ref-failed');
+            btn.classList.add('decidr-copy-ref-copied');
+            btn.setAttribute('title', 'Copied');
+            btn.setAttribute('aria-label', 'Copied ' + UI.copyRefText(type, id));
+            clearTimeout(btn._decidrCopyResetTimer);
+            btn._decidrCopyResetTimer = setTimeout(function() {
+              btn.classList.remove('decidr-copy-ref-copied');
+              btn.setAttribute('title', 'Copy ' + type + ' ID');
+              btn.setAttribute('aria-label', 'Copy ' + type + ' ID');
+            }, 1400);
+          }).catch(function(err) {
+            console.warn('[decidr] Copy reference failed:', err);
+            btn.classList.remove('decidr-copy-ref-copied');
+            btn.classList.add('decidr-copy-ref-failed');
+            btn.setAttribute('title', 'Copy failed');
+            btn.setAttribute('aria-label', 'Copy failed');
+            clearTimeout(btn._decidrCopyResetTimer);
+            btn._decidrCopyResetTimer = setTimeout(function() {
+              btn.classList.remove('decidr-copy-ref-failed');
+              btn.setAttribute('title', 'Copy ' + type + ' ID');
+              btn.setAttribute('aria-label', 'Copy ' + type + ' ID');
+            }, 1600);
+          });
+        });
+      })(buttons[i]);
+    }
+  };
 
   UI.bridgeEndpointLabel = function(bridge, side) {
     if (!bridge) return '';
@@ -1117,6 +1236,7 @@
       + '<div class="decidr-card-header">'
       + '<span class="decidr-card-type-label">Project</span>'
       + UI.statusBadge(project.status)
+      + UI.copyRefButton('project', project.id)
       + '</div>'
       + '<div class="decidr-card-title">' + UI.escapeHtml(project.name) + '</div>'
       + descHtml
@@ -1207,7 +1327,10 @@
     return '<div class="decidr-dash-proj" '
       + 'data-entity-type="project" data-entity-id="' + UI.escapeHtml(project.id) + '"'
       + ' style="' + styleStr + '">'
+      + '<div class="decidr-dash-proj-title-row">'
       + '<div class="decidr-dash-proj-name">' + UI.escapeHtml(project.name) + '</div>'
+      + UI.copyRefButton('project', project.id)
+      + '</div>'
       + ownerHtml
       + '<div class="decidr-dash-proj-meta">'
       + UI.statusBadge(project.status)
@@ -1371,6 +1494,7 @@
       + '<span class="decidr-card-type-label">Decision</span>'
       + UI.statusBadge(decision.status)
       + UI.decisionKindBadge(decision)
+      + UI.copyRefButton('decision', decision.id)
       + '</div>'
       + '<div class="decidr-card-title">' + UI.escapeHtml(decision.title) + '</div>'
       + descHtml
@@ -1443,6 +1567,7 @@
       + '<div class="decidr-card-header">'
       + '<span class="decidr-card-type-label">Task</span>'
       + UI.statusBadge(task.status)
+      + UI.copyRefButton('task', task.id)
       + '</div>'
       + '<div class="decidr-card-title">' + UI.escapeHtml(task.title) + '</div>'
       + descHtml
@@ -1528,6 +1653,7 @@
         + legendHtml
         + decHealthHtml
         + '</div>'
+        + UI.copyRefButton('initiative', initiative.id)
         + '</div>'
         + '</div>';
     }
@@ -1555,6 +1681,7 @@
       + '<div class="decidr-card-body">'
       + '<div class="decidr-card-header">'
       + '<span class="decidr-card-type-label">Initiative</span>'
+      + UI.copyRefButton('initiative', initiative.id)
       + '</div>'
       + '<div class="decidr-card-title">' + UI.escapeHtml(initiative.name) + '</div>'
       + descHtml
@@ -1641,6 +1768,7 @@
       + '<span class="decidr-card-type-label">' + UI.escapeHtml(typeLabel) + '</span>'
       + (item.priority ? ' ' + UI.priorityBadge(item.priority) : '')
       + (item.status ? ' ' + UI.statusBadge(item.status) : '')
+      + UI.copyRefButton(entityType, item.entityId || item.id || '')
       + '</div>'
       + '<div class="decidr-card-title">' + UI.escapeHtml(item.title) + '</div>'
       + reasonHtml
@@ -1692,6 +1820,7 @@
       + '<span class="decidr-next-step-type-label">' + UI.escapeHtml(typeLabel) + '</span>'
       + actionBadgeHtml
       + (item.status ? ' ' + UI.statusBadge(item.status) : '')
+      + UI.copyRefButton(entityType, item.entityId || item.id || '')
       + '</div>'
       + '<div class="decidr-next-step-title">' + UI.escapeHtml(item.title) + '</div>'
       + subtitleHtml
@@ -1839,6 +1968,7 @@
       + UI.statusBadge(decision.status)
       + UI.decisionKindBadge(decision)
       + supersedesBadge
+      + UI.copyRefButton('decision', decision.id)
       + '</div>';
 
     if (supersededDec) {
@@ -1863,6 +1993,7 @@
         + UI.decisionKindBadge(supersededDec)
         + prevStatusHtml
         + '</div>'
+        + UI.copyRefButton('decision', supersededDec.id)
         + '</div>';
     }
 
@@ -1885,6 +2016,7 @@
       + '</div>'
       + UI.statusBadge(decision.status)
       + UI.decisionKindBadge(decision)
+      + UI.copyRefButton('decision', decision.id)
       + '</div>';
   };
 
@@ -2507,6 +2639,7 @@
         + '<a class="decidr-so-nav-link" data-entity-type="' + UI.escapeHtml(entityType) + '" '
         + 'data-entity-id="' + UI.escapeHtml(entity.id) + '">'
         + UI.escapeHtml(entity.name || entity.title) + '</a>'
+        + UI.copyRefButton(entityType, entity.id)
         + '</div>';
     },
 
@@ -2746,6 +2879,7 @@
         html += '<span class="decidr-so-list-title">' + UI.escapeHtml(title) + '</span>'
           + UI.statusBadge(item.status)
           + (normalizeStatus(rowType || entityType) === 'decision' ? UI.decisionKindBadge(item) : '')
+          + UI.copyRefButton(rowType || entityType, item.id)
           + '</div>';
       }
       html += '</div>';
@@ -2966,11 +3100,14 @@
         };
       }
 
+      UI.wireCopyRefButtons(panel);
+
       // Wire all entity navigation links
       var navItems = panel.querySelectorAll('[data-entity-type][data-entity-id]');
       for (var i = 0; i < navItems.length; i++) {
         (function(el) {
           el.onclick = function(e) {
+            if (e.target.closest && e.target.closest('[data-decidr-copy-ref]')) return;
             // Don't navigate if clicking a task checkbox
             if (e.target.hasAttribute('data-task-toggle')) return;
             e.preventDefault();

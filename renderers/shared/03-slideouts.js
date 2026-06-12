@@ -1093,6 +1093,7 @@
     // Action bar
     html += '<div class="decidr-so-action-bar">';
     html += '<span class="decidr-so-spacer"></span>';
+    html += UI.copyRefButton('project', project.id);
     html += '<button class="decidr-so-btn decidr-so-btn-danger decidr-so-btn-sm" id="decidr-so-btn-project-archive">' + ICON_TRASH + ' Archive</button>';
     html += '</div>';
 
@@ -1176,6 +1177,7 @@
         html += '</button>';
         html += '<span class="decidr-so-task-title">' + UI.escapeHtml(task.title) + '</span>';
         html += UI.statusBadge(task.status);
+        html += UI.copyRefButton('task', task.id);
         html += '</div>';
       }
       html += '</div>';
@@ -1229,6 +1231,7 @@
           if (supersededChildren.length > 0) {
             html += '<span class="decidr-so-supersedes-badge">Supersedes</span>';
           }
+          html += UI.copyRefButton('decision', dec.id);
           html += '<span class="decidr-so-decision-chevron">\u203a</span>';
           html += '</div>';
           // Render superseded children
@@ -1240,6 +1243,7 @@
             var wasStatus = oldDec.status ? ' <span class="decidr-so-decision-was-status">was ' + UI.escapeHtml(statusLabel(oldDec.status)) + '</span>' : '';
             html += wasStatus;
             html += '<span class="decidr-so-decision-title">' + UI.escapeHtml(oldDec.title) + '</span>';
+            html += UI.copyRefButton('decision', oldDec.id);
             html += '</div>';
           }
         }
@@ -1361,6 +1365,7 @@
       html += '<button class="decidr-so-btn" id="decidr-so-btn-supersede">Supersede</button>';
     }
     html += '<span class="decidr-so-spacer"></span>';
+    html += UI.copyRefButton('decision', decision.id);
     html += '<button class="decidr-so-btn decidr-so-btn-danger" id="decidr-so-btn-archive">' + ICON_TRASH + ' Archive</button>';
     html += '</div>';
 
@@ -1516,6 +1521,7 @@
         html += '</button>';
         html += '<span class="decidr-so-task-title">' + UI.escapeHtml(task.title) + '</span>';
         html += UI.statusBadge(task.status);
+        html += UI.copyRefButton('task', task.id);
         html += '</div>';
       }
     }
@@ -1623,6 +1629,8 @@
       }
       html += '</div></div>';
     }
+    html += '<span class="decidr-so-spacer"></span>';
+    html += UI.copyRefButton('task', task.id);
     html += '<button class="decidr-so-btn decidr-so-btn-danger decidr-so-btn-sm" id="decidr-so-btn-task-archive">' + ICON_TRASH + ' Archive</button>';
     html += '</div>';
 
@@ -1775,6 +1783,7 @@
       if (bridge.fromDecision.project && bridge.fromDecision.project.name) {
         html += '<span class="decidr-so-doc-type-badge">' + UI.escapeHtml(bridge.fromDecision.project.name) + '</span>';
       }
+      html += UI.copyRefButton('decision', bridge.fromDecision.id);
       html += '</div></div>';
     } else if (bridge.fromProject) {
       html += '<div class="decidr-so-section">';
@@ -1783,6 +1792,7 @@
       html += '<div class="decidr-so-color-dot" style="background:' + UI.sanitizeColor(bridge.fromProject.color || '#6366f1') + ';display:inline-block;margin-right:6px;"></div>';
       html += '<span class="decidr-so-list-title">' + UI.escapeHtml(bridge.fromProject.name) + '</span>';
       html += UI.statusBadge(bridge.fromProject.status);
+      html += UI.copyRefButton('project', bridge.fromProject.id);
       html += '</div></div>';
     }
 
@@ -1796,6 +1806,7 @@
       if (bridge.toDecision.project && bridge.toDecision.project.name) {
         html += '<span class="decidr-so-doc-type-badge">' + UI.escapeHtml(bridge.toDecision.project.name) + '</span>';
       }
+      html += UI.copyRefButton('decision', bridge.toDecision.id);
       html += '</div></div>';
     } else if (bridge.toProject) {
       html += '<div class="decidr-so-section">';
@@ -1804,6 +1815,7 @@
       html += '<div class="decidr-so-color-dot" style="background:' + UI.sanitizeColor(bridge.toProject.color || '#6366f1') + ';display:inline-block;margin-right:6px;"></div>';
       html += '<span class="decidr-so-list-title">' + UI.escapeHtml(bridge.toProject.name) + '</span>';
       html += UI.statusBadge(bridge.toProject.status);
+      html += UI.copyRefButton('project', bridge.toProject.id);
       html += '</div></div>';
     }
 
@@ -1857,6 +1869,7 @@
     // Action bar
     html += '<div class="decidr-so-action-bar">';
     html += '<span class="decidr-so-spacer"></span>';
+    html += UI.copyRefButton('initiative', initiative.id);
     html += '<button class="decidr-so-btn decidr-so-btn-danger decidr-so-btn-sm" id="decidr-so-btn-initiative-archive">' + ICON_TRASH + ' Archive</button>';
     html += '</div>';
 

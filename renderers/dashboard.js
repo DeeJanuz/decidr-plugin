@@ -1165,6 +1165,7 @@
     }
 
     function wireEntityClicks(scope) {
+      UI.wireCopyRefButtons(scope);
       var clickables = scope.querySelectorAll('[data-entity-type][data-entity-id]');
       for (var i = 0; i < clickables.length; i++) {
         (function(el) {
@@ -1176,6 +1177,7 @@
           if (el.querySelector('.decidr-init-header')) return;
 
           el.addEventListener('click', function(e) {
+            if (e.target.closest && e.target.closest('[data-decidr-copy-ref]')) return;
             // Don't fire if clicking inside init-header (toggle)
             if (e.target.closest('.decidr-init-header')) return;
             e.preventDefault();

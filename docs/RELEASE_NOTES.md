@@ -1,3 +1,8 @@
+# 0.1.40
+
+- **feat**: Add copy reference buttons for initiatives, projects, decisions, and tasks across dashboard cards, action rows, and slideout child lists.
+- **feat**: Copy DecidR references as plain `<type> <id>` strings for quick AI chat lookup, with clipboard fallback handling and click guards that preserve existing navigation.
+
 # 0.1.39
 
 - **feat**: Split DecidR workflow breadcrumbs into compact global `plugin_rules` and filterable `plugin_rule_definitions`.

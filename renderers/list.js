@@ -230,7 +230,9 @@
               '[data-entity-type="project"][data-entity-id="' + proj.id + '"]'
             );
             if (newCard) {
-              newCard.addEventListener('click', function() {
+              UI.wireCopyRefButtons(newCard);
+              newCard.addEventListener('click', function(e) {
+                if (e.target.closest && e.target.closest('[data-decidr-copy-ref]')) return;
                 UI.SlideOut.open('project', proj.id, { source: container });
               });
             }
@@ -825,6 +827,7 @@
   // ─── Wire entity click handlers ───────────────────────────────────
 
   function wireEntityLinks(root) {
+    UI.wireCopyRefButtons(root);
     var items = root.querySelectorAll('[data-entity-type][data-entity-id]');
     for (var i = 0; i < items.length; i++) {
       (function(el) {
@@ -833,6 +836,7 @@
         el.setAttribute('data-decidr-wired', '1');
 
         el.addEventListener('click', function(e) {
+          if (e.target.closest && e.target.closest('[data-decidr-copy-ref]')) return;
           e.preventDefault();
           e.stopPropagation();
           var type = el.getAttribute('data-entity-type');
