@@ -231,6 +231,43 @@
       return actMap;
     }
 
+    function findEntityById(items, id) {
+      if (!id || !items) return null;
+      for (var i = 0; i < items.length; i++) {
+        if (items[i] && items[i].id === id) return items[i];
+      }
+      return null;
+    }
+
+    function shallowMerge(left, right) {
+      var out = {};
+      var k;
+      for (k in left) {
+        if (left.hasOwnProperty(k)) out[k] = left[k];
+      }
+      for (k in right) {
+        if (right.hasOwnProperty(k)) out[k] = right[k];
+      }
+      return out;
+    }
+
+    function enrichActionItem(item) {
+      if (!item) return item;
+      var type = String(item.entityType || item.entity_type || '').toUpperCase();
+      var id = item.entityId || item.entity_id || item.id;
+      var full = null;
+      if (type === 'DECISION') {
+        full = findEntityById(dashState.allDecisions, id);
+      } else if (type === 'TASK') {
+        full = findEntityById(dashState.allTasks, id);
+      }
+      if (!full) return item;
+      var enriched = shallowMerge(full, item);
+      enriched.entityType = item.entityType || item.entity_type || type;
+      enriched.entityId = item.entityId || item.entity_id || full.id;
+      return enriched;
+    }
+
     function getAllProjects() {
       var projects = [];
       for (var initId in dashState.projectsByInitiative) {
@@ -526,7 +563,7 @@
       'Open decision needs attention':  { badge: 'Review',    cls: 'decidr-action-review' },
       'Decision in progress':           { badge: 'Follow Up', cls: 'decidr-action-followup' },
       'Task is blocked':                { badge: 'Blocked',   cls: 'decidr-action-blocked' },
-      'TODO task':                       { badge: 'Tasks',     cls: 'decidr-action-tasks' },
+      'TODO task':                       { badge: '',          cls: '' },
       'Deferred decision':              { badge: 'Deferred',  cls: 'decidr-action-deferred' },
       'Open issue on an entity you own':{ badge: 'Issue',     cls: 'decidr-action-issue' }
     };
@@ -546,9 +583,13 @@
     }
 
     function renderNextStepsContent() {
-      var items = dashState.actionItems;
-      if (!items || items.length === 0) {
+      var rawItems = dashState.actionItems;
+      if (!rawItems || rawItems.length === 0) {
         return UI.emptyState('No action items right now. You are all caught up!');
+      }
+      var items = [];
+      for (var ai = 0; ai < rawItems.length; ai++) {
+        items.push(enrichActionItem(rawItems[ai]));
       }
 
       // Group by entityType
@@ -615,6 +656,8 @@
               animDelay: 0.05 + j * 0.05,
               actionBadge: cfg.badge,
               actionClass: cfg.cls,
+              showWorkflow: true,
+              workflowEntity: item,
               lastActivity: dashState.lastActivityByEntity[item.entityId || item.id] || null
             });
           }
@@ -649,6 +692,7 @@
         html += UI.decisionListItem(visible[i], {
           animDelay: 0.05 + i * 0.05,
           allDecisions: dashState.allDecisions,
+          showWorkflow: true,
           lastActivity: dashState.lastActivityByEntity[visible[i].id] || null
         });
       }
@@ -809,6 +853,7 @@
       for (var i = 0; i < recent.length; i++) {
         html += UI.decisionListItem(recent[i], {
           animDelay: 0.05 + i * 0.05,
+          showWorkflow: true,
           allDecisions: dashState.allDecisions
         });
       }
@@ -825,6 +870,7 @@
       for (var i = 0; i < pending.length; i++) {
         html += UI.pendingItem(pending[i].decision, {
           animDelay: 0.05 + i * 0.05,
+          showWorkflow: true,
           projectName: pending[i].projectName
         });
       }

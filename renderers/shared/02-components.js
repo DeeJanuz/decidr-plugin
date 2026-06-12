@@ -936,6 +936,233 @@
     return '<span class="decidr-badge decidr-decision-kind-catch-up">Catch-up</span>';
   };
 
+  // ─── Workflow Summary ─────────────────────────────────────────────
+
+  function workflowType(entityType) {
+    return String(entityType || '').toLowerCase();
+  }
+
+  function fieldValue(entity, names) {
+    var obj = entity || {};
+    for (var i = 0; i < names.length; i++) {
+      if (obj[names[i]] !== undefined && obj[names[i]] !== null && obj[names[i]] !== '') {
+        return obj[names[i]];
+      }
+    }
+    return null;
+  }
+
+  function personValue(entity, objectNames, idNames, fallbackObjectNames, fallbackIdNames) {
+    var user = fieldValue(entity, objectNames || []);
+    var userId = fieldValue(entity, idNames || []);
+    if (!user && !userId) {
+      user = fieldValue(entity, fallbackObjectNames || []);
+      userId = fieldValue(entity, fallbackIdNames || []);
+    }
+    if (user && user.name) return user.name;
+    if (user && user.email) return user.email;
+    if (typeof user === 'string') return user;
+    if (userId) return String(userId).slice(0, 8);
+    return 'Unassigned';
+  }
+
+  function personInfo(entity, objectNames, idNames, fallbackObjectNames, fallbackIdNames) {
+    var user = fieldValue(entity, objectNames || []);
+    var userId = fieldValue(entity, idNames || []);
+    if (!user && !userId) {
+      user = fieldValue(entity, fallbackObjectNames || []);
+      userId = fieldValue(entity, fallbackIdNames || []);
+    }
+    var name = 'Unassigned';
+    var initials = '--';
+    var color = '#6b7280';
+    if (user && user.name) {
+      name = user.name;
+    } else if (user && user.email) {
+      name = user.email;
+    } else if (typeof user === 'string') {
+      name = user;
+    } else if (userId) {
+      name = String(userId).slice(0, 8);
+    }
+    if (name !== 'Unassigned') {
+      initials = String(name).split(/[\s@._-]+/).map(function(part) {
+        return part.charAt(0).toUpperCase();
+      }).join('').slice(0, 2) || '?';
+    }
+    if (user && user.avatarColor) color = UI.sanitizeColor(user.avatarColor);
+    return { name: name, initials: initials, color: color, assigned: name !== 'Unassigned' };
+  }
+
+  function workflowOwner(entity, type) {
+    if (type === 'task') {
+      return personValue(entity,
+        ['owner', 'owner_user'],
+        ['ownerId', 'owner_id'],
+        ['createdBy', 'created_by'],
+        ['createdById', 'created_by_id']);
+    }
+    return personValue(entity,
+      ['owner', 'owner_user'],
+      ['ownerId', 'owner_id'],
+      ['createdBy', 'created_by'],
+      ['createdById', 'created_by_id']);
+  }
+
+  function workflowOwnerInfo(entity, type) {
+    if (type === 'task') {
+      return personInfo(entity,
+        ['owner', 'owner_user'],
+        ['ownerId', 'owner_id'],
+        ['createdBy', 'created_by'],
+        ['createdById', 'created_by_id']);
+    }
+    return personInfo(entity,
+      ['owner', 'owner_user'],
+      ['ownerId', 'owner_id'],
+      ['createdBy', 'created_by'],
+      ['createdById', 'created_by_id']);
+  }
+
+  function workflowImplementor(entity, type) {
+    if (type === 'task') {
+      return personValue(entity,
+        ['assignee', 'assignedTo', 'assigned_to'],
+        ['assigneeId', 'assignee_id', 'assignedToId', 'assigned_to_id'],
+        [],
+        []);
+    }
+    return personValue(entity,
+      ['implementer', 'implementor', 'assignedImplementor', 'assigned_implementor'],
+      ['implementerId', 'implementer_id', 'implementorId', 'implementor_id'],
+      [],
+      []);
+  }
+
+  function workflowImplementorInfo(entity, type) {
+    if (type === 'task') {
+      return personInfo(entity,
+        ['assignee', 'assignedTo', 'assigned_to'],
+        ['assigneeId', 'assignee_id', 'assignedToId', 'assigned_to_id'],
+        [],
+        []);
+    }
+    return personInfo(entity,
+      ['implementer', 'implementor', 'assignedImplementor', 'assigned_implementor'],
+      ['implementerId', 'implementer_id', 'implementorId', 'implementor_id'],
+      [],
+      []);
+  }
+
+  UI.workflowNextStep = function(entity, entityType) {
+    var type = workflowType(entityType);
+    var status = ((entity && entity.status) ? String(entity.status) : '').toUpperCase();
+    var decisionNext = {
+      DRAFT: 'Needs approval',
+      PROPOSED: 'Needs review/approval',
+      APPROVED: 'Start implementation',
+      IN_PROGRESS: 'Stage after build/test',
+      STAGED: 'Add to implemented after production-equivalent release',
+      IMPLEMENTED: 'Implemented',
+      BACKLOG: 'Move out of backlog when ready',
+      REJECTED: 'Revise or archive'
+    };
+    var taskNext = {
+      BACKLOG: 'Move to To Do when ready',
+      TODO: 'Start work',
+      IN_PROGRESS: 'Complete when done',
+      DONE: 'Done'
+    };
+    if (type === 'task' && taskNext[status]) return taskNext[status];
+    if (type === 'decision' && decisionNext[status]) return decisionNext[status];
+    var transitions = (entity && (entity.allowedTransitions || entity.allowed_transitions)) || [];
+    if (transitions && transitions.length) return 'Next: ' + statusLabel(transitions[0]);
+    return 'Review status';
+  };
+
+  function workflowRow(label, valueHtml, opts) {
+    var o = opts || {};
+    return '<div class="decidr-workflow-row' + (o.next ? ' decidr-workflow-next' : '') + '">'
+      + '<div class="decidr-workflow-label">' + UI.escapeHtml(label) + '</div>'
+      + '<div class="decidr-workflow-value">' + valueHtml + '</div>'
+      + '</div>';
+  }
+
+  function workflowFieldEnabled(fields, field) {
+    if (!fields || !fields.length) return true;
+    return fields.indexOf(field) !== -1;
+  }
+
+  UI.workflowSummary = function(entity, entityType, opts) {
+    var o = opts || {};
+    var type = workflowType(entityType || (entity && entity.entityType));
+    if (type !== 'decision' && type !== 'task') return '';
+    var fields = o.fields || null;
+    var className = 'decidr-workflow-summary';
+    if (o.className) className += ' ' + UI.escapeHtml(o.className);
+    var html = '<div class="' + className + '">';
+    if (workflowFieldEnabled(fields, 'owner')) {
+      html += workflowRow('Owner', UI.escapeHtml(workflowOwner(entity, type)));
+    }
+    if (workflowFieldEnabled(fields, 'implementor')) {
+      var implLabel = type === 'task' ? 'Assigned implementor' : 'Implementor';
+      html += workflowRow(implLabel, UI.escapeHtml(workflowImplementor(entity, type)));
+    }
+    if (workflowFieldEnabled(fields, 'stage')) {
+      html += workflowRow('Stage', UI.statusBadge(entity && entity.status));
+    }
+    if (workflowFieldEnabled(fields, 'nextStep')) {
+      html += workflowRow('Next step', UI.escapeHtml(UI.workflowNextStep(entity, type)), { next: true });
+    }
+    html += '</div>';
+    return html;
+  };
+
+  function workflowPersonPill(label, person, kind) {
+    var safeName = UI.escapeHtml(person.name || 'Unassigned');
+    var cls = 'decidr-workflow-pill decidr-workflow-pill-person decidr-workflow-pill-' + UI.escapeHtml(kind || 'person');
+    if (!person.assigned) cls += ' decidr-workflow-pill-unassigned';
+    return '<span class="' + cls + '" title="' + safeName + '">'
+      + '<span class="decidr-workflow-pill-label">' + UI.escapeHtml(label) + ':</span>'
+      + '<span class="decidr-workflow-avatar" style="background:' + UI.sanitizeColor(person.color || '#6b7280') + ';">'
+      + UI.escapeHtml(person.initials || '--') + '</span>'
+      + '</span>';
+  }
+
+  function workflowStatusClass(status) {
+    if (!status) return 'decidr-workflow-pill-status-unknown';
+    return 'decidr-workflow-pill-status-' + String(status).toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  }
+
+  function workflowTextPill(text, kind, label, extraClass) {
+    var safeText = UI.escapeHtml(text || '');
+    var title = label ? UI.escapeHtml(label + ': ' + text) : safeText;
+    var cls = 'decidr-workflow-pill decidr-workflow-pill-' + UI.escapeHtml(kind || 'text');
+    if (extraClass) cls += ' ' + UI.escapeHtml(extraClass);
+    return '<span class="' + cls + '" title="' + title + '">'
+      + (label ? '<span class="decidr-workflow-pill-label">' + UI.escapeHtml(label) + ':</span>' : '')
+      + '<span class="decidr-workflow-pill-text">' + safeText + '</span>'
+      + '</span>';
+  }
+
+  UI.workflowPills = function(entity, entityType, opts) {
+    var o = opts || {};
+    var type = workflowType(entityType || (entity && entity.entityType));
+    if (type !== 'decision' && type !== 'task') return '';
+    var fields = o.fields || null;
+    var className = 'decidr-workflow-pills';
+    if (o.className) className += ' ' + UI.escapeHtml(o.className);
+    var owner = workflowOwnerInfo(entity, type);
+    var implementor = workflowImplementorInfo(entity, type);
+    var html = '<span class="' + className + '">';
+    if (workflowFieldEnabled(fields, 'stage')) html += workflowTextPill(statusLabel(entity && entity.status), 'stage', null, workflowStatusClass(entity && entity.status));
+    if (workflowFieldEnabled(fields, 'owner')) html += workflowPersonPill('OW', owner, 'owner');
+    if (workflowFieldEnabled(fields, 'implementor')) html += workflowPersonPill('IM', implementor, 'implementor');
+    if (workflowFieldEnabled(fields, 'nextStep')) html += workflowTextPill(UI.workflowNextStep(entity, type), 'action', null);
+    html += '</span>';
+    return html;
+  };
+
   // ─── Activity Label ─────────────────────────────────────────────────
 
   UI.activityLabel = function(lastActivity) {
@@ -1484,6 +1711,10 @@
     var metaHtml = metaParts.length > 0
       ? '<div class="decidr-card-meta">' + UI.escapeHtml(metaParts.join(' \u00b7 ')) + '</div>'
       : '';
+    var workflowPillsHtml = o.showWorkflow
+      ? UI.workflowPills(decision, 'decision', { className: 'decidr-workflow-pills-card' })
+      : '';
+    var statusHtml = o.showWorkflow ? '' : UI.statusBadge(decision.status);
 
     return '<div class="decidr-card decidr-decision-card" '
       + 'data-entity-type="decision" data-entity-id="' + UI.escapeHtml(decision.id) + '"'
@@ -1492,8 +1723,9 @@
       + '<div class="decidr-card-body">'
       + '<div class="decidr-card-header">'
       + '<span class="decidr-card-type-label">Decision</span>'
-      + UI.statusBadge(decision.status)
+      + statusHtml
       + UI.decisionKindBadge(decision)
+      + workflowPillsHtml
       + UI.copyRefButton('decision', decision.id)
       + '</div>'
       + '<div class="decidr-card-title">' + UI.escapeHtml(decision.title) + '</div>'
@@ -1558,6 +1790,10 @@
     var metaHtml = metaParts.length > 0
       ? '<div class="decidr-card-meta">' + UI.escapeHtml(metaParts.join(' \u00b7 ')) + '</div>'
       : '';
+    var workflowPillsHtml = o.showWorkflow
+      ? UI.workflowPills(task, 'task', { className: 'decidr-workflow-pills-card' })
+      : '';
+    var statusHtml = o.showWorkflow ? '' : UI.statusBadge(task.status);
 
     return '<div class="decidr-card decidr-task-card" '
       + 'data-entity-type="task" data-entity-id="' + UI.escapeHtml(task.id) + '"'
@@ -1566,7 +1802,8 @@
       + '<div class="decidr-card-body">'
       + '<div class="decidr-card-header">'
       + '<span class="decidr-card-type-label">Task</span>'
-      + UI.statusBadge(task.status)
+      + statusHtml
+      + workflowPillsHtml
       + UI.copyRefButton('task', task.id)
       + '</div>'
       + '<div class="decidr-card-title">' + UI.escapeHtml(task.title) + '</div>'
@@ -1787,7 +2024,7 @@
 
     // Action badge (category) instead of priority badge
     var actionBadgeHtml = '';
-    if (o.actionBadge) {
+    if (o.actionBadge && !(String(entityType).toUpperCase() === 'TASK' && String(o.actionBadge).toUpperCase() === 'TASKS')) {
       actionBadgeHtml = ' <span class="decidr-next-step-action-badge'
         + (o.actionClass ? ' ' + o.actionClass : '') + '">'
         + UI.escapeHtml(o.actionBadge) + '</span>';
@@ -1809,6 +2046,11 @@
         activityHtml = '<div class="decidr-next-step-activity">' + actContent + '</div>';
       }
     }
+    var workflowEntity = o.workflowEntity || item;
+    var workflowPillsHtml = o.showWorkflow
+      ? UI.workflowPills(workflowEntity, entityType, { className: 'decidr-workflow-pills-next-step' })
+      : '';
+    var statusHtml = (item.status && !o.showWorkflow) ? ' ' + UI.statusBadge(item.status) : '';
 
     return '<div class="decidr-next-step-item" '
       + 'data-entity-type="' + UI.escapeHtml(entityType) + '" '
@@ -1819,7 +2061,8 @@
       + '<div class="decidr-next-step-header">'
       + '<span class="decidr-next-step-type-label">' + UI.escapeHtml(typeLabel) + '</span>'
       + actionBadgeHtml
-      + (item.status ? ' ' + UI.statusBadge(item.status) : '')
+      + statusHtml
+      + workflowPillsHtml
       + UI.copyRefButton(entityType, item.entityId || item.id || '')
       + '</div>'
       + '<div class="decidr-next-step-title">' + UI.escapeHtml(item.title) + '</div>'
@@ -1958,6 +2201,10 @@
         activityHtml = '<div class="decidr-decision-item-activity">' + actContent + '</div>';
       }
     }
+    var workflowPillsHtml = o.showWorkflow
+      ? UI.workflowPills(decision, 'decision', { className: 'decidr-workflow-pills-list' })
+      : '';
+    var statusHtml = o.showWorkflow ? '' : UI.statusBadge(decision.status);
 
     var html = '<div class="decidr-decision-item" data-entity-type="decision" data-entity-id="' + UI.escapeHtml(decision.id) + '"' + animStyle + '>'
       + '<div class="decidr-decision-item-body">'
@@ -1965,7 +2212,8 @@
       + '<div class="decidr-decision-item-meta">' + UI.escapeHtml(ago) + '</div>'
       + activityHtml
       + '</div>'
-      + UI.statusBadge(decision.status)
+      + workflowPillsHtml
+      + statusHtml
       + UI.decisionKindBadge(decision)
       + supersedesBadge
       + UI.copyRefButton('decision', decision.id)
@@ -2007,6 +2255,10 @@
     var animStyle = typeof o.animDelay === 'number'
       ? ' style="animation-delay: ' + o.animDelay.toFixed(2) + 's;"' : '';
     var projectName = o.projectName || '';
+    var workflowPillsHtml = o.showWorkflow
+      ? UI.workflowPills(decision, 'decision', { className: 'decidr-workflow-pills-pending' })
+      : '';
+    var statusHtml = o.showWorkflow ? '' : UI.statusBadge(decision.status);
 
     return '<div class="decidr-pending-item" data-entity-type="decision" data-entity-id="' + UI.escapeHtml(decision.id) + '"' + animStyle + '>'
       + '<span class="decidr-pending-item-dot"></span>'
@@ -2014,7 +2266,8 @@
       + '<div class="decidr-pending-item-title">' + UI.escapeHtml(decision.title) + '</div>'
       + (projectName ? '<div class="decidr-pending-item-project">' + UI.escapeHtml(projectName) + '</div>' : '')
       + '</div>'
-      + UI.statusBadge(decision.status)
+      + workflowPillsHtml
+      + statusHtml
       + UI.decisionKindBadge(decision)
       + UI.copyRefButton('decision', decision.id)
       + '</div>';

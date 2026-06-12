@@ -7,6 +7,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
 const dashboard = read('renderers/dashboard.js');
+const theme = read('renderers/shared/01-theme.js');
 const components = read('renderers/shared/02-components.js');
 const slideouts = read('renderers/shared/03-slideouts.js');
 
@@ -55,6 +56,124 @@ assert.match(
   components,
   /UI\.SlideOut\._refetchAndRender\(\)/,
   'Responsibilities save must refetch the decision and trigger refresh callbacks.'
+);
+assert.match(
+  components,
+  /UI\.workflowNextStep\s*=\s*function/,
+  'Shared components must expose workflowNextStep().'
+);
+assert.match(
+  components,
+  /UI\.workflowSummary\s*=\s*function/,
+  'Shared components must expose workflowSummary().'
+);
+assert.match(
+  components,
+  /UI\.workflowPills\s*=\s*function/,
+  'Shared components must expose workflowPills().'
+);
+assert.match(
+  components,
+  /workflowPersonPill\('OW'/,
+  'Workflow pills must render OW owner initials.'
+);
+assert.match(
+  components,
+  /workflowPersonPill\('IM'/,
+  'Workflow pills must render IM implementor initials.'
+);
+assert.match(
+  components,
+  /workflowFieldEnabled\(fields,\s*'stage'\)[\s\S]*?workflowFieldEnabled\(fields,\s*'owner'\)[\s\S]*?workflowFieldEnabled\(fields,\s*'implementor'\)[\s\S]*?workflowFieldEnabled\(fields,\s*'nextStep'\)/,
+  'Workflow pills must render in Stage, OW, IM, Next step order.'
+);
+[
+  'Needs approval',
+  'Needs review/approval',
+  'Start implementation',
+  'Stage after build/test',
+  'Add to implemented after production-equivalent release',
+  'Move out of backlog when ready',
+  'Move to To Do when ready',
+  'Complete when done',
+  'Review status'
+].forEach((label) => {
+  assert.match(components, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), `Missing next-step label: ${label}`);
+});
+assert.match(
+  components,
+  /Next:\s*'\s*\+\s*statusLabel\(transitions\[0\]\)/,
+  'Unknown statuses with allowed transitions must render the first transition.'
+);
+assert.match(
+  dashboard,
+  /function enrichActionItem\(item\)/,
+  'Dashboard must enrich action items from fetched decisions/tasks.'
+);
+assert.match(
+  dashboard,
+  /showWorkflow:\s*true/,
+  'Dashboard cards must opt into workflow pills.'
+);
+assert.match(
+  dashboard,
+  /workflowEntity:\s*item/,
+  'Next Steps must pass enriched action-item data to workflow pills.'
+);
+assert.match(
+  components,
+  /UI\.workflowPills\(workflowEntity,\s*entityType/,
+  'Next Steps must render workflow pills in the header whitespace.'
+);
+assert.match(
+  components,
+  /workflowStatusClass\(entity\s*&&\s*entity\.status\)/,
+  'Workflow stage pills must include status-specific color classes.'
+);
+assert.match(
+  slideouts,
+  /fields:\s*\['stage',\s*'nextStep'\]/,
+  'Decision responsibilities card must include Stage and Next step workflow pills.'
+);
+assert.match(
+  slideouts,
+  /decidr-so-workflow-card/,
+  'Task slideout must render compact workflow pills.'
+);
+assert.match(
+  theme,
+  /decidr-workflow-pill-action/,
+  'Theme must include workflow pill styles.'
+);
+assert.match(
+  theme,
+  /decidr-workflow-pill-action \.decidr-workflow-pill-text[\s\S]*?overflow:\s*visible[\s\S]*?text-overflow:\s*clip/,
+  'Next-step workflow pill text must not be truncated.'
+);
+assert.match(
+  theme,
+  /decidr-workflow-pill-owner/,
+  'Theme must include colored owner workflow pill styles.'
+);
+assert.match(
+  theme,
+  /decidr-workflow-pill-status-draft/,
+  'Theme must include colored status workflow pill styles.'
+);
+assert.match(
+  theme,
+  /decidr-next-step-header \.decidr-workflow-pills,[\s\S]*?margin-left:\s*2px/,
+  'Workflow pills must start immediately after the type/action label, not right-align.'
+);
+assert.match(
+  theme,
+  /decidr-workflow-pills \+ \.decidr-copy-ref-btn[\s\S]*?margin-left:\s*auto/,
+  'Copy buttons must keep the trailing whitespace after workflow pills.'
+);
+assert.doesNotMatch(
+  dashboard,
+  /'TODO task':\s*\{\s*badge:\s*'Tasks'/,
+  'Task cards must not render the redundant TASKS action pill.'
 );
 
 console.log('Dashboard Next Steps renderer checks passed.');

@@ -1,5 +1,10 @@
 # Unreleased
 
+## 0.1.41
+
+- Add compact workflow pills to dashboard and slideout task/decision UI, showing stage, owner, implementor, and next action.
+- Use stronger role/status/action colors, remove redundant task badges, and keep next-action text fully visible.
+
 ## 0.1.40
 
 - Add copy reference buttons for initiatives, projects, decisions, and tasks across dashboard cards, action rows, and slideout child lists.

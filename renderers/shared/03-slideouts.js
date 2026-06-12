@@ -544,6 +544,10 @@
     html += '<div class="decidr-so-reviewers-label">RESPONSIBILITIES</div>';
     html += renderResponsibilityRow('owner', 'Owner', decision.owner, ownerId, 'No owner assigned');
     html += renderResponsibilityRow('implementer', 'Implementer', decision.implementer, implementerId, 'No implementer assigned');
+    html += UI.workflowPills(decision, 'decision', {
+      className: 'decidr-workflow-pills-slideout',
+      fields: ['stage', 'nextStep']
+    });
     html += '<div class="decidr-so-responsibility-actions">'
       + '<button class="decidr-so-btn decidr-so-btn-sm decidr-so-btn-primary" id="decidr-so-btn-save-responsibilities" disabled>Save responsibilities</button>'
       + '</div>';
@@ -1648,6 +1652,7 @@
       metaItems.push({ html: UI.formatDate(task.createdAt) });
     }
     html += UI.SlideOut._renderMeta(metaItems);
+    html += UI.workflowPills(task, 'task', { className: 'decidr-so-workflow-card decidr-workflow-pills-slideout' });
 
     // Title + Description
     if (state.editMode) {
