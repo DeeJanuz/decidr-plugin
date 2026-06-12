@@ -1652,7 +1652,10 @@
       metaItems.push({ html: UI.formatDate(task.createdAt) });
     }
     html += UI.SlideOut._renderMeta(metaItems);
-    html += UI.workflowPills(task, 'task', { className: 'decidr-so-workflow-card decidr-workflow-pills-slideout' });
+    html += UI.workflowPills(task, 'task', {
+      className: 'decidr-so-workflow-card decidr-workflow-pills-slideout',
+      fields: ['stage', 'nextStep']
+    });
 
     // Title + Description
     if (state.editMode) {

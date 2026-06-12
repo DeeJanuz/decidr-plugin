@@ -1,5 +1,10 @@
 # Unreleased
 
+## 0.1.42
+
+- Move owner and implementor out of workflow header pills and render full names inline on dashboard activity/meta rows.
+- Keep workflow header pills focused on stage and next action while color-coding owner and implementor names.
+
 ## 0.1.41
 
 - Add compact workflow pills to dashboard and slideout task/decision UI, showing stage, owner, implementor, and next action.

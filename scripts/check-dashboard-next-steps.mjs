@@ -74,18 +74,18 @@ assert.match(
 );
 assert.match(
   components,
-  /workflowPersonPill\('OW'/,
-  'Workflow pills must render OW owner initials.'
+  /UI\.workflowPeopleText\s*=\s*function/,
+  'Shared components must expose workflowPeopleText().'
 );
 assert.match(
   components,
-  /workflowPersonPill\('IM'/,
-  'Workflow pills must render IM implementor initials.'
+  /workflowPersonText\('Owner'/,
+  'Workflow people text must render full owner names.'
 );
 assert.match(
   components,
-  /workflowFieldEnabled\(fields,\s*'stage'\)[\s\S]*?workflowFieldEnabled\(fields,\s*'owner'\)[\s\S]*?workflowFieldEnabled\(fields,\s*'implementor'\)[\s\S]*?workflowFieldEnabled\(fields,\s*'nextStep'\)/,
-  'Workflow pills must render in Stage, OW, IM, Next step order.'
+  /workflowPersonText\('Implementor'/,
+  'Workflow people text must render full implementor names.'
 );
 [
   'Needs approval',
@@ -122,8 +122,13 @@ assert.match(
 );
 assert.match(
   components,
-  /UI\.workflowPills\(workflowEntity,\s*entityType/,
-  'Next Steps must render workflow pills in the header whitespace.'
+  /UI\.workflowPills\(workflowEntity,\s*entityType,\s*\{\s*className:\s*'decidr-workflow-pills-next-step',\s*fields:\s*\['stage',\s*'nextStep'\]/,
+  'Next Steps must keep only Stage and Next step in the header pills.'
+);
+assert.match(
+  components,
+  /UI\.workflowPeopleText\(workflowEntity,\s*entityType/,
+  'Next Steps must render Owner and Implementor as text on the activity line.'
 );
 assert.match(
   components,
@@ -152,8 +157,13 @@ assert.match(
 );
 assert.match(
   theme,
-  /decidr-workflow-pill-owner/,
-  'Theme must include colored owner workflow pill styles.'
+  /decidr-workflow-person-name-owner/,
+  'Theme must include colored owner name styles.'
+);
+assert.match(
+  theme,
+  /decidr-workflow-person-name-implementor/,
+  'Theme must include colored implementor name styles.'
 );
 assert.match(
   theme,

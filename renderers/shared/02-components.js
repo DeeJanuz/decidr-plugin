@@ -1149,7 +1149,7 @@
     var o = opts || {};
     var type = workflowType(entityType || (entity && entity.entityType));
     if (type !== 'decision' && type !== 'task') return '';
-    var fields = o.fields || null;
+    var fields = o.fields || ['stage', 'nextStep'];
     var className = 'decidr-workflow-pills';
     if (o.className) className += ' ' + UI.escapeHtml(o.className);
     var owner = workflowOwnerInfo(entity, type);
@@ -1161,6 +1161,31 @@
     if (workflowFieldEnabled(fields, 'nextStep')) html += workflowTextPill(UI.workflowNextStep(entity, type), 'action', null);
     html += '</span>';
     return html;
+  };
+
+  function workflowPersonText(label, person, kind) {
+    var safeName = UI.escapeHtml(person.name || 'Unassigned');
+    var cls = 'decidr-workflow-person-name decidr-workflow-person-name-' + UI.escapeHtml(kind || 'person');
+    if (!person.assigned) cls += ' decidr-workflow-person-name-unassigned';
+    return '<span class="decidr-workflow-person-entry">'
+      + '<span class="decidr-workflow-person-label">' + UI.escapeHtml(label) + ': </span>'
+      + '<span class="' + cls + '">' + safeName + '</span>'
+      + '</span>';
+  }
+
+  UI.workflowPeopleText = function(entity, entityType, opts) {
+    var o = opts || {};
+    var type = workflowType(entityType || (entity && entity.entityType));
+    if (type !== 'decision' && type !== 'task') return '';
+    var owner = workflowOwnerInfo(entity, type);
+    var implementor = workflowImplementorInfo(entity, type);
+    var prefix = o.prefix === false ? '' : '<span class="decidr-workflow-people-separator"> \u00b7 </span>';
+    return '<span class="decidr-workflow-people-inline">'
+      + prefix
+      + workflowPersonText('Owner', owner, 'owner')
+      + '<span class="decidr-workflow-people-separator"> \u00b7 </span>'
+      + workflowPersonText('Implementor', implementor, 'implementor')
+      + '</span>';
   };
 
   // ─── Activity Label ─────────────────────────────────────────────────
@@ -1708,11 +1733,14 @@
     if (decision.status) metaParts.push(statusLabel(decision.status));
     if (decision.createdAt) metaParts.push(UI.timeAgo(decision.createdAt));
     if (o.parentName) metaParts.push('on ' + o.parentName);
-    var metaHtml = metaParts.length > 0
-      ? '<div class="decidr-card-meta">' + UI.escapeHtml(metaParts.join(' \u00b7 ')) + '</div>'
+    var peopleTextHtml = o.showWorkflow
+      ? UI.workflowPeopleText(decision, 'decision', { prefix: metaParts.length > 0 })
+      : '';
+    var metaHtml = metaParts.length > 0 || peopleTextHtml
+      ? '<div class="decidr-card-meta">' + UI.escapeHtml(metaParts.join(' \u00b7 ')) + peopleTextHtml + '</div>'
       : '';
     var workflowPillsHtml = o.showWorkflow
-      ? UI.workflowPills(decision, 'decision', { className: 'decidr-workflow-pills-card' })
+      ? UI.workflowPills(decision, 'decision', { className: 'decidr-workflow-pills-card', fields: ['stage', 'nextStep'] })
       : '';
     var statusHtml = o.showWorkflow ? '' : UI.statusBadge(decision.status);
 
@@ -1787,11 +1815,14 @@
     else if (task.createdAt) metaParts.push(UI.timeAgo(task.createdAt));
     if (task.priority) metaParts.push(task.priority + ' priority');
     if (o.parentName) metaParts.push('on ' + o.parentName);
-    var metaHtml = metaParts.length > 0
-      ? '<div class="decidr-card-meta">' + UI.escapeHtml(metaParts.join(' \u00b7 ')) + '</div>'
+    var peopleTextHtml = o.showWorkflow
+      ? UI.workflowPeopleText(task, 'task', { prefix: metaParts.length > 0 })
+      : '';
+    var metaHtml = metaParts.length > 0 || peopleTextHtml
+      ? '<div class="decidr-card-meta">' + UI.escapeHtml(metaParts.join(' \u00b7 ')) + peopleTextHtml + '</div>'
       : '';
     var workflowPillsHtml = o.showWorkflow
-      ? UI.workflowPills(task, 'task', { className: 'decidr-workflow-pills-card' })
+      ? UI.workflowPills(task, 'task', { className: 'decidr-workflow-pills-card', fields: ['stage', 'nextStep'] })
       : '';
     var statusHtml = o.showWorkflow ? '' : UI.statusBadge(task.status);
 
@@ -2038,17 +2069,22 @@
       ? '<div class="decidr-next-step-meta">' + UI.escapeHtml(subtitleParts.join(' \u00b7 ')) + '</div>'
       : '';
 
-    // Last activity line
-    var activityHtml = '';
-    if (o.lastActivity) {
-      var actContent = UI.activityLabel(o.lastActivity);
-      if (actContent) {
-        activityHtml = '<div class="decidr-next-step-activity">' + actContent + '</div>';
-      }
-    }
     var workflowEntity = o.workflowEntity || item;
+    var activityHtml = '';
+    var actContent = '';
+    if (o.lastActivity) {
+      actContent = UI.activityLabel(o.lastActivity);
+    }
+    var peopleTextHtml = o.showWorkflow
+      ? UI.workflowPeopleText(workflowEntity, entityType, { prefix: !!actContent })
+      : '';
+
+    // Last activity line
+    if (actContent || peopleTextHtml) {
+      activityHtml = '<div class="decidr-next-step-activity">' + actContent + peopleTextHtml + '</div>';
+    }
     var workflowPillsHtml = o.showWorkflow
-      ? UI.workflowPills(workflowEntity, entityType, { className: 'decidr-workflow-pills-next-step' })
+      ? UI.workflowPills(workflowEntity, entityType, { className: 'decidr-workflow-pills-next-step', fields: ['stage', 'nextStep'] })
       : '';
     var statusHtml = (item.status && !o.showWorkflow) ? ' ' + UI.statusBadge(item.status) : '';
 
@@ -2193,16 +2229,21 @@
     var supersedesBadge = supersededDec
       ? ' <span class="decidr-decision-item-supersedes-badge">Supersedes</span>' : '';
 
-    // Last activity indicator
     var activityHtml = '';
+    var actContent = '';
     if (o.lastActivity) {
-      var actContent = UI.activityLabel(o.lastActivity);
-      if (actContent) {
-        activityHtml = '<div class="decidr-decision-item-activity">' + actContent + '</div>';
-      }
+      actContent = UI.activityLabel(o.lastActivity);
+    }
+    var peopleTextHtml = o.showWorkflow
+      ? UI.workflowPeopleText(decision, 'decision', { prefix: !!actContent })
+      : '';
+
+    // Last activity indicator
+    if (actContent || peopleTextHtml) {
+      activityHtml = '<div class="decidr-decision-item-activity">' + actContent + peopleTextHtml + '</div>';
     }
     var workflowPillsHtml = o.showWorkflow
-      ? UI.workflowPills(decision, 'decision', { className: 'decidr-workflow-pills-list' })
+      ? UI.workflowPills(decision, 'decision', { className: 'decidr-workflow-pills-list', fields: ['stage', 'nextStep'] })
       : '';
     var statusHtml = o.showWorkflow ? '' : UI.statusBadge(decision.status);
 
@@ -2255,8 +2296,11 @@
     var animStyle = typeof o.animDelay === 'number'
       ? ' style="animation-delay: ' + o.animDelay.toFixed(2) + 's;"' : '';
     var projectName = o.projectName || '';
+    var peopleTextHtml = o.showWorkflow
+      ? UI.workflowPeopleText(decision, 'decision', { prefix: !!projectName })
+      : '';
     var workflowPillsHtml = o.showWorkflow
-      ? UI.workflowPills(decision, 'decision', { className: 'decidr-workflow-pills-pending' })
+      ? UI.workflowPills(decision, 'decision', { className: 'decidr-workflow-pills-pending', fields: ['stage', 'nextStep'] })
       : '';
     var statusHtml = o.showWorkflow ? '' : UI.statusBadge(decision.status);
 
@@ -2264,7 +2308,7 @@
       + '<span class="decidr-pending-item-dot"></span>'
       + '<div class="decidr-pending-item-body">'
       + '<div class="decidr-pending-item-title">' + UI.escapeHtml(decision.title) + '</div>'
-      + (projectName ? '<div class="decidr-pending-item-project">' + UI.escapeHtml(projectName) + '</div>' : '')
+      + (projectName || peopleTextHtml ? '<div class="decidr-pending-item-project">' + UI.escapeHtml(projectName) + peopleTextHtml + '</div>' : '')
       + '</div>'
       + workflowPillsHtml
       + statusHtml
