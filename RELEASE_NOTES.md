@@ -1,5 +1,10 @@
 # Unreleased
 
+## 0.1.44
+
+- Add a DecidR Work Session Bootstrap startup rule so fresh agents and subagents discover the Work Sessions tool group after `init_session`.
+- Point Work Session bootstrap guidance at the stable `active work sessions` discovery query and prefer normal MCPViews/DecidR tools over direct MCP HTTP fallbacks.
+
 ## 0.1.43
 
 - Add Active Work Sessions guidance and tool routing for lazy cross-agent handoff.

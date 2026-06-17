@@ -1,6 +1,6 @@
 {
   "name": "decidr",
-  "version": "0.1.43",
+  "version": "0.1.44",
   "prompt_definitions": [
     {
       "name": "initiative_planning",
@@ -77,6 +77,15 @@
     "When the user asks for a timeline, roadmap, schedule, portfolio timing, or how initiatives shape up over time: push decidr_timeline directly. Do not call list tools first; the renderer fetches its own data.",
     "Active Work Sessions are lazy and always-on for cross-agent handoff. Use get_active_work_sessions during startup/context reads; create/update a session only when there is compact summary, note, or artifact reference content to save."
   ],
+  "startup_rules": [
+    {
+      "id": "decidr_work_session_bootstrap",
+      "version": "1",
+      "title": "DecidR Work Session Bootstrap",
+      "description": "Project startup rule for deterministic DecidR Active Work Session tool availability in fresh agents and subagents.",
+      "rule": "After calling MCPViews `init_session`, inspect `plugin_contexts.decidr`. If DecidR status is `available`, active work sessions are present, or capture defaults/instructions are present, use DecidR Active Work Sessions for cross-agent handoff. Before saving or reading work-session state, ensure the Work Session tools are callable: `decidr__get_active_work_sessions`, `decidr__ensure_work_session`, `decidr__update_work_session_summary`, and `decidr__record_work_session_event`. In Codex subagents or other deferred-tool environments, if those tools are not already callable, call tool discovery with the query `active work sessions` to expose the Work Sessions group, then use the normal MCPViews/DecidR tools. Prefer the normal tools over direct HTTP calls to DecidR MCP. Store only compact summaries, next steps, blockers, decisions made, and artifact refs/previews; never store raw transcript."
+    }
+  ],
   "setup_questions": [
     {
       "id": "decidr_governance_mode",
@@ -127,7 +136,7 @@
       ]
     }
   ],
-  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.43/decidr.zip",
+  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.44/decidr.zip",
   "registry_index": {
     "summary": "Decision governance \u2014 initiatives, projects, decisions, tasks, and bridges with approval workflows",
     "tags": [
