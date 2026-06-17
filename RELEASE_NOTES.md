@@ -1,5 +1,12 @@
 # Unreleased
 
+## 0.1.45
+
+- Add a setup-configured DecidR Work Logging Runtime startup rule sourced from the selected setup answer.
+- Add setup-configured DecidR Governance Lifecycle Runtime startup rules for team and solo-builder modes so agents know lifecycle gates from native startup context.
+- Replace the legacy work-style setup question with a decision-first work logging policy, defaulting to auto-log confident low-risk work while review-gating ambiguous or high-impact writes.
+- Update the governance lifecycle runbook so installed local logging policy controls whether agents create formal DecidR records directly, through review, or only after explicit approval.
+
 ## 0.1.44
 
 - Add a DecidR Work Session Bootstrap startup rule so fresh agents and subagents discover the Work Sessions tool group after `init_session`.
