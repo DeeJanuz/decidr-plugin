@@ -1,6 +1,6 @@
 {
   "name": "decidr",
-  "version": "0.1.42",
+  "version": "0.1.43",
   "prompt_definitions": [
     {
       "name": "initiative_planning",
@@ -74,7 +74,8 @@
     "When the user asks for a DecidR governance check-in, pending approvals, approval reminders, or assigned decision reviews, fetch governance_checkin and follow it.",
     "When creating, updating, approving, staging, implementing, or logging DecidR-governed decision work, call get_plugin_docs for the relevant DecidR tool or group, then fetch governance_lifecycle when instructed.",
     "When using DecidR search, list, or detail tools only for agent discovery, keep results private. Push decidr_list only when the user explicitly asks to see results or details.",
-    "When the user asks for a timeline, roadmap, schedule, portfolio timing, or how initiatives shape up over time: push decidr_timeline directly. Do not call list tools first; the renderer fetches its own data."
+    "When the user asks for a timeline, roadmap, schedule, portfolio timing, or how initiatives shape up over time: push decidr_timeline directly. Do not call list tools first; the renderer fetches its own data.",
+    "Active Work Sessions are lazy and always-on for cross-agent handoff. Use get_active_work_sessions during startup/context reads; create/update a session only when there is compact summary, note, or artifact reference content to save."
   ],
   "setup_questions": [
     {
@@ -97,9 +98,36 @@
           "persisted_rule": "Default DecidR governance mode is solo_builder. For governed DecidR decision lifecycle work, fetch governance_lifecycle with mode=solo_builder before implementation or status transitions. Use save_decision_document_version for PLAN, STAGED, and IMPLEMENTED snapshots; STAGED means built and validating, IMPLEMENTED means live or production-equivalent release."
         }
       ]
+    },
+    {
+      "id": "decidr_work_style",
+      "question": "How should agents capture and log active DecidR work by default?",
+      "description": "This controls the default work-session handoff style used between agents.",
+      "default_value": "simple_handoff",
+      "persist_as_rule_name": "decidr_work_style",
+      "options": [
+        {
+          "value": "simple_handoff",
+          "label": "Simple handoff",
+          "description": "Capture compact summaries and artifact references automatically, then ask before formal DecidR logging.",
+          "persisted_rule": "Default DecidR work style is simple_handoff. Use lazy Active Work Sessions by default: capture compact summaries and artifact refs after milestones/end-turn, do not store raw transcript, and review-gate formal DecidR logging."
+        },
+        {
+          "value": "solo_builder",
+          "label": "Solo builder",
+          "description": "Capture automatically and allow clear low-risk DecidR logging after review-gated artifact rows.",
+          "persisted_rule": "Default DecidR work style is solo_builder. Use lazy Active Work Sessions, background capture when available, compact summary+refs only, and MCPViews row-level review for multi-item DecidR logging before executing accepted rows."
+        },
+        {
+          "value": "team_approval",
+          "label": "Team approval",
+          "description": "Capture automatically but treat formal logging/promotion as approval-sensitive by default.",
+          "persisted_rule": "Default DecidR work style is team_approval. Use lazy Active Work Sessions for handoff, and use MCPViews row-level review plus DecidR governance checks before logging or promoting artifacts."
+        }
+      ]
     }
   ],
-  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.42/decidr.zip",
+  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.43/decidr.zip",
   "registry_index": {
     "summary": "Decision governance \u2014 initiatives, projects, decisions, tasks, and bridges with approval workflows",
     "tags": [
@@ -115,6 +143,22 @@
         "hint": "Prioritized action items: pending approvals, assigned tasks, stalled decisions. BACKLOG decisions/tasks are intentionally non-actionable and stay out of Next Steps. Push results to decidr_list.",
         "tools": [
           "my_action_items"
+        ]
+      },
+      {
+        "name": "Work Sessions",
+        "hint": "Lazy, temporary Active Work Sessions for cross-agent handoff. Read active sessions at init/context time, then save only compact summaries, next steps, blockers, decisions made, and artifact refs/previews after milestones or end-turn. Use MCPViews review before multi-item DecidR logging.",
+        "tools": [
+          "get_active_work_sessions",
+          "ensure_work_session",
+          "start_work_session",
+          "record_work_session_event",
+          "update_work_session_summary",
+          "promote_work_session_to_decision",
+          "mark_work_session_logged",
+          "archive_work_session",
+          "record_agent_feedback",
+          "propose_native_rule_patch"
         ]
       },
       {
@@ -234,6 +278,16 @@
   },
   "tool_rules": {
     "my_action_items": "Returns prioritized action items as entity refs. Draft, approved, in-progress, and staged decisions appear when the user is owner or implementer; proposed decisions appear when awaiting the user's review. ALWAYS push results to decidr_list \u2014 the renderer fetches full data from the API. Never use decidr_dashboard for action item requests. Drill into individual items with get_decision/get_task.",
+    "get_active_work_sessions": "Read active DecidR work sessions for cross-agent handoff. Safe during init_session because it is read-only and must not create empty sessions. Use include_guidance=true for startup context, capture defaults, preferences, and latest feedback.",
+    "ensure_work_session": "Lazily ensure a session only when there is compact summary, note, artifact ref, or entity context to save. Prefer client_session_key for per-user/org active-session identity. Store summary+refs only; never raw transcript.",
+    "start_work_session": "Compatibility alias for ensure_work_session. Do not call just because init_session ran; call only when useful session content exists.",
+    "record_work_session_event": "Record compact events such as ARTIFACT_CREATED, USER_NOTE, AGENT_NOTE, TOOL_ACTIVITY, or LOGGING_PROPOSED. For proposed DecidR writes, first build an MCPViews structured review table and record LOGGING_PROPOSED before executing accepted rows.",
+    "update_work_session_summary": "Save compact milestone/end-turn state. Include next_steps, blockers, decisions_made, and entity_refs where possible. Use background saver when the runtime supports it; otherwise save inline briefly.",
+    "promote_work_session_to_decision": "Promote a temporary work session into formal governance by creating a DRAFT decision and PLAN document, then archive the session. Supports entity_type PROJECT, INITIATIVE, or BRIDGE plus optional parent_decision_id.",
+    "mark_work_session_logged": "Call only after accepted MCPViews review rows have been executed in DecidR. Records completed logging and archives the work session.",
+    "archive_work_session": "Manually archive a work session. Sessions also archive after successful logging, promotion, or expiry; archived rows are retained for 60 days.",
+    "record_agent_feedback": "Record user feedback about agent behavior or work style so init_session can return guidance later.",
+    "propose_native_rule_patch": "Record a proposed native startup-rule file patch for review only. Never edit native agent rule files from this tool unless the user explicitly approves the patch separately.",
     "list_initiatives": "Use to discover all initiatives. Push to decidr_list. Use format=compact to save tokens. The standalone graph view is currently hidden from this plugin line.",
     "list_projects": "Use to discover projects. Push to decidr_list. Filter by status to find active work. Use initiative_id to filter by initiative.",
     "list_decisions": "Use to discover decisions. Filter status=BACKLOG to inspect future/non-actionable decisions. No auto-push: keep discovery-only calls private. Push to decidr_list only when the user explicitly asked to see/list/browse decisions. Call get_decision for full details including approval progress.",
@@ -301,6 +355,16 @@
     "manage_repo_admin": "Add or remove repo admin. No auto-push."
   },
   "no_auto_push": [
+    "get_active_work_sessions",
+    "ensure_work_session",
+    "start_work_session",
+    "record_work_session_event",
+    "update_work_session_summary",
+    "promote_work_session_to_decision",
+    "mark_work_session_logged",
+    "archive_work_session",
+    "record_agent_feedback",
+    "propose_native_rule_patch",
     "list_decisions",
     "get_decision",
     "search",
@@ -394,6 +458,16 @@
     "save_decision_document_version": "decidr_list",
     "archive_entity": "decidr_list",
     "restore_entity": "decidr_list",
+    "get_active_work_sessions": "decidr_list",
+    "ensure_work_session": "decidr_list",
+    "start_work_session": "decidr_list",
+    "record_work_session_event": "decidr_list",
+    "update_work_session_summary": "decidr_list",
+    "promote_work_session_to_decision": "decidr_list",
+    "mark_work_session_logged": "decidr_list",
+    "archive_work_session": "decidr_list",
+    "record_agent_feedback": "decidr_list",
+    "propose_native_rule_patch": "decidr_list",
     "connect_github": "decidr_github_auth",
     "disconnect_github": "decidr_list",
     "list_repos": "decidr_list",
@@ -467,6 +541,16 @@
         "save_decision_document_version",
         "archive_entity",
         "restore_entity",
+        "get_active_work_sessions",
+        "ensure_work_session",
+        "start_work_session",
+        "record_work_session_event",
+        "update_work_session_summary",
+        "promote_work_session_to_decision",
+        "mark_work_session_logged",
+        "archive_work_session",
+        "record_agent_feedback",
+        "propose_native_rule_patch",
         "connect_github",
         "disconnect_github",
         "list_repos",
@@ -541,6 +625,31 @@
       "tags": [
         "auth",
         "organization"
+      ],
+      "always_include": true
+    },
+    {
+      "id": "active_work_sessions",
+      "rule": "Use DecidR Active Work Sessions as lazy always-on handoff state. During init/context reads, call get_active_work_sessions with include_guidance=true when available and do not create an empty session. After milestones and end-turn, spawn a background saver when the runtime supports it; otherwise do a short inline update_work_session_summary. Save only compact summary, next steps, blockers, decisions made, and artifact refs/previews. Store no raw transcript. For multi-item DecidR logging, build an MCPViews structured review table with one row per proposed write, execute accepted rows only, then call mark_work_session_logged to archive. Promote to formal governance with promote_work_session_to_decision only when the user chooses a PROJECT, INITIATIVE, or BRIDGE target. Never edit native agent rule files from work-session guidance; use propose_native_rule_patch and wait for explicit user approval.",
+      "tools": [
+        "get_active_work_sessions",
+        "ensure_work_session",
+        "start_work_session",
+        "record_work_session_event",
+        "update_work_session_summary",
+        "promote_work_session_to_decision",
+        "mark_work_session_logged",
+        "archive_work_session",
+        "record_agent_feedback",
+        "propose_native_rule_patch"
+      ],
+      "groups": [
+        "Work Sessions"
+      ],
+      "tags": [
+        "work-sessions",
+        "handoff",
+        "review"
       ],
       "always_include": true
     },

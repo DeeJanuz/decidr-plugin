@@ -1,5 +1,11 @@
 # Unreleased
 
+## 0.1.43
+
+- Add Active Work Sessions guidance and tool routing for lazy cross-agent handoff.
+- Capture compact summaries and artifact references only, with MCPViews row-level review before multi-item DecidR logging or promotion.
+- Guard native rule-file edits behind explicit approval guidance.
+
 ## 0.1.42
 
 - Move owner and implementor out of workflow header pills and render full names inline on dashboard activity/meta rows.
