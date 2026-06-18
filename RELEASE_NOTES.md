@@ -1,5 +1,10 @@
 # Unreleased
 
+## 0.1.50
+
+- Fix Ludflow document sidecars so delayed repeated opens reuse the existing loading/data stack entry instead of pushing duplicate previews.
+- Attach left document sidecars to the right slideout, flip the sidecar chevron, remove duplicate header titles, and add truncation/tooltips for long document and version names.
+
 ## 0.1.49
 
 - Increase DecidR `init_context` timeout to 2500 ms so MCPViews startup can reliably return current-user recent decision breadcrumbs from the last 24 hours during cold hosted calls.

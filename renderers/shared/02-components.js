@@ -2548,6 +2548,16 @@
       }
     },
 
+    _findStackIndex: function(type, id) {
+      var stack = UI.SlideOut._stack || [];
+      var idText = String(id || '');
+      for (var i = stack.length - 1; i >= 0; i--) {
+        var entry = stack[i];
+        if (entry && entry.type === type && String(entry.id || '') === idText) return i;
+      }
+      return -1;
+    },
+
     open: function(type, id, opts) {
       type = (type || '').toLowerCase();
       var o = opts || {};
@@ -2567,6 +2577,17 @@
         }
         if (UI.SlideOut._stack.length === 0 && o.onMutate) {
           UI.SlideOut._onMutateCallback = o.onMutate;
+        }
+
+        var existingIndex = type === 'ludflow_document' ? UI.SlideOut._findStackIndex(type, id) : -1;
+        if (existingIndex !== -1) {
+          var existing = UI.SlideOut._stack[existingIndex];
+          if (!existing.data || !existing.data._error) {
+            UI.SlideOut._stack = UI.SlideOut._stack.slice(0, existingIndex + 1);
+            UI.SlideOut._render(contextKey);
+            return;
+          }
+          UI.SlideOut._stack.splice(existingIndex, 1);
         }
 
         // If preloaded data is provided, push and render immediately
@@ -2642,9 +2663,10 @@
         // Header
         var hasStack = UI.SlideOut._stack.length > 1;
         var backLabel = hasStack ? 'Back' : 'Close';
+        var backSvgPath = isLeftPanel ? 'M6 3l5 5-5 5' : 'M10 3l-5 5 5 5';
         var backSvg = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" '
           + 'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" '
-          + 'stroke-linejoin="round"><path d="M10 3l-5 5 5 5"/></svg>';
+          + 'stroke-linejoin="round"><path d="' + backSvgPath + '"/></svg>';
 
         var typeLabels = {
           project: 'Project', decision: 'Decision',
@@ -2660,11 +2682,14 @@
           + backSvg + '</button>'
           + '<span class="decidr-so-type-badge decidr-so-type-' + UI.escapeHtml(top.type) + '">'
           + UI.escapeHtml(typeLabels[top.type] || top.type)
-          + '</span>'
-          + '<span class="decidr-so-title">'
-          + UI.escapeHtml(UI.SlideOut._getTitle(top))
-          + '</span>'
-          + '</div>';
+          + '</span>';
+
+        if (!isLeftPanel) {
+          headerHtml += '<span class="decidr-so-title" title="' + UI.escapeHtml(UI.SlideOut._getTitle(top)) + '">'
+            + UI.escapeHtml(UI.SlideOut._getTitle(top))
+            + '</span>';
+        }
+        headerHtml += '</div>';
 
         els.header.innerHTML = headerHtml;
 
@@ -4551,19 +4576,20 @@
           var docType = (doc.type || 'URL').toUpperCase();
           var isUrl = docType === 'URL';
           var isLudflow = docType === 'LUDFLOW';
+          var docTitle = doc.title || (isUrl && doc.url) || (isLudflow ? 'LudFlow Document' : 'Untitled');
           html += '<div class="decidr-so-doc-item">';
           if (isUrl && doc.url) {
-            html += '<a href="' + UI.escapeHtml(doc.url) + '" target="_blank" rel="noopener" class="decidr-so-doc-link">'
-              + UI.escapeHtml(doc.title || doc.url)
-              + ' <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>'
+            html += '<a href="' + UI.escapeHtml(doc.url) + '" target="_blank" rel="noopener" class="decidr-so-doc-link" title="' + UI.escapeHtml(docTitle) + '">'
+              + '<span class="decidr-so-doc-link-title">' + UI.escapeHtml(docTitle) + '</span>'
+              + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>'
               + '</a>';
           } else if (isLudflow) {
-            html += '<button type="button" class="decidr-so-doc-link decidr-so-doc-ludflow" data-entity-type="ludflow_document" data-entity-id="' + UI.escapeHtml(doc.ludflowDocumentId || doc.id) + '">'
-              + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> '
-              + UI.escapeHtml(doc.title || 'LudFlow Document')
+            html += '<button type="button" class="decidr-so-doc-link decidr-so-doc-ludflow" data-entity-type="ludflow_document" data-entity-id="' + UI.escapeHtml(doc.ludflowDocumentId || doc.id) + '" title="' + UI.escapeHtml(docTitle) + '">'
+              + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'
+              + '<span class="decidr-so-doc-link-title">' + UI.escapeHtml(docTitle) + '</span>'
               + '</button>';
           } else {
-            html += '<span class="decidr-so-doc-link">' + UI.escapeHtml(doc.title || 'Untitled') + '</span>';
+            html += '<span class="decidr-so-doc-link" title="' + UI.escapeHtml(docTitle) + '"><span class="decidr-so-doc-link-title">' + UI.escapeHtml(docTitle) + '</span></span>';
           }
           html += '<span class="decidr-so-doc-type-badge">' + UI.escapeHtml(docType === 'LUDFLOW' ? 'LudFlow' : docType) + '</span>';
           html += '<button class="decidr-so-btn-unlink-doc" data-doc-unlink-id="' + UI.escapeHtml(doc.id) + '" title="Unlink document">'

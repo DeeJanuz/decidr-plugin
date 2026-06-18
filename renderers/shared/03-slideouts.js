@@ -271,7 +271,8 @@
       var selected = ludflowSelectedVersion(doc || {}, items);
       var html = '<div class="decidr-so-detail decidr-so-doc-preview">';
 
-      html += '<h3 class="decidr-so-detail-title">' + UI.escapeHtml((doc && doc.title) || 'LudFlow Document') + '</h3>';
+      var docTitle = (doc && doc.title) || 'LudFlow Document';
+      html += '<h3 class="decidr-so-detail-title" title="' + UI.escapeHtml(docTitle) + '">' + UI.escapeHtml(docTitle) + '</h3>';
       var metaItems = [];
       var selectedVersionMeta = selected.current
         ? 'Current document'
@@ -290,9 +291,9 @@
       for (var i = 0; i < items.length; i++) {
         var item = items[i];
         var active = item.id === selected.id;
-        html += '<button type="button" class="decidr-so-version-item' + (active ? ' active' : '') + '" data-ludflow-version-id="' + UI.escapeHtml(item.id) + '">';
+        html += '<button type="button" class="decidr-so-version-item' + (active ? ' active' : '') + '" data-ludflow-version-id="' + UI.escapeHtml(item.id) + '" title="' + UI.escapeHtml(item.label) + '">';
         html += '<span class="decidr-so-version-title-wrap">';
-        html += '<span class="decidr-so-version-title">' + UI.escapeHtml(item.label) + '</span>';
+        html += '<span class="decidr-so-version-title" title="' + UI.escapeHtml(item.label) + '">' + UI.escapeHtml(item.label) + '</span>';
         html += ludflowLifecycleBadge(item.decisionLifecycleStage);
         html += '</span>';
         if (item.detail) html += '<span class="decidr-so-version-detail">' + UI.escapeHtml(item.detail) + '</span>';
