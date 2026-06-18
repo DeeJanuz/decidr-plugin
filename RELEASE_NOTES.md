@@ -1,5 +1,9 @@
 # Unreleased
 
+## 0.1.49
+
+- Increase DecidR `init_context` timeout to 2500 ms so MCPViews startup can reliably return current-user recent decision breadcrumbs from the last 24 hours during cold hosted calls.
+
 ## 0.1.48
 
 - Declare DecidR's plugin-controlled `init_context` provider for recent decision breadcrumbs during MCPViews `init_session`.
