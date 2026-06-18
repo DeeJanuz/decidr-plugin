@@ -1,5 +1,10 @@
 # Unreleased
 
+## 0.1.46
+
+- Rewrite DecidR startup rules into concise trigger/action/review/example blocks so fresh agents have explicit run conditions and concrete behavior examples.
+- Bump DecidR startup rule versions to force local startup-rule update detection after the instruction rewrite.
+
 ## 0.1.45
 
 - Add a setup-configured DecidR Work Logging Runtime startup rule sourced from the selected setup answer.
