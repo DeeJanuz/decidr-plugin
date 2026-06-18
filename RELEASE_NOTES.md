@@ -1,5 +1,10 @@
 # Unreleased
 
+## 0.1.47
+
+- Make DecidR startup-rule language more agent-agnostic by referring to provided tools instead of Codex-specific tool names.
+- Bias governance lifecycle and work logging triggers toward durable user intent: accepted plans, selected options, agreed findings, meaningful discoveries, persistent objects, tasks, and lifecycle proof.
+
 ## 0.1.46
 
 - Rewrite DecidR startup rules into concise trigger/action/review/example blocks so fresh agents have explicit run conditions and concrete behavior examples.
