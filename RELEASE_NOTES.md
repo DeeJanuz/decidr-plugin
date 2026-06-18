@@ -1,5 +1,11 @@
 # Unreleased
 
+## 0.1.48
+
+- Declare DecidR's plugin-controlled `init_context` provider for recent decision breadcrumbs during MCPViews `init_session`.
+- Remove Active Work Session startup rules, tool groups, renderer routing, and no-auto-push entries from the active manifest.
+- Reframe work logging setup guidance around durable decisions, tasks, documents, and lifecycle proof without temporary session handoff state.
+
 ## 0.1.47
 
 - Make DecidR startup-rule language more agent-agnostic by referring to provided tools instead of Codex-specific tool names.
