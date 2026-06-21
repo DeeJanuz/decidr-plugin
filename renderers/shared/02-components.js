@@ -2445,16 +2445,16 @@
     },
 
     _baseContextKey: function(contextKey) {
-      return String(contextKey || '').replace(/:ludflow-document-preview$/, '');
+      return String(contextKey || '').replace(/:document-preview$/, '').replace(/:ludflow-document-preview$/, '');
     },
 
     _panelContextKey: function(type, baseContextKey) {
       var key = UI.SlideOut._baseContextKey(baseContextKey);
-      return type === 'ludflow_document' ? key + ':ludflow-document-preview' : key;
+      return (type === 'ludflow_document' || type === 'external_document') ? key + ':document-preview' : key;
     },
 
     _isLudflowDocumentContextKey: function(contextKey) {
-      return /:ludflow-document-preview$/.test(String(contextKey || ''));
+      return /:(ludflow-)?document-preview$/.test(String(contextKey || ''));
     },
 
     _resolveContextKey: function(sourceOrKey) {
@@ -2523,7 +2523,7 @@
 
         var targetElement = e.target && e.target.nodeType === 1 ? e.target : (e.target && e.target.parentElement ? e.target.parentElement : null);
         var docLink = targetElement && typeof targetElement.closest === 'function'
-          ? targetElement.closest('[data-entity-type="ludflow_document"][data-entity-id]')
+          ? targetElement.closest('[data-entity-type="ludflow_document"][data-entity-id], [data-external-doc-id]')
           : null;
         if (docLink) return;
 
@@ -2579,7 +2579,7 @@
           UI.SlideOut._onMutateCallback = o.onMutate;
         }
 
-        var existingIndex = type === 'ludflow_document' ? UI.SlideOut._findStackIndex(type, id) : -1;
+        var existingIndex = (type === 'ludflow_document' || type === 'external_document') ? UI.SlideOut._findStackIndex(type, id) : -1;
         if (existingIndex !== -1) {
           var existing = UI.SlideOut._stack[existingIndex];
           if (!existing.data || !existing.data._error) {
@@ -2654,7 +2654,7 @@
         var top = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
         var els = UI.SlideOut._ensureDOM(resolvedKey);
         if (!els) return;
-        var isLeftPanel = top.type === 'ludflow_document';
+        var isLeftPanel = top.type === 'ludflow_document' || top.type === 'external_document';
         UI.SlideOut._lastRenderedContextKey = resolvedKey;
         els.panel.classList.toggle('decidr-so-panel-left', isLeftPanel);
         els.overlay.classList.toggle('decidr-so-overlay-left', isLeftPanel);
@@ -2673,6 +2673,7 @@
           audit_event: 'Audit Event',
           task: 'Task', bridge: 'Bridge', initiative: 'Initiative',
           ludflow_document: 'LudFlow Document',
+          external_document: 'External Document',
           'project-timeline': 'Timeline', 'decision-timeline': 'Timeline',
           'organization-settings': 'Organization'
         };
@@ -2739,6 +2740,7 @@
       bridge: function(data) { return UI.slideOutBridge(data); },
       initiative: function(data) { return UI.slideOutInitiative(data); },
       ludflow_document: function(data) { return UI.slideOutLudflowDocument(data); },
+      external_document: function(data) { return UI.slideOutExternalDocument(data); },
       'organization-settings': function(data) { return UI.slideOutOrganizationSettings(data); },
       'project-timeline': function(data) { return UI.slideOutTimeline(data, 'project'); },
       'decision-timeline': function(data) { return UI.slideOutTimeline(data, 'decision'); },
@@ -3482,6 +3484,11 @@
         UI.SlideOut._wireLudflowDocumentEvents(panel, top.id, top.data);
       }
 
+      // --- External document preview events ---
+      if (top.type === 'external_document') {
+        UI.SlideOut._wireExternalDocumentEvents(panel, top.id, top.data);
+      }
+
       // --- Organization settings events ---
       if (top.type === 'organization-settings') {
         UI.SlideOut._wireOrganizationSettingsEvents(panel, top.id, top.data);
@@ -3632,6 +3639,64 @@
           if (!top || top.type !== 'ludflow_document' || top.id !== id || !top.data) return;
           top.data._versionFetchState = 'error';
           top.data._versionFetchError = err && err.message ? err.message : 'Failed to load version history';
+          UI.SlideOut._render(contextKey);
+        });
+      });
+    },
+
+    _wireExternalDocumentEvents: function(panel, id, data) {
+      var openBtn = panel.querySelector('[data-external-doc-open-url]');
+      if (openBtn) {
+        openBtn.onclick = function(e) {
+          e.stopPropagation();
+        };
+      }
+      UI.SlideOut._loadExternalDocumentEvidence(panel, id, data);
+    },
+
+    _shouldLoadExternalDocumentEvidence: function(data) {
+      if (!data || data._evidenceFetchState === 'loading' || data._evidenceFetchState === 'loaded') return false;
+      return !!data.decisionId;
+    },
+
+    _loadExternalDocumentEvidence: function(panel, id, data) {
+      if (!UI.SlideOut._shouldLoadExternalDocumentEvidence(data)) return;
+      var API = window.__decidrAPI;
+      if (!API || typeof API.listDecisionDocumentEvidence !== 'function') return;
+
+      var contextKey = UI.SlideOut._resolveContextKey(panel);
+      data._evidenceFetchState = 'loading';
+      setTimeout(function() {
+        UI.SlideOut._withContextKey(contextKey, function() {
+          var top = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
+          if (!top || top.type !== 'external_document' || top.id !== id || !top.data) return;
+          if (top.data._evidenceFetchState === 'loading') UI.SlideOut._render(contextKey);
+        });
+      }, 0);
+
+      API.listDecisionDocumentEvidence(data.decisionId).then(function(result) {
+        UI.SlideOut._withContextKey(contextKey, function() {
+          var top = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
+          if (!top || top.type !== 'external_document' || top.id !== id || !top.data) return;
+          var rows = UI.SlideOut._normalizeListPayload(result);
+          var evidence = [];
+          for (var i = 0; i < rows.length; i++) {
+            if (rows[i] && String(rows[i].documentId || rows[i].document_id || '') === String(id || '')) {
+              evidence.push(rows[i]);
+            }
+          }
+          top.data.evidence = evidence;
+          top.data._evidenceFetchState = 'loaded';
+          top.data._evidenceFetchError = '';
+          UI.SlideOut._render(contextKey);
+        });
+      }).catch(function(err) {
+        console.warn('[decidr] Failed to load external document evidence:', err);
+        UI.SlideOut._withContextKey(contextKey, function() {
+          var top = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
+          if (!top || top.type !== 'external_document' || top.id !== id || !top.data) return;
+          top.data._evidenceFetchState = 'error';
+          top.data._evidenceFetchError = err && err.message ? err.message : 'Failed to load evidence';
           UI.SlideOut._render(contextKey);
         });
       });
@@ -4576,7 +4641,10 @@
           var docType = (doc.type || 'URL').toUpperCase();
           var isUrl = docType === 'URL';
           var isLudflow = docType === 'LUDFLOW';
-          var docTitle = doc.title || (isUrl && doc.url) || (isLudflow ? 'LudFlow Document' : 'Untitled');
+          var isExternal = docType === 'EXTERNAL';
+          var provider = doc.provider || doc.externalProvider || '';
+          var providerLabel = provider ? String(provider).charAt(0).toUpperCase() + String(provider).slice(1) : 'External';
+          var docTitle = doc.title || (isUrl && doc.url) || (isLudflow ? 'LudFlow Document' : (isExternal ? providerLabel + ' Document' : 'Untitled'));
           html += '<div class="decidr-so-doc-item">';
           if (isUrl && doc.url) {
             html += '<a href="' + UI.escapeHtml(doc.url) + '" target="_blank" rel="noopener" class="decidr-so-doc-link" title="' + UI.escapeHtml(docTitle) + '">'
@@ -4588,10 +4656,22 @@
               + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'
               + '<span class="decidr-so-doc-link-title">' + UI.escapeHtml(docTitle) + '</span>'
               + '</button>';
+          } else if (isExternal) {
+            html += '<button type="button" class="decidr-so-doc-link decidr-so-doc-external"'
+              + ' data-external-doc-id="' + UI.escapeHtml(doc.id || '') + '"'
+              + ' data-external-doc-title="' + UI.escapeHtml(docTitle) + '"'
+              + ' data-external-doc-url="' + UI.escapeHtml(doc.url || '') + '"'
+              + ' data-external-doc-provider="' + UI.escapeHtml(provider || '') + '"'
+              + ' data-external-doc-external-id="' + UI.escapeHtml(doc.externalId || '') + '"'
+              + ' data-external-doc-decision-id="' + UI.escapeHtml(doc.decisionId || (entityType === 'DECISION' ? entityId : '')) + '"'
+              + ' title="' + UI.escapeHtml(docTitle) + '">'
+              + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.07 0l2.12-2.12a5 5 0 0 0-7.07-7.07L10.9 5"/><path d="M14 11a5 5 0 0 0-7.07 0L4.81 13.12a5 5 0 0 0 7.07 7.07L13.1 19"/></svg>'
+              + '<span class="decidr-so-doc-link-title">' + UI.escapeHtml(docTitle) + '</span>'
+              + '</button>';
           } else {
             html += '<span class="decidr-so-doc-link" title="' + UI.escapeHtml(docTitle) + '"><span class="decidr-so-doc-link-title">' + UI.escapeHtml(docTitle) + '</span></span>';
           }
-          html += '<span class="decidr-so-doc-type-badge">' + UI.escapeHtml(docType === 'LUDFLOW' ? 'LudFlow' : docType) + '</span>';
+          html += '<span class="decidr-so-doc-type-badge">' + UI.escapeHtml(isLudflow ? 'LudFlow' : (isExternal ? providerLabel : docType)) + '</span>';
           html += '<button class="decidr-so-btn-unlink-doc" data-doc-unlink-id="' + UI.escapeHtml(doc.id) + '" title="Unlink document">'
             + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
             + '</button>';
@@ -4612,6 +4692,7 @@
       html += '<div class="decidr-so-tab-bar">';
       html += '<button class="decidr-so-tab' + (state.docFormTab === 'search' ? ' active' : '') + '" data-decidr-doc-tab="search">Search LudFlow</button>';
       html += '<button class="decidr-so-tab' + (state.docFormTab === 'manual' ? ' active' : '') + '" data-decidr-doc-tab="manual">Manual URL</button>';
+      html += '<button class="decidr-so-tab' + (state.docFormTab === 'external' ? ' active' : '') + '" data-decidr-doc-tab="external">External</button>';
       html += '<button class="decidr-so-tab' + (state.docFormTab === 'upload' ? ' active' : '') + '" data-decidr-doc-tab="upload">Upload</button>';
       html += '</div>';
       // Tab: Search LudFlow
@@ -4630,6 +4711,17 @@
       html += '<div class="decidr-so-form-actions">'
         + '<button class="decidr-so-btn decidr-so-btn-sm" id="decidr-so-btn-cancel-doc-manual">Cancel</button>'
         + '<button class="decidr-so-btn decidr-so-btn-primary decidr-so-btn-sm" id="decidr-so-btn-save-doc">Link</button>'
+        + '</div>';
+      html += '</div>';
+      // Tab: External provider document
+      html += '<div class="decidr-so-tab-panel' + (state.docFormTab === 'external' ? ' active' : '') + '" id="decidr-so-doc-tab-external">';
+      html += '<input type="text" id="decidr-so-input-doc-ext-title" placeholder="Document title...">';
+      html += '<input type="text" id="decidr-so-input-doc-ext-provider" placeholder="Provider..." value="notion">';
+      html += '<input type="text" id="decidr-so-input-doc-ext-url" placeholder="Provider document URL...">';
+      html += '<input type="text" id="decidr-so-input-doc-ext-id" placeholder="Provider document ID...">';
+      html += '<div class="decidr-so-form-actions">'
+        + '<button class="decidr-so-btn decidr-so-btn-sm" id="decidr-so-btn-cancel-doc-external">Cancel</button>'
+        + '<button class="decidr-so-btn decidr-so-btn-primary decidr-so-btn-sm" id="decidr-so-btn-save-external-doc">Link</button>'
         + '</div>';
       html += '</div>';
       // Tab: Upload
@@ -4672,7 +4764,7 @@
             for (var at = 0; at < allTabs.length; at++) {
               allTabs[at].classList.toggle('active', allTabs[at].getAttribute('data-decidr-doc-tab') === tabName);
             }
-            var panelIds = { search: 'decidr-so-doc-tab-search', manual: 'decidr-so-doc-tab-manual', upload: 'decidr-so-doc-tab-upload' };
+            var panelIds = { search: 'decidr-so-doc-tab-search', manual: 'decidr-so-doc-tab-manual', external: 'decidr-so-doc-tab-external', upload: 'decidr-so-doc-tab-upload' };
             for (var pKey in panelIds) {
               if (panelIds.hasOwnProperty(pKey)) {
                 var pEl = panel.querySelector('#' + panelIds[pKey]);
@@ -4750,7 +4842,7 @@
       }
 
       // Cancel buttons (all tabs)
-      var cancelDocBtns = panel.querySelectorAll('#decidr-so-btn-cancel-doc, #decidr-so-btn-cancel-doc-manual, #decidr-so-btn-cancel-doc-upload');
+      var cancelDocBtns = panel.querySelectorAll('#decidr-so-btn-cancel-doc, #decidr-so-btn-cancel-doc-manual, #decidr-so-btn-cancel-doc-external, #decidr-so-btn-cancel-doc-upload');
       for (var cb = 0; cb < cancelDocBtns.length; cb++) {
         cancelDocBtns[cb].onclick = function() {
           state.addDocFormOpen = false;
@@ -4780,6 +4872,64 @@
             UI.SlideOut._refetchAndRender();
           }).catch(function(err) { UI.SlideOut._busy = false; console.error('[decidr] Link doc failed:', err); });
         };
+      }
+
+      // Save provider-neutral external document tab
+      var saveExternalDocBtn = panel.querySelector('#decidr-so-btn-save-external-doc');
+      if (saveExternalDocBtn) {
+        saveExternalDocBtn.onclick = function() {
+          var titleInput = panel.querySelector('#decidr-so-input-doc-ext-title');
+          var providerInput = panel.querySelector('#decidr-so-input-doc-ext-provider');
+          var urlInput = panel.querySelector('#decidr-so-input-doc-ext-url');
+          var externalIdInput = panel.querySelector('#decidr-so-input-doc-ext-id');
+          var title = titleInput ? titleInput.value.trim() : '';
+          var provider = providerInput ? providerInput.value.trim() : '';
+          var url = urlInput ? urlInput.value.trim() : '';
+          var externalId = externalIdInput ? externalIdInput.value.trim() : '';
+          var providerKey = provider.toLowerCase();
+          if (!title || !provider || !url || !API) return;
+          if (UI.SlideOut._guardBusy()) return;
+          API.linkEntityDocument({
+            title: title,
+            url: url,
+            type: 'EXTERNAL',
+            provider: providerKey,
+            externalId: externalId || undefined,
+            resolverPlugin: providerKey,
+            resolverTool: providerKey === 'notion' ? 'notion_read_document' : undefined,
+            resolverInput: externalId ? { page_id: externalId } : undefined,
+            entityType: entityType,
+            entityId: entityId
+          }).then(function() {
+            state.addDocFormOpen = false;
+            UI.SlideOut._refetchAndRender();
+          }).catch(function(err) { UI.SlideOut._busy = false; console.error('[decidr] Link external doc failed:', err); });
+        };
+      }
+
+      // External document sidecar buttons
+      var externalDocBtns = panel.querySelectorAll('[data-external-doc-id]');
+      for (var xb = 0; xb < externalDocBtns.length; xb++) {
+        (function(btn) {
+          btn.onclick = function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var docId = btn.getAttribute('data-external-doc-id');
+            if (!docId) return;
+            UI.SlideOut.open('external_document', docId, {
+              source: panel,
+              data: {
+                id: docId,
+                title: btn.getAttribute('data-external-doc-title') || 'External Document',
+                url: btn.getAttribute('data-external-doc-url') || '',
+                provider: btn.getAttribute('data-external-doc-provider') || '',
+                externalId: btn.getAttribute('data-external-doc-external-id') || '',
+                decisionId: btn.getAttribute('data-external-doc-decision-id') || '',
+                _enrichmentDone: true
+              }
+            });
+          };
+        })(externalDocBtns[xb]);
       }
 
       // Unlink buttons

@@ -315,6 +315,98 @@
       return html;
     };
 
+    function externalProviderLabel(value) {
+      var text = String(value || '').trim();
+      if (!text) return 'External';
+      return text.charAt(0).toUpperCase() + text.slice(1);
+    }
+
+    function externalEvidenceStage(item) {
+      return ludflowLifecycleStage((item && (item.stage || item.lifecycleStage || item.lifecycle_stage)) || '');
+    }
+
+    function externalEvidenceDate(item) {
+      return ludflowVersionDate(item && (item.capturedAt || item.captured_at || item.createdAt || item.created_at));
+    }
+
+    function externalEvidenceMarkdown(item) {
+      if (!item) return '';
+      return ludflowContent(item.snapshotMarkdown || item.snapshot_markdown || item.content || '');
+    }
+
+    function externalEvidenceHash(item) {
+      var hash = item && (item.contentHash || item.content_hash);
+      if (!hash) return '';
+      return String(hash).slice(0, 12);
+    }
+
+    function externalEvidencePreviewHtml(item) {
+      var content = externalEvidenceMarkdown(item);
+      if (!content || !content.trim()) {
+        return '<div class="decidr-so-empty-hint">No snapshot content available</div>';
+      }
+      return UI.richDescription(content, { className: 'decidr-so-doc-preview-rich' });
+    }
+
+    UI.slideOutExternalDocument = function(doc) {
+      doc = doc || {};
+      var html = '<div class="decidr-so-detail decidr-so-doc-preview">';
+      var title = doc.title || 'External Document';
+      var provider = externalProviderLabel(doc.provider);
+      var evidence = Array.isArray(doc.evidence) ? doc.evidence : [];
+      var selected = evidence.length ? evidence[0] : null;
+
+      html += '<h3 class="decidr-so-detail-title" title="' + UI.escapeHtml(title) + '">' + UI.escapeHtml(title) + '</h3>';
+
+      var metaItems = [];
+      metaItems.push({ html: '<span class="decidr-so-doc-type-badge">' + UI.escapeHtml(provider) + '</span>' });
+      if (doc.externalId) metaItems.push({ html: 'ID ' + UI.escapeHtml(doc.externalId) });
+      if (doc.url) {
+        metaItems.push({
+          html: '<a href="' + UI.escapeHtml(doc.url) + '" target="_blank" rel="noopener noreferrer" data-external-doc-open-url="1">Open source</a>'
+        });
+      }
+      html += UI.SlideOut._renderMeta(metaItems);
+
+      html += '<div class="decidr-so-section">';
+      html += UI.SlideOut._renderSectionHeader('Evidence', evidence.length);
+      if (doc._evidenceFetchState === 'loading') {
+        html += '<div class="decidr-so-empty-hint">Loading evidence snapshots...</div>';
+      } else if (doc._evidenceFetchState === 'error') {
+        html += '<div class="decidr-so-empty-hint">Evidence could not be loaded.</div>';
+      } else if (!evidence.length) {
+        html += '<div class="decidr-so-empty-hint">No captured lifecycle evidence</div>';
+      } else {
+        html += '<div class="decidr-so-version-list">';
+        for (var i = 0; i < evidence.length; i++) {
+          var item = evidence[i] || {};
+          var stage = externalEvidenceStage(item);
+          var detailParts = [];
+          var dateLabel = externalEvidenceDate(item);
+          var hashLabel = externalEvidenceHash(item);
+          if (dateLabel) detailParts.push(dateLabel);
+          if (hashLabel) detailParts.push('SHA ' + hashLabel);
+          html += '<div class="decidr-so-version-item' + (i === 0 ? ' active' : '') + '">';
+          html += '<span class="decidr-so-version-title-wrap">';
+          html += '<span class="decidr-so-version-title">' + UI.escapeHtml(stage || 'Evidence') + '</span>';
+          html += ludflowLifecycleBadge(stage);
+          html += '</span>';
+          if (detailParts.length) html += '<span class="decidr-so-version-detail">' + UI.escapeHtml(detailParts.join(' · ')) + '</span>';
+          html += '</div>';
+        }
+        html += '</div>';
+      }
+      html += '</div>';
+
+      html += '<div class="decidr-so-section">';
+      html += UI.SlideOut._renderSectionHeader('Preview');
+      html += externalEvidencePreviewHtml(selected);
+      html += '</div>';
+
+      html += '</div>';
+      return html;
+    };
+
     function renderGitHubComingSoon(githubStatus) {
       var html = '<div class="decidr-so-section">';
       html += UI.SlideOut._renderSectionHeader('GitHub Sync');

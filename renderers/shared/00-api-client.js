@@ -611,6 +611,11 @@
       return api.get('/ludflow-documents/' + id);
     },
 
+    listDecisionDocumentEvidence: function(decisionId) {
+      _validatePathIds('/decisions/' + decisionId + '/document-evidence');
+      return api.get('/decisions/' + decisionId + '/document-evidence');
+    },
+
     listMembers: function() {
       return api.get('/auth/members');
     },
@@ -940,6 +945,9 @@
         audit_event: api.getAuditEvent,
         'organization-settings': api.getOrganizationMemberSettings,
         ludflow_document: api.getLudflowDocument,
+        external_document: function(id) {
+          return Promise.reject(new Error('External document previews open from a linked document row'));
+        },
         issue: function(id) { return api.getIssue(id); },
         pull_request: function(id) { return api.getPR(id); },
         repo: function(id) { return api.getRepo(id); }

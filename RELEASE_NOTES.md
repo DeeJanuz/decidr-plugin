@@ -1,5 +1,11 @@
 # Unreleased
 
+## 0.1.51
+
+- Add provider-neutral external document links in decision/project/task slideouts, with a Notion-default external link form and provider badges.
+- Add external document sidecars that load captured lifecycle evidence snapshots and preview the latest evidence with source URL fallback.
+- Register new provider-neutral document evidence tools in the manifest and route them to the DecidR list renderer.
+
 ## 0.1.50
 
 - Fix Ludflow document sidecars so delayed repeated opens reuse the existing loading/data stack entry instead of pushing duplicate previews.
