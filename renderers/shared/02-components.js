@@ -3918,6 +3918,43 @@
       setTimeout(function() { window.URL.revokeObjectURL(url); }, 1000);
     },
 
+    _downloadAndRevealBlob: function(blob, filename, mimeType) {
+      var host = window.__mcpviewsHost || {};
+      var utils = window.__companionUtils || {};
+      var downloader = typeof host.downloadFile === 'function'
+        ? host.downloadFile
+        : utils.downloadFile;
+      var hasTauriDownload = !!(window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function');
+      var attemptedNative = typeof downloader === 'function' || hasTauriDownload;
+      if (!blob) {
+        return Promise.reject(new Error('No file bytes were returned.'));
+      }
+      if (typeof downloader !== 'function'
+        && !hasTauriDownload) {
+        UI.SlideOut._downloadBlob(blob, filename, true);
+        return Promise.resolve(false);
+      }
+      return UI.SlideOut._blobToBase64(blob).then(function(dataBase64) {
+        var payload = {
+          filename: filename || 'ludflow-document',
+          mimeType: mimeType || blob.type || '',
+          dataBase64: dataBase64
+        };
+        if (typeof downloader === 'function') {
+          return downloader(payload);
+        }
+        return window.__TAURI__.core.invoke('download_file', payload);
+      }).catch(function(err) {
+        console.warn('[decidr] Native file download failed:', err);
+        if (attemptedNative) {
+          alert('Download failed: ' + String((err && err.message) || err || 'Unknown error'));
+          return false;
+        }
+        UI.SlideOut._downloadBlob(blob, filename, true);
+        return false;
+      });
+    },
+
     _closeBrowserPreview: function() {
       var existing = document.querySelector('.decidr-file-preview-overlay');
       if (!existing) return;
@@ -4123,16 +4160,16 @@
         if (previewKind === 'system') {
           UI.SlideOut._openSystemFilePreview(result.blob, filename, mimeType).catch(function(err) {
             console.warn('[decidr] System preview failed; downloading instead:', err);
-            UI.SlideOut._downloadBlob(result.blob, filename, true);
+            return UI.SlideOut._downloadAndRevealBlob(result.blob, filename, mimeType);
           });
           return;
         }
         if (previewKind === 'download') {
-          UI.SlideOut._downloadBlob(result.blob, filename, true);
+          UI.SlideOut._downloadAndRevealBlob(result.blob, filename, mimeType);
           return;
         }
         if (!UI.SlideOut._openBrowserPreviewBlob(result.blob, filename, mimeType)) {
-          UI.SlideOut._downloadBlob(result.blob, filename, true);
+          UI.SlideOut._downloadAndRevealBlob(result.blob, filename, mimeType);
         }
       }).catch(function(err) {
         console.error('[decidr] Failed to fetch Ludflow document asset:', err);
