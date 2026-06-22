@@ -3944,6 +3944,13 @@
           return downloader(payload);
         }
         return window.__TAURI__.core.invoke('download_file', payload);
+      }).then(function(result) {
+        if (result && result.revealed === false) {
+          alert('Downloaded to ' + String(result.path || filename || 'Downloads')
+            + ', but the file location could not be opened: '
+            + String(result.revealError || 'Unknown reveal error'));
+        }
+        return result;
       }).catch(function(err) {
         console.warn('[decidr] Native file download failed:', err);
         if (attemptedNative) {
