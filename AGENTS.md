@@ -2,17 +2,21 @@
 
 ## What is this?
 
-MCPViews plugin that renders DecidR MCP tool output in the Ludflow Companion. Three renderers (list, dashboard, graph) connected to the DecidR backend via REST API.
+MCPViews plugin that renders DecidR MCP tool output and self-fetching DecidR views in MCPViews Companion. Current manifest exposes four user-facing renderers: `decidr_list`, `decidr_dashboard`, `decidr_timeline`, and `decidr_github_auth`. Source files for graph and audit renderers remain in the repo, but they are hidden from the current manifest renderer names.
 
 ## File Structure
 
 ```
-manifest.json          → Tool-to-renderer mappings + MCP config
-build.sh               → Produces decidr-plugin.zip
+manifest.json          → Tool-to-renderer mappings, MCP config, prompts, rules
+build.sh               → Produces release/decidr.zip
 renderers/
   list.js              → Universal list/detail renderer
-  dashboard.js         → Initiative dashboard renderer
-  graph.js             → Force-directed graph renderer
+  dashboard.js         → Dashboard renderer
+  timeline.js          → Executive timeline renderer
+  github-auth.js       → Secure GitHub PAT entry renderer
+  graph.js             → Source retained; not exposed by current manifest
+  audit-dashboard.js   → Source retained; not exposed by current manifest
+  audit-reports.js     → Source retained; not exposed by current manifest
   shared/
     00-api-client.js   → REST fetch wrapper + autoInit bootstrap
     01-theme.js        → CSS token injection
@@ -23,10 +27,11 @@ renderers/
 ## Key Commands
 
 ```bash
-bash build.sh                              # Build decidr-plugin.zip
+bash build.sh                              # Build release/decidr.zip
 node -c renderers/list.js                  # Syntax check a renderer
 node -c renderers/shared/02-components.js  # Syntax check shared code
 node -c renderers/shared/03-slideouts.js   # Syntax check slideout renderers
+node scripts/check-dashboard-next-steps.mjs # Static dashboard/workflow check
 ```
 
 ## JavaScript Conventions
@@ -73,20 +78,20 @@ node -c renderers/shared/03-slideouts.js   # Syntax check slideout renderers
 - `API.setDefaultOrg(orgId)` → `PATCH /me/preferences` with `{ defaultOrganizationId: orgId }`.
 - `API.clearDefaultOrg()` → `PATCH /me/preferences` with `{ defaultOrganizationId: null }`.
 
-## Dashboard / Graph Two-Phase Init
+## Dashboard / Timeline Two-Phase Init
 
 Renderers that boot with a default-org preference MUST use two-phase initial fetch:
 
 1. **Phase 1 (preflight)**: `Promise.all` of `listOrganizations`, plugin-org tokens, and `getUserPreferences`. Resolve target org with precedence `pushed organization_id > default-with-token > current`. If target differs from currently-bound token, call `api.switchOrg(targetId)` and await it.
 2. **Phase 2 (data)**: Run the big data `Promise.all` against the correct token.
 
-For graph, preflight lives OUTSIDE `_fetchGraphData` so refetches triggered by explicit user switches don't loop back to the default.
+For timeline/dashboard refetches, keep default-org preflight separate from explicit user-triggered org switches so a manual switch does not loop back to the default.
 
 ## Manifest Rules
 
 - Every MCP tool must map to a renderer in the `renderers` object.
 - `renderer_definitions` must include `data_hint` describing the expected data shape.
-- `tool_prefix` must be `"decidr_"`.
+- `tool_prefix` must be `"decidr__"` in the current MCPViews manifest. Raw backend MCP tool names remain unprefixed (`list_decisions`, `get_decision`, etc.).
 - `plugin_rules` is an array of compact global workflow breadcrumbs returned by `init_session` and `get_plugin_docs`. Use it only for routing guidance that should always be visible, such as action item vs dashboard renderer routing or a short prompt-fetch pointer.
 - `plugin_rule_definitions` is the filterable breadcrumb layer for detailed workflow guidance. Use `tools` and/or `groups` so `get_plugin_docs({ tools: [...] })` returns only relevant DecidR instructions. Set `always_include` only for genuinely global short guidance.
 - `tool_rules` provide per-tool routing hints. Must be consistent with both `plugin_rules` and matching `plugin_rule_definitions`.
@@ -112,6 +117,7 @@ For graph, preflight lives OUTSIDE `_fetchGraphData` so refetches triggered by e
 
 ## Build & Verification
 
-- Build: `bash build.sh` produces `decidr-plugin.zip`.
+- Build: `bash build.sh` produces `release/decidr.zip` and updates manifest `download_url`.
 - Syntax check: `node -c renderers/<file>.js` for each file.
-- No automated test runner — verify via companion preview.
+- Static check: `node scripts/check-dashboard-next-steps.mjs`.
+- UI changes still need MCPViews/browser-visible verification.

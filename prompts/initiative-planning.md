@@ -151,15 +151,15 @@ Each row should be individually reviewable — the user can accept, reject, or r
 
 Create in strict dependency order — each step requires IDs from the previous step:
 
-1. **People** — call `decidr_list_members`. For approved plan rows that reference non-members by email, call `decidr_invite_member`. Only active member user IDs can be passed into user ID fields; pending invitations stay unassigned until accepted.
-2. **Initiative** — `decidr_create_initiative` with name, description. Capture the returned initiative ID.
-3. **Projects** — `decidr_create_project` for each approved project, passing `initiative_id` and only active-member `owner_id` or `member_ids` values. Capture each project ID.
-4. **Bridges** — `decidr_create_bridge` for each approved bridge, passing the two project IDs. Capture each bridge ID.
-5. **Decisions** — `decidr_create_decision` for each approved decision, passing the parent entity type and ID (project or bridge).
-6. **Tasks** — `decidr_create_task` for each approved task, passing the parent entity type and ID (project or bridge) and only an active-member `assignee_id` if one was resolved.
-7. **Documents** — `decidr_link_document` for each approved document link, passing the target entity type and ID.
+1. **People** — call `list_members`. For approved plan rows that reference non-members by email, call `invite_member`. Only active member user IDs can be passed into user ID fields; pending invitations stay unassigned until accepted.
+2. **Initiative** — `create_initiative` with name, description. Capture the returned initiative ID.
+3. **Projects** — `create_project` for each approved project, passing `initiative_id` and only active-member `owner_id` or `member_ids` values. Capture each project ID.
+4. **Bridges** — `create_bridge` for each approved bridge, passing the two project IDs. Capture each bridge ID.
+5. **Decisions** — `create_decision` for each approved decision, passing the parent entity type and ID (project or bridge).
+6. **Tasks** — `create_task` for each approved task, passing the parent entity type and ID (project or bridge) and only an active-member `assignee_id` if one was resolved.
+7. **Documents** — `link_document` for each approved document link, passing the target entity type and ID.
 
-After all entities are created, push the completed initiative to the `decidr_graph` renderer using `push_content` with `{ initiative_ids: [initiative_id] }` so the user can see the visual graph of what was built.
+After all entities are created, push the completed initiative to the `decidr_dashboard` renderer using `push_content` with `{ initiative_ids: [initiative_id] }` so the user can inspect the initiative and drill into created entities. Use `decidr_timeline` instead when the user asks for schedule, roadmap, or time-based context.
 
 ### Wrap Up
 
@@ -172,36 +172,39 @@ Summarize what was created:
 
 ## Tool Reference
 
-### DecidR Tools (all prefixed with `decidr_`)
+### DecidR Tools
+
+Tool names below are the raw backend names. The MCP host may expose them with the plugin prefix from `manifest.json` (`decidr__`).
+
 | Tool | Purpose |
 |------|---------|
-| `decidr_list_initiatives` | List all initiatives |
-| `decidr_create_initiative` | Create a new initiative |
-| `decidr_update_initiative` | Update an existing initiative |
-| `decidr_list_projects` | List all projects (filter by initiative_id) |
-| `decidr_create_project` | Create a new project; pass `initiative_id` and only active-member `member_ids` |
-| `decidr_update_project` | Update an existing project |
-| `decidr_list_bridges` | List all bridges |
-| `decidr_create_bridge` | Create a bridge between two projects |
-| `decidr_update_bridge` | Update an existing bridge |
-| `decidr_list_decisions` | List all decisions |
-| `decidr_create_decision` | Create a new decision |
-| `decidr_update_decision` | Update an existing decision |
-| `decidr_list_tasks` | List all tasks |
-| `decidr_create_task` | Create a new task |
-| `decidr_update_task` | Update an existing task |
-| `decidr_link_document` | Link a document to an entity |
-| `decidr_search` | Full-text search across all entity types |
-| `decidr_search_ludflow_documents` | Search LudFlow documents by keyword |
-| `decidr_create_organization` | Create a new organization. During DecidR setup/onboarding, pass `creation_source: "DECIDR_ONBOARDING"`; otherwise omit it or use `GENERIC`. |
-| `decidr_list_organizations` | List organizations the user belongs to |
-| `decidr_list_members` | List active members; use returned user IDs for owner, implementer, member, assignee, or reviewer fields |
-| `decidr_list_member_invites` | List pending invites; invitation IDs are not assignable user IDs |
-| `decidr_invite_member` | Invite a new team member by email; leave assignments unset until they accept |
-| `decidr_manage_member` | Add, update role, or remove organization members |
+| `list_initiatives` | List all initiatives |
+| `create_initiative` | Create a new initiative |
+| `update_initiative` | Update an existing initiative |
+| `list_projects` | List all projects (filter by initiative_id) |
+| `create_project` | Create a new project; pass `initiative_id` and only active-member `member_ids` |
+| `update_project` | Update an existing project |
+| `list_bridges` | List all bridges |
+| `create_bridge` | Create a bridge between two projects |
+| `update_bridge` | Update an existing bridge |
+| `list_decisions` | List all decisions |
+| `create_decision` | Create a new decision |
+| `update_decision` | Update an existing decision |
+| `list_tasks` | List all tasks |
+| `create_task` | Create a new task |
+| `update_task` | Update an existing task |
+| `link_document` | Link a document to an entity |
+| `search` | Full-text search across all entity types |
+| `search_ludflow_documents` | Search LudFlow documents by keyword |
+| `create_organization` | Create a new organization. During DecidR setup/onboarding, pass `creation_source: "DECIDR_ONBOARDING"`; otherwise omit it or use `GENERIC`. |
+| `list_organizations` | List organizations the user belongs to |
+| `list_members` | List active members; use returned user IDs for owner, implementer, member, assignee, or reviewer fields |
+| `list_member_invites` | List pending invites; invitation IDs are not assignable user IDs |
+| `invite_member` | Invite a new team member by email; leave assignments unset until they accept |
+| `manage_member` | Add, update role, or remove organization members |
 
 ### MCPViews Tools
 | Tool | Purpose |
 |------|---------|
-| `push_content` | Push rich content (landscape summaries, final graph view) |
+| `push_content` | Push rich content or DecidR renderers (`decidr_list`, `decidr_dashboard`, `decidr_timeline`) |
 | `push_review` | Push structured data for human review with accept/reject per row |

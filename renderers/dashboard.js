@@ -60,6 +60,34 @@
       return [];
     }
 
+    function orgExists(orgs, orgId) {
+      if (!orgId) return false;
+      for (var i = 0; i < orgs.length; i++) {
+        if (orgs[i].id === orgId) return true;
+      }
+      return false;
+    }
+
+    function inferOrgIdFromRows(orgs) {
+      var sources = [
+        fetches.initiatives,
+        fetches.projects,
+        fetches.decisions,
+        fetches.tasks,
+        fetches.bridges,
+        fetches.actionItems
+      ];
+      for (var s = 0; s < sources.length; s++) {
+        var rows = sources[s] || [];
+        for (var r = 0; r < rows.length; r++) {
+          var row = rows[r] || {};
+          var orgId = row.orgId || row.organizationId || row.org_id || row.organization_id;
+          if (orgExists(orgs, orgId)) return orgId;
+        }
+      }
+      return null;
+    }
+
     // Preflight: resolve the user's target org BEFORE firing the main data
     // fetches. Without this, data fetches run against whatever token withReady
     // picked first (usually the currently-connected org), and the user's
@@ -107,11 +135,10 @@
       var orgs = fetches.organizations || [];
       dashState.organizations = orgs;
       dashState.defaultOrgId = fetches.defaultOrgId || null;
-      // Mirror the bound token's org onto local state. On fresh mount the
-      // preflight already switched (if needed) to default or pushed; here we
-      // just reflect that choice, falling back to the first org if nothing
-      // resolved.
-      var boundOrgId = API.getActiveOrgId();
+      // Mirror the bound token's org onto local state. Some renderer launches
+      // only get a bearer-resolved org from returned records, so use that
+      // before falling back to the first org in the membership list.
+      var boundOrgId = API.getActiveOrgId() || fetches.activeOrgId || inferOrgIdFromRows(orgs);
       if (boundOrgId) {
         dashState.activeOrgId = boundOrgId;
       } else if (orgs.length > 0) {

@@ -1,6 +1,8 @@
 # DecidR Plugin
 
-MCPViews plugin for [DecidR](https://app.decidrmcp.com) — a decision graph tool for solo builders.
+MCPViews plugin for [DecidR](https://app.decidrmcp.com) — decision governance for solo builders and teams.
+
+Current source line: `manifest.json` version `0.1.52`, MCP endpoint `https://app.decidrmcp.com/api/mcp`, OAuth/email-code auth through Ludflow, and release asset `release/decidr.zip`.
 
 ## Renderers
 
@@ -8,6 +10,8 @@ MCPViews plugin for [DecidR](https://app.decidrmcp.com) — a decision graph too
 - **decidr_dashboard** — User Dashboard with health bars, project cards, and action items
 - **decidr_timeline** — Executive timeline of planned work and actual activity across initiatives
 - **decidr_github_auth** — Secure GitHub PAT entry form for outbound GitHub write actions
+
+The repository still contains source for graph and audit renderers, but the current manifest exposes the four renderer names above in this plugin line.
 
 ## Organization Picker
 
@@ -21,10 +25,22 @@ Audit dashboard, audit report, and graph renderer source remains in the reposito
 bash build.sh
 ```
 
-Produces `decidr-plugin.zip` ready for installation in MCPViews Companion.
+Produces `release/decidr.zip`. Production is the default build channel and
+uses `https://app.decidrmcp.com` with Ludflow auth at `https://app.ludflow.com`.
+For a staging package, run:
+
+```bash
+DECIDR_MCPVIEWS_BUILD_CHANNEL=staging bash build.sh
+```
+
+The source manifest remains production-default. The generated ZIP is guarded so
+production artifacts cannot contain staging endpoints, and staging artifacts
+cannot contain production endpoints.
 
 ## Install
 
 1. Build the plugin zip
-2. In Ludflow Companion, go to Settings > Plugins > Install
-3. Select `decidr-plugin.zip`
+2. In MCPViews Companion, go to Settings > Plugins > Install
+3. Select `release/decidr.zip`
+
+For release verification, check the GitHub release asset and, when the user-facing runtime is a bundled MCPViews app, inspect the bundled plugin manifest rather than relying only on this repo.

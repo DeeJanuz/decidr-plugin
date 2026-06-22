@@ -1,6 +1,6 @@
 {
   "name": "decidr",
-  "version": "0.1.51",
+  "version": "0.1.52",
   "prompt_definitions": [
     {
       "name": "initiative_planning",
@@ -269,6 +269,9 @@
           "find_entities_by_external_document",
           "save_decision_document_version",
           "save_decision_document_evidence",
+          "start_evidence_file_upload",
+          "complete_evidence_file_upload",
+          "upload_evidence_file",
           "list_decision_document_evidence"
         ]
       },
@@ -361,6 +364,9 @@
     "find_entities_by_external_document": "Find DecidR entities linked to a provider-neutral external document by provider/external_id and/or URL.",
     "save_decision_document_version": "Save a lifecycle-tagged Ludflow document version for a DecidR decision. Use PLAN after accepted discovery/planning, STAGED when implementation is built and validating, and IMPLEMENTED when the live implemented state is captured. Creates and links the first PLAN document when no linked Ludflow document exists; provide document_id when multiple Ludflow docs are linked.",
     "save_decision_document_evidence": "Save PLAN/STAGED/IMPLEMENTED lifecycle evidence for an EXTERNAL document already linked to a decision. The backend hashes the snapshot and the evidence can satisfy lifecycle gates.",
+    "start_evidence_file_upload": "Start a direct LudFlow evidence file upload. Upload bytes to the returned uploadUrl with uploadHeaders, then call complete_evidence_file_upload.",
+    "complete_evidence_file_upload": "Complete a direct evidence file upload. LudFlow encrypts/stores the final asset and DecidR links it as LUDFLOW evidence with lifecycle metadata.",
+    "upload_evidence_file": "Small-file base64 shortcut for uploading evidence into LudFlow and linking it as LUDFLOW. Use start/complete for larger files.",
     "list_decision_document_evidence": "List provider-neutral external document evidence snapshots captured for a decision.",
     "archive_entity": "Soft-delete (archive) an entity. Archived entities are hidden from default lists but can be restored. Use when the user wants to remove or delete an entity.",
     "restore_entity": "Restore a previously archived entity. Use when the user wants to undelete or bring back an archived entity.",
@@ -414,6 +420,9 @@
     "link_document",
     "save_decision_document_version",
     "save_decision_document_evidence",
+    "start_evidence_file_upload",
+    "complete_evidence_file_upload",
+    "upload_evidence_file",
     "list_decision_document_evidence",
     "unlink_document",
     "archive_entity",
@@ -481,6 +490,9 @@
     "find_entities_by_external_document": "decidr_list",
     "save_decision_document_version": "decidr_list",
     "save_decision_document_evidence": "decidr_list",
+    "start_evidence_file_upload": "decidr_list",
+    "complete_evidence_file_upload": "decidr_list",
+    "upload_evidence_file": "decidr_list",
     "list_decision_document_evidence": "decidr_list",
     "archive_entity": "decidr_list",
     "restore_entity": "decidr_list",
@@ -557,6 +569,9 @@
         "find_entities_by_external_document",
         "save_decision_document_version",
         "save_decision_document_evidence",
+        "start_evidence_file_upload",
+        "complete_evidence_file_upload",
+        "upload_evidence_file",
         "list_decision_document_evidence",
         "archive_entity",
         "restore_entity",
@@ -627,6 +642,9 @@
     },
     "tool_prefix": "decidr__"
   },
+  "connect_origins": [
+    "https://*.r2.cloudflarestorage.com"
+  ],
   "plugin_rule_definitions": [
     {
       "id": "decidr_auth_status",
@@ -719,6 +737,9 @@
         "create_catch_up_decision",
         "save_decision_document_version",
         "save_decision_document_evidence",
+        "start_evidence_file_upload",
+        "complete_evidence_file_upload",
+        "upload_evidence_file",
         "list_decision_document_evidence",
         "list_decisions",
         "get_decision",
@@ -742,6 +763,9 @@
         "update_decision",
         "save_decision_document_version",
         "save_decision_document_evidence",
+        "start_evidence_file_upload",
+        "complete_evidence_file_upload",
+        "upload_evidence_file",
         "get_decision",
         "list_decisions"
       ],
@@ -794,10 +818,13 @@
     },
     {
       "id": "decision_lifecycle_documents",
-      "rule": "For standard decision lifecycle documents, use save_decision_document_version for LudFlow-backed docs or save_decision_document_evidence for EXTERNAL provider docs: save accepted plans as PLAN, staged implementation state as STAGED, and live implemented state as IMPLEMENTED. Passive URL links do not satisfy lifecycle gates. Approval remains DecidR status/progress, not document metadata. When creating supporting LudFlow documents for DecidR work, place them in an existing relevant folder structure or, if none exists, in a folder named for the DecidR project; fetch governance_lifecycle only when deeper document-placement detail is needed.",
+      "rule": "For standard decision lifecycle documents, use save_decision_document_version for LudFlow-backed markdown docs, start_evidence_file_upload/complete_evidence_file_upload or upload_evidence_file for LudFlow-backed file evidence, or save_decision_document_evidence for EXTERNAL provider docs: save accepted plans as PLAN, staged implementation state as STAGED, and live implemented state as IMPLEMENTED. Passive URL links do not satisfy lifecycle gates. Uploaded evidence files attach as LUDFLOW document links with lifecycle metadata. Approval remains DecidR status/progress, not document metadata. When creating supporting LudFlow documents for DecidR work, place them in an existing relevant folder structure or, if none exists, in a folder named for the DecidR project; fetch governance_lifecycle only when deeper document-placement detail is needed.",
       "tools": [
         "save_decision_document_version",
         "save_decision_document_evidence",
+        "start_evidence_file_upload",
+        "complete_evidence_file_upload",
+        "upload_evidence_file",
         "list_decision_document_evidence",
         "link_document",
         "list_entity_documents",
@@ -823,6 +850,8 @@
       "rule": "When updating a LudFlow document linked to an implemented DecidR decision, or a LudFlow document that is already published, preserve the existing implemented content and append new findings as a dated addendum unless the user explicitly asks for a rewrite.",
       "tools": [
         "save_decision_document_version",
+        "complete_evidence_file_upload",
+        "upload_evidence_file",
         "link_document",
         "list_entity_documents",
         "find_entities_by_ludflow_document",

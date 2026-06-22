@@ -101,6 +101,19 @@
     });
   }
 
+  function _handleBlobResponse(response) {
+    if (!response.ok) {
+      return response.text().then(function(text) {
+        throw _buildApiError(response, text);
+      }, function() {
+        throw _buildApiError(response, '');
+      });
+    }
+    return response.blob().then(function(blob) {
+      return { blob: blob, response: response };
+    });
+  }
+
   function _hasTauri() {
     return window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function';
   }
@@ -154,6 +167,22 @@
         });
       }
       return _handleTextResponse(response);
+    });
+  }
+
+  function _fetchBlobWithRetry(url, opts) {
+    return fetch(url, opts).then(function(response) {
+      if (response.status === 401 && _hasTauri()) {
+        return _refreshToken().then(function() {
+          var retryOpts = {};
+          for (var key in opts) {
+            if (opts.hasOwnProperty(key)) retryOpts[key] = opts[key];
+          }
+          retryOpts.headers = _headers(!!retryOpts.body);
+          return fetch(url, retryOpts).then(_handleBlobResponse);
+        });
+      }
+      return _handleBlobResponse(response);
     });
   }
 
@@ -241,6 +270,14 @@
         .then(function(data) {
           if (data && data.user && data.user.id) {
             api._currentUserId = data.user.id;
+          }
+          if (
+            data &&
+            data.session &&
+            data.session.currentOrganizationId &&
+            !_activeOrgId
+          ) {
+            _activeOrgId = data.session.currentOrganizationId;
           }
         }).catch(function() { /* session fetch is best-effort */ });
     },
@@ -591,6 +628,14 @@
       return api.post('/documents', data);
     },
 
+    startEvidenceFileUpload: function(data) {
+      return api.post('/documents/evidence-upload/start', data);
+    },
+
+    completeEvidenceFileUpload: function(data) {
+      return api.post('/documents/evidence-upload/complete', data);
+    },
+
     listEntityDocuments: function(entityType, entityId) {
       return api.get('/documents' + _qs({ entityType: entityType, entityId: entityId }));
     },
@@ -609,6 +654,14 @@
 
     getLudflowDocument: function(id) {
       return api.get('/ludflow-documents/' + id);
+    },
+
+    fetchLudflowDocumentAsset: function(documentId, versionId) {
+      _validatePathIds('/ludflow-documents/' + documentId + '/versions/' + versionId + '/asset');
+      return _fetchBlobWithRetry(api._baseUrl + '/ludflow-documents/' + documentId + '/versions/' + versionId + '/asset', {
+        method: 'GET',
+        headers: _headers(false)
+      });
     },
 
     listDecisionDocumentEvidence: function(decisionId) {
@@ -824,7 +877,7 @@
      *   1. `opts.pushedOrgId` (from MCP push data)
      *   2. `preferences.defaultOrganizationId` (if the user has a stored
      *      plugin token for it)
-     *   3. none — the Tauri autoInit fallback token stays in place
+     *   3. first stored plugin org token
      */
     resolveAndBindTargetOrg: function(opts) {
       opts = opts || {};
@@ -839,11 +892,15 @@
         var prefs = results[2] || null;
 
         var pluginOrgStatus = {};
+        var firstUsablePluginOrgId = null;
         for (var i = 0; i < pluginOrgAuth.length; i++) {
           var entry = pluginOrgAuth[i] || {};
           var entryOrgId = entry.org_id || entry.orgId;
           if (!entryOrgId) continue;
           pluginOrgStatus[entryOrgId] = entry.status || (entry.refreshable ? 'expired_refreshable' : 'valid');
+          if (!firstUsablePluginOrgId && _statusHasUsableToken(pluginOrgStatus[entryOrgId])) {
+            firstUsablePluginOrgId = entryOrgId;
+          }
         }
 
         var defaultOrgId = (prefs && prefs.defaultOrganizationId) || null;
@@ -858,6 +915,8 @@
             targetOrgId = pushedOrgId;
           } else if (defaultOrgId && _statusHasUsableToken(pluginOrgStatus[defaultOrgId])) {
             targetOrgId = defaultOrgId;
+          } else if (firstUsablePluginOrgId) {
+            targetOrgId = firstUsablePluginOrgId;
           }
         }
 

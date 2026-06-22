@@ -197,6 +197,10 @@
           mimeType: doc.mimeType || doc.mime_type || '',
           decisionId: doc.decisionId || doc.decision_id || null,
           decisionLifecycleStage: ludflowLifecycleStage(doc.decisionLifecycleStage || doc.decision_lifecycle_stage),
+          extractionStatus: doc.extractionStatus || doc.extraction_status || null,
+          extractionError: doc.extractionError || doc.extraction_error || null,
+          asset: ludflowAssetMeta(doc),
+          assetCount: ludflowAssetCount(doc),
           dateLabel: updatedDate ? 'Updated ' + updatedDate : '',
           current: true
         }];
@@ -213,6 +217,9 @@
         var sourceArtifactVersion = ludflowField(version, 'sourceArtifactVersion', 'source_artifact_version');
         var decisionId = ludflowField(version, 'decisionId', 'decision_id');
         var decisionLifecycleStage = ludflowLifecycleStage(ludflowField(version, 'decisionLifecycleStage', 'decision_lifecycle_stage'));
+        var extractionStatus = ludflowField(version, 'extractionStatus', 'extraction_status');
+        var extractionError = ludflowField(version, 'extractionError', 'extraction_error');
+        var asset = ludflowAssetMeta(version) || ludflowAssetMeta(doc);
         var detailParts = [];
         if (current) detailParts.push('Current');
         if (versionNumber != null) detailParts.push('Version ' + versionNumber);
@@ -228,6 +235,10 @@
           sourceArtifactVersion: sourceArtifactVersion,
           decisionId: decisionId,
           decisionLifecycleStage: decisionLifecycleStage,
+          extractionStatus: extractionStatus,
+          extractionError: extractionError,
+          asset: asset,
+          assetCount: ludflowAssetCount(version) || (asset ? 1 : 0),
           dateLabel: createdDate,
           current: current
         });
@@ -235,16 +246,85 @@
       return items;
     }
 
-    function ludflowLooksMarkdown(item) {
+    function ludflowAssetMeta(record) {
+      if (!record) return null;
+      var asset = null;
+      if (record.asset && typeof record.asset === 'object') asset = record.asset;
+      else if (Array.isArray(record.assets) && record.assets.length) asset = record.assets[0];
+      else if (record._assetMeta && typeof record._assetMeta === 'object') asset = record._assetMeta;
+      else if (record.metadata && record.metadata.asset && typeof record.metadata.asset === 'object') asset = record.metadata.asset;
+      else if (record._linkedDocument && record._linkedDocument.metadata && record._linkedDocument.metadata.asset) asset = record._linkedDocument.metadata.asset;
+      if (!asset) return null;
+      return {
+        id: asset.id || '',
+        filename: asset.filename || asset.name || '',
+        mimeType: asset.mimeType || asset.mime_type || '',
+        size: asset.size || asset.byteSize || asset.byte_size || null,
+        checksum: asset.checksum || ''
+      };
+    }
+
+    function ludflowAssetCount(record) {
+      if (!record) return 0;
+      if (record.assetCount != null) return Number(record.assetCount) || 0;
+      if (record.asset_count != null) return Number(record.asset_count) || 0;
+      if (record._count && record._count.assets != null) return Number(record._count.assets) || 0;
+      if (Array.isArray(record.assets)) return record.assets.length;
+      return ludflowAssetMeta(record) ? 1 : 0;
+    }
+
+    function ludflowFormat(item) {
       var format = String((item && item.format) || '').toLowerCase();
+      return format.replace(/_/g, '-');
+    }
+
+    function ludflowMime(item) {
       var mimeType = String((item && item.mimeType) || '').toLowerCase();
+      return mimeType;
+    }
+
+    function ludflowLooksMarkdown(item) {
+      var format = ludflowFormat(item);
+      var mimeType = ludflowMime(item);
       return !format ||
         format === 'markdown' ||
         format === 'md' ||
+        format === 'text-markdown' ||
+        mimeType.indexOf('markdown') !== -1;
+    }
+
+    function ludflowLooksPlainText(item) {
+      var format = ludflowFormat(item);
+      var mimeType = ludflowMime(item);
+      return format === 'plain-text' ||
         format === 'text' ||
-        format === 'plain_text' ||
-        mimeType.indexOf('markdown') !== -1 ||
         mimeType.indexOf('text/plain') !== -1;
+    }
+
+    function ludflowLooksHtml(item) {
+      var format = ludflowFormat(item);
+      var mimeType = ludflowMime(item);
+      return format === 'html' || mimeType.indexOf('text/html') !== -1;
+    }
+
+    function ludflowLooksJson(item) {
+      var format = ludflowFormat(item);
+      var mimeType = ludflowMime(item);
+      return format === 'json' || mimeType.indexOf('json') !== -1;
+    }
+
+    function ludflowLooksCsv(item) {
+      var format = ludflowFormat(item);
+      var mimeType = ludflowMime(item);
+      return format === 'csv' || mimeType.indexOf('csv') !== -1;
+    }
+
+    function ludflowPrettyJson(content) {
+      try {
+        return JSON.stringify(JSON.parse(content), null, 2);
+      } catch (e) {
+        return content;
+      }
     }
 
     function ludflowPreviewHtml(item) {
@@ -255,7 +335,46 @@
       if (ludflowLooksMarkdown(item)) {
         return UI.richDescription(content, { className: 'decidr-so-doc-preview-rich' });
       }
+      if (ludflowLooksJson(item)) {
+        return '<pre class="decidr-so-doc-preview-raw"><code>' + UI.escapeHtml(ludflowPrettyJson(content)) + '</code></pre>';
+      }
+      if (ludflowLooksCsv(item)) {
+        return '<pre class="decidr-so-doc-preview-raw"><code>' + UI.escapeHtml(content) + '</code></pre>';
+      }
+      if (ludflowLooksHtml(item) || ludflowLooksPlainText(item)) {
+        return '<div class="decidr-so-doc-preview-text">' + UI.escapeHtml(content) + '</div>';
+      }
       return '<pre class="decidr-so-doc-preview-raw"><code>' + UI.escapeHtml(content) + '</code></pre>';
+    }
+
+    function ludflowOriginalFilename(doc, item) {
+      var asset = (item && item.asset) || ludflowAssetMeta(doc);
+      if (asset && asset.filename) return asset.filename;
+      var title = (doc && doc.title) || 'ludflow-document';
+      var mimeType = ludflowMime(item);
+      var ext = '';
+      if (mimeType.indexOf('text/html') !== -1) ext = '.html';
+      else if (mimeType.indexOf('application/pdf') !== -1) ext = '.pdf';
+      else if (mimeType.indexOf('json') !== -1) ext = '.json';
+      else if (mimeType.indexOf('csv') !== -1) ext = '.csv';
+      else if (mimeType.indexOf('text/plain') !== -1) ext = '.txt';
+      return title.replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-|-$/g, '').toLowerCase() + ext;
+    }
+
+    function ludflowCanFetchOriginal(item) {
+      if (!item || !item.id || String(item.id).indexOf('__') === 0) return false;
+      return ludflowAssetCount(item) > 0 || !!item.asset;
+    }
+
+    function ludflowOriginalActionsHtml(doc, item) {
+      if (!ludflowCanFetchOriginal(item)) return '';
+      var filename = ludflowOriginalFilename(doc, item);
+      var documentId = (doc && doc.id) || '';
+      var versionId = item.id || '';
+      return '<div class="decidr-so-doc-actions">'
+        + '<button type="button" class="decidr-create-secondary decidr-so-doc-action-btn" data-ludflow-asset-action="preview" data-ludflow-document-id="' + UI.escapeHtml(documentId) + '" data-ludflow-version-id="' + UI.escapeHtml(versionId) + '" data-ludflow-asset-filename="' + UI.escapeHtml(filename) + '">Open original</button>'
+        + '<button type="button" class="decidr-create-secondary decidr-so-doc-action-btn" data-ludflow-asset-action="download" data-ludflow-document-id="' + UI.escapeHtml(documentId) + '" data-ludflow-version-id="' + UI.escapeHtml(versionId) + '" data-ludflow-asset-filename="' + UI.escapeHtml(filename) + '">Download</button>'
+        + '</div>';
     }
 
     function ludflowSelectedVersion(doc, items) {
@@ -281,9 +400,12 @@
       if (selected.format) metaItems.push({ html: UI.escapeHtml(String(selected.format).replace(/_/g, ' ')) });
       if (selected.mimeType) metaItems.push({ html: UI.escapeHtml(selected.mimeType) });
       if (selected.decisionLifecycleStage) metaItems.push({ html: ludflowLifecycleBadge(selected.decisionLifecycleStage) });
+      if (selected.extractionStatus) metaItems.push({ html: UI.escapeHtml(String(selected.extractionStatus).replace(/_/g, ' ')) });
       if (selected.dateLabel) metaItems.push({ html: UI.escapeHtml(selected.dateLabel) });
       if (selected.sourceArtifactVersion) metaItems.push({ html: 'Source ' + UI.escapeHtml(selected.sourceArtifactVersion) });
+      if (selected.asset && selected.asset.filename) metaItems.push({ html: UI.escapeHtml(selected.asset.filename) });
       html += UI.SlideOut._renderMeta(metaItems);
+      html += ludflowOriginalActionsHtml(doc || {}, selected);
 
       html += '<div class="decidr-so-section">';
       html += UI.SlideOut._renderSectionHeader('Versions', items.length);

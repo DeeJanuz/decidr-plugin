@@ -734,16 +734,27 @@
       throw new Error(errorText || 'MCP tool returned an error.');
     }
     if (!result.content || !result.content[0] || typeof result.content[0].text !== 'string') return result;
+    var text = result.content[0].text;
     try {
-      return JSON.parse(result.content[0].text) || {};
+      return JSON.parse(text) || {};
     } catch (e) {
+      var trimmed = String(text || '').trim();
+      if (trimmed) throw new Error(trimmed.length < 500 ? trimmed : 'MCP tool returned a non-JSON response.');
       throw new Error('Failed to parse MCP payload.');
     }
   }
 
+  function localMcpBaseUrl() {
+    var location = window.location || {};
+    var protocol = location.protocol === 'https:' ? 'https:' : 'http:';
+    var host = location.hostname || 'localhost';
+    var port = location.port || '4200';
+    return protocol + '//' + host + (port ? ':' + port : '');
+  }
+
   function localMcpToolFetch(toolName, args) {
     if (typeof fetch !== 'function') return Promise.reject(new Error('MCP fetch unavailable.'));
-    return fetch('http://localhost:4200/mcp', {
+    return fetch(localMcpBaseUrl() + '/mcp', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -771,8 +782,7 @@
     var utils = window.__companionUtils || {};
     if (typeof utils.companionFetch === 'function') {
       return utils.companionFetch(toolName, args || {})
-        .then(parseMcpToolResponse)
-        .catch(function() {
+        .then(parseMcpToolResponse, function() {
           return localMcpToolFetch(toolName, args || {});
         });
     }
@@ -785,6 +795,41 @@
 
   function ludflowVersionHasContent(version) {
     return !!(version && (version.content || version.body || version.extractedText));
+  }
+
+  function ludflowVersionAssetCount(version) {
+    if (!version) return 0;
+    if (version.assetCount != null) return Number(version.assetCount) || 0;
+    if (version.asset_count != null) return Number(version.asset_count) || 0;
+    if (version._count && version._count.assets != null) return Number(version._count.assets) || 0;
+    if (Array.isArray(version.assets)) return version.assets.length;
+    if (version.asset) return 1;
+    return 0;
+  }
+
+  function firstLudflowAsset(version, fallbackDoc) {
+    if (version) {
+      if (version.asset && typeof version.asset === 'object') return version.asset;
+      if (Array.isArray(version.assets) && version.assets.length) return version.assets[0];
+    }
+    var fallback = fallbackDoc || {};
+    if (fallback._assetMeta) return fallback._assetMeta;
+    if (fallback.asset && typeof fallback.asset === 'object') return fallback.asset;
+    if (Array.isArray(fallback.assets) && fallback.assets.length) return fallback.assets[0];
+    if (fallback.metadata && fallback.metadata.asset && typeof fallback.metadata.asset === 'object') return fallback.metadata.asset;
+    if (fallback._linkedDocument && fallback._linkedDocument.metadata && fallback._linkedDocument.metadata.asset) return fallback._linkedDocument.metadata.asset;
+    return null;
+  }
+
+  function normalizeLudflowAsset(asset) {
+    if (!asset || typeof asset !== 'object') return null;
+    return {
+      id: asset.id || '',
+      filename: asset.filename || asset.name || '',
+      mimeType: asset.mimeType || asset.mime_type || '',
+      size: asset.size || asset.byteSize || asset.byte_size || null,
+      checksum: asset.checksum || ''
+    };
   }
 
   function normalizeLudflowVersionMeta(version, fallbackDoc) {
@@ -800,18 +845,85 @@
       sourceArtifactVersion: meta.sourceArtifactVersion || meta.source_artifact_version || fallback.sourceArtifactVersion || fallback.source_artifact_version || null,
       decisionId: meta.decisionId || meta.decision_id || fallback.decisionId || fallback.decision_id || null,
       decisionLifecycleStage: meta.decisionLifecycleStage || meta.decision_lifecycle_stage || fallback.decisionLifecycleStage || fallback.decision_lifecycle_stage || null,
+      extractionStatus: meta.extractionStatus || meta.extraction_status || null,
+      extractionError: meta.extractionError || meta.extraction_error || null,
+      assetCount: ludflowVersionAssetCount(meta),
+      asset: normalizeLudflowAsset(firstLudflowAsset(meta, fallback)),
       createdAt: meta.createdAt || meta.created_at || null
     };
   }
 
-  UI.fetchLudflowDocumentVersions = function(documentId, baseDoc) {
-    if (!documentId) return Promise.resolve([]);
-    var existing = baseDoc || {};
-    return mcpToolFetch('ludflow__get_document', {
+  function resolveLudflowMcpOrgId(baseDoc) {
+    var doc = baseDoc || {};
+    var linked = doc._linkedDocument || {};
+    var orgId = doc.orgId || doc.organizationId || doc.organization_id
+      || linked.orgId || linked.organizationId || linked.organization_id;
+    if (orgId) return orgId;
+    var API = window.__decidrAPI;
+    if (API && typeof API.getActiveOrgId === 'function') return API.getActiveOrgId() || null;
+    return null;
+  }
+
+  function ludflowMcpDocumentArgs(documentId, baseDoc, extra) {
+    var args = {
       document_id: documentId,
       include_links: false,
       include_children: false
-    }).then(function(payload) {
+    };
+    var orgId = resolveLudflowMcpOrgId(baseDoc);
+    if (orgId) args.organization_id = orgId;
+    extra = extra || {};
+    for (var key in extra) {
+      if (extra.hasOwnProperty(key)) args[key] = extra[key];
+    }
+    return args;
+  }
+
+  UI.fetchLudflowDocument = function(documentId, baseDoc) {
+    if (!documentId) return Promise.reject(new Error('Ludflow document id is required.'));
+    var linkedDoc = baseDoc || {};
+    var fetchFromMcp = function() {
+      return mcpToolFetch('ludflow__get_document', ludflowMcpDocumentArgs(documentId, linkedDoc)).then(function(payload) {
+        var doc = normalizeMcpData(payload) || {};
+        doc.id = doc.id || documentId;
+        doc.title = doc.title || linkedDoc.title || 'LudFlow Document';
+        doc.orgId = doc.orgId || doc.organizationId || linkedDoc.orgId || linkedDoc.organizationId || linkedDoc.organization_id || null;
+        doc._linkedDocument = linkedDoc;
+        doc._assetMeta = normalizeLudflowAsset(firstLudflowAsset(linkedDoc, linkedDoc));
+        doc._loadedViaMcp = true;
+        return UI.fetchLudflowDocumentVersions(documentId, doc).then(function(versions) {
+          if (Array.isArray(versions) && versions.length) {
+            doc.versions = versions;
+            if (!doc._selectedVersionId) doc._selectedVersionId = versions[0].id || '__current';
+          }
+          doc._versionFetchState = 'loaded';
+          return doc;
+        }).catch(function(err) {
+          console.warn('[decidr] Failed to enrich Ludflow document from MCP:', err);
+          doc._versionFetchState = 'error';
+          doc._versionFetchError = err && err.message ? err.message : 'Failed to load version history';
+          return doc;
+        });
+      });
+    };
+
+    var API = window.__decidrAPI;
+    if (!API || typeof API.getLudflowDocument !== 'function') return fetchFromMcp();
+    return API.getLudflowDocument(documentId).then(function(doc) {
+      doc = doc || {};
+      doc._linkedDocument = linkedDoc;
+      doc._assetMeta = normalizeLudflowAsset(firstLudflowAsset(linkedDoc, linkedDoc));
+      return doc;
+    }).catch(function(err) {
+      if (err && err.status === 404) return fetchFromMcp();
+      return fetchFromMcp().catch(function() { throw err; });
+    });
+  };
+
+  UI.fetchLudflowDocumentVersions = function(documentId, baseDoc) {
+    if (!documentId) return Promise.resolve([]);
+    var existing = baseDoc || {};
+    return mcpToolFetch('ludflow__get_document', ludflowMcpDocumentArgs(documentId, existing)).then(function(payload) {
       var doc = normalizeMcpData(payload) || {};
       var versions = Array.isArray(doc.versions) ? doc.versions.slice() : [];
       if (!versions.length) return [];
@@ -824,12 +936,9 @@
         if (!versionNumber || ludflowVersionHasContent(version)) {
           return normalized;
         }
-        return mcpToolFetch('ludflow__get_document', {
-          document_id: documentId,
-          version_number: versionNumber,
-          include_links: false,
-          include_children: false
-        }).then(function(versionPayload) {
+        return mcpToolFetch('ludflow__get_document', ludflowMcpDocumentArgs(documentId, existing, {
+          version_number: versionNumber
+        })).then(function(versionPayload) {
           var versionDoc = normalizeMcpData(versionPayload) || {};
           normalized.content = versionDoc.content || '';
           normalized.format = normalized.format || versionDoc.format || doc.format || existing.format || 'MARKDOWN';
@@ -843,6 +952,131 @@
       }));
     });
   };
+
+  function jsonObject(value) {
+    if (!value) return {};
+    if (typeof value === 'object' && !Array.isArray(value)) return value;
+    if (typeof value === 'string') {
+      try {
+        var parsed = JSON.parse(value);
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+      } catch (e) {
+        return {};
+      }
+    }
+    return {};
+  }
+
+  function firstString() {
+    for (var i = 0; i < arguments.length; i++) {
+      var value = arguments[i];
+      if (typeof value === 'string' && value.trim()) return value.trim();
+    }
+    return '';
+  }
+
+  function compactByteSize(value) {
+    var size = Number(value);
+    if (!isFinite(size) || size <= 0) return '';
+    if (size < 1024) return size + ' B';
+    if (size < 1024 * 1024) return Math.round(size / 102.4) / 10 + ' KB';
+    return Math.round(size / 1024 / 102.4) / 10 + ' MB';
+  }
+
+  function fileExtension(filename) {
+    var match = String(filename || '').toLowerCase().match(/\.([a-z0-9]+)$/);
+    return match ? match[1] : '';
+  }
+
+  function fileTypeLabel(format, mimeType, filename) {
+    var fmt = String(format || '').replace(/_/g, ' ').trim();
+    if (fmt && fmt.toUpperCase() !== 'MARKDOWN') return fmt.toUpperCase();
+    var mime = String(mimeType || '').toLowerCase();
+    var ext = fileExtension(filename);
+    if (mime.indexOf('text/html') !== -1 || ext === 'html' || ext === 'htm') return 'HTML';
+    if (mime.indexOf('application/pdf') !== -1 || ext === 'pdf') return 'PDF';
+    if (mime.indexOf('json') !== -1 || ext === 'json') return 'JSON';
+    if (mime.indexOf('csv') !== -1 || ext === 'csv') return 'CSV';
+    if (mime.indexOf('markdown') !== -1 || ext === 'md' || ext === 'markdown') return 'MD';
+    if (mime.indexOf('text/plain') !== -1 || ext === 'txt') return 'TXT';
+    if (ext) return ext.toUpperCase();
+    if (mime) return mime.split('/').pop().toUpperCase();
+    return '';
+  }
+
+  function filePreviewKind(format, mimeType, filename) {
+    var fmt = String(format || '').replace(/_/g, '-').toLowerCase();
+    var mime = String(mimeType || '').toLowerCase();
+    var ext = fileExtension(filename);
+    if (fmt === 'markdown' || fmt === 'md' || mime.indexOf('markdown') !== -1 || ext === 'md' || ext === 'markdown') return 'markdown';
+    if (mime.indexOf('text/html') !== -1 || ext === 'html' || ext === 'htm') return 'browser';
+    if (mime.indexOf('application/pdf') !== -1 || ext === 'pdf') return 'browser';
+    if (mime.indexOf('image/') === 0 || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp'].indexOf(ext) !== -1) return 'browser';
+    if (mime.indexOf('application/json') !== -1 || mime.indexOf('+json') !== -1 || ext === 'json') return 'browser';
+    if (mime.indexOf('text/csv') !== -1 || mime.indexOf('application/csv') !== -1 || ext === 'csv') return 'browser';
+    if (mime.indexOf('text/plain') !== -1 || ext === 'txt' || ext === 'log') return 'browser';
+    if (mime.indexOf('application/rtf') !== -1 || mime.indexOf('text/rtf') !== -1 || ext === 'rtf') return 'system';
+    if (mime.indexOf('wordprocessingml') !== -1 || mime.indexOf('msword') !== -1 || ext === 'doc' || ext === 'docx') return 'system';
+    if (mime.indexOf('spreadsheetml') !== -1 || mime.indexOf('ms-excel') !== -1 || ext === 'xls' || ext === 'xlsx') return 'system';
+    if (mime.indexOf('presentationml') !== -1 || mime.indexOf('ms-powerpoint') !== -1 || ext === 'ppt' || ext === 'pptx') return 'system';
+    if (mime.indexOf('opendocument') !== -1 || ['odt', 'ods', 'odp'].indexOf(ext) !== -1) return 'system';
+    if (mime.indexOf('vnd.apple.pages') !== -1 || mime.indexOf('vnd.apple.numbers') !== -1 || mime.indexOf('vnd.apple.keynote') !== -1) return 'system';
+    if (['pages', 'numbers', 'key'].indexOf(ext) !== -1) return 'system';
+    return 'download';
+  }
+
+  function ludflowLinkedDocumentMeta(doc) {
+    var metadata = jsonObject(doc && doc.metadata);
+    var asset = normalizeLudflowAsset(firstLudflowAsset(metadata, doc));
+    var filename = firstString(
+      metadata.originalFilename,
+      metadata.original_filename,
+      asset && asset.filename,
+      doc && doc.filename,
+      doc && doc.title
+    );
+    var mimeType = firstString(
+      metadata.mimeType,
+      metadata.mime_type,
+      metadata.assetMimeType,
+      asset && asset.mimeType
+    );
+    var format = firstString(metadata.format, doc && doc.format);
+    var versionId = firstString(metadata.ludflowVersionId, metadata.ludflow_version_id, doc && doc.ludflowVersionId);
+    var lifecycleStage = firstString(metadata.lifecycleStage, metadata.decisionLifecycleStage, metadata.stage);
+    var extractionStatus = firstString(metadata.extractionStatus, metadata.extraction_status);
+    var size = (asset && asset.size) || metadata.size || metadata.byteSize || metadata.byte_size || null;
+    var source = firstString(
+      metadata.source,
+      metadata.ludflowMetadata && metadata.ludflowMetadata.source,
+      metadata.ludflow_metadata && metadata.ludflow_metadata.source
+    );
+    return {
+      filename: filename,
+      mimeType: mimeType,
+      format: format,
+      versionId: versionId,
+      lifecycleStage: lifecycleStage,
+      extractionStatus: extractionStatus,
+      size: size,
+      asset: asset,
+      source: source,
+      isUploadedAsset: source === 'decidr-evidence-upload' && !!asset && !!versionId,
+      previewKind: filePreviewKind(format, mimeType, filename),
+      typeLabel: fileTypeLabel(format, mimeType, filename)
+    };
+  }
+
+  function ludflowDocumentSubtitle(meta, title) {
+    meta = meta || {};
+    var parts = [];
+    if (meta.filename && meta.filename !== title) parts.push(meta.filename);
+    if (meta.mimeType) parts.push(meta.mimeType);
+    var size = compactByteSize(meta.size);
+    if (size) parts.push(size);
+    if (meta.extractionStatus && meta.extractionStatus !== 'NOT_REQUIRED') parts.push(meta.extractionStatus);
+    return parts.join(' · ');
+  }
 
   function validDate(value) {
     if (!value) return null;
@@ -2613,13 +2847,13 @@
         else if (type === 'initiative') fetchFn = API.getInitiative;
         else if (type === 'audit_event') fetchFn = API.getAuditEvent;
         else if (type === 'organization-settings') fetchFn = API.getOrganizationMemberSettings;
-        else if (type === 'ludflow_document') fetchFn = API.getLudflowDocument;
+        else if (type === 'ludflow_document') fetchFn = UI.fetchLudflowDocument || API.getLudflowDocument;
         else if (type === 'issue') fetchFn = function(id) { return API.getIssue(id); };
         else if (type === 'pull_request') fetchFn = function(id) { return API.getPR(id); };
         else if (type === 'repo') fetchFn = function(id) { return API.getRepo(id); };
 
         if (fetchFn) {
-          fetchFn(id).then(function(data) {
+          fetchFn(id, o.seedData).then(function(data) {
             UI.SlideOut._withContextKey(contextKey, function() {
               // Update the top of stack with fetched data
               var top = UI.SlideOut._stack[UI.SlideOut._stack.length - 1];
@@ -3426,6 +3660,19 @@
 
       UI.wireCopyRefButtons(panel);
 
+      if (!panel.getAttribute('data-decidr-asset-delegated')) {
+        panel.setAttribute('data-decidr-asset-delegated', '1');
+        panel.addEventListener('click', function(e) {
+          var target = e.target;
+          var btn = target && target.closest ? target.closest('[data-ludflow-asset-action]') : null;
+          if (!btn || !panel.contains(btn)) return;
+          e.preventDefault();
+          e.stopPropagation();
+          UI.SlideOut._openLudflowAssetButton(btn, '');
+        });
+      }
+      UI.SlideOut._wireLudflowAssetButtons(panel, '');
+
       // Wire all entity navigation links
       var navItems = panel.querySelectorAll('[data-entity-type][data-entity-id]');
       for (var i = 0; i < navItems.length; i++) {
@@ -3592,7 +3839,306 @@
           };
         })(versionButtons[i]);
       }
+
+      UI.SlideOut._wireLudflowAssetButtons(panel, id);
       UI.SlideOut._loadLudflowDocumentVersions(panel, id, data);
+    },
+
+    _wireLudflowAssetButtons: function(panel, fallbackDocumentId) {
+      var assetButtons = panel.querySelectorAll('[data-ludflow-asset-action]');
+      for (var a = 0; a < assetButtons.length; a++) {
+        (function(btn) {
+          btn.onclick = function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            UI.SlideOut._openLudflowAssetButton(btn, fallbackDocumentId);
+          };
+        })(assetButtons[a]);
+      }
+    },
+
+    _openLudflowAssetButton: function(btn, fallbackDocumentId) {
+      var action = btn.getAttribute('data-ludflow-asset-action') || 'preview';
+      var documentId = btn.getAttribute('data-ludflow-document-id') || fallbackDocumentId;
+      var versionId = btn.getAttribute('data-ludflow-version-id') || '';
+      var filename = btn.getAttribute('data-ludflow-asset-filename') || 'ludflow-document';
+      var mimeType = btn.getAttribute('data-ludflow-asset-mime-type') || '';
+      var previewKind = btn.getAttribute('data-ludflow-asset-preview-kind') || '';
+      UI.SlideOut._openLudflowDocumentAsset(documentId, versionId, filename, action === 'download', {
+        mimeType: mimeType,
+        previewKind: previewKind
+      });
+    },
+
+    _handleLudflowAssetInline: function(e, btn) {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      UI.SlideOut._openLudflowAssetButton(btn, '');
+      return false;
+    },
+
+    _filenameFromContentDisposition: function(headerValue, fallback) {
+      var header = String(headerValue || '');
+      var encodedMatch = header.match(/filename\*=UTF-8''([^;]+)/i);
+      if (encodedMatch && encodedMatch[1]) {
+        try {
+          return decodeURIComponent(encodedMatch[1].trim());
+        } catch (e) {
+          return encodedMatch[1].trim();
+        }
+      }
+      var quotedMatch = header.match(/filename="([^"]+)"/i);
+      if (quotedMatch && quotedMatch[1]) return quotedMatch[1];
+      var plainMatch = header.match(/filename=([^;]+)/i);
+      if (plainMatch && plainMatch[1]) return plainMatch[1].trim();
+      return fallback || 'ludflow-document';
+    },
+
+    _downloadBlob: function(blob, filename, forceDownload) {
+      if (!window.URL || typeof window.URL.createObjectURL !== 'function') {
+        throw new Error('Browser blob URLs are unavailable.');
+      }
+      var url = window.URL.createObjectURL(blob);
+      if (!forceDownload) {
+        var opened = window.open(url, '_blank', 'noopener');
+        if (opened) {
+          setTimeout(function() { window.URL.revokeObjectURL(url); }, 60000);
+          return;
+        }
+      }
+      var link = document.createElement('a');
+      link.href = url;
+      link.download = filename || 'ludflow-document';
+      link.rel = 'noopener';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(function() { window.URL.revokeObjectURL(url); }, 1000);
+    },
+
+    _closeBrowserPreview: function() {
+      var existing = document.querySelector('.decidr-file-preview-overlay');
+      if (!existing) return;
+      var objectUrl = existing.getAttribute('data-object-url') || '';
+      if (objectUrl && window.URL && typeof window.URL.revokeObjectURL === 'function') {
+        window.URL.revokeObjectURL(objectUrl);
+      }
+      if (existing.parentNode) existing.parentNode.removeChild(existing);
+    },
+
+    _createBrowserPreviewShell: function(filename) {
+      UI.SlideOut._closeBrowserPreview();
+      var name = String(filename || 'Preview');
+      var overlay = document.createElement('div');
+      overlay.className = 'decidr-file-preview-overlay';
+      overlay.setAttribute('role', 'dialog');
+      overlay.setAttribute('aria-modal', 'true');
+      overlay.innerHTML = '<div class="decidr-file-preview-dialog">'
+        + '<div class="decidr-file-preview-header">'
+        + '<div class="decidr-file-preview-title" title="' + UI.escapeHtml(name) + '">' + UI.escapeHtml(name) + '</div>'
+        + '<button type="button" class="decidr-file-preview-close" title="Close preview" aria-label="Close preview">'
+        + '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
+        + '</button>'
+        + '</div>'
+        + '<div class="decidr-file-preview-body"><div class="decidr-file-preview-loading">Loading preview...</div></div>'
+        + '</div>';
+      document.body.appendChild(overlay);
+
+      var closeBtn = overlay.querySelector('.decidr-file-preview-close');
+      var escHandler = function(e) {
+        if (e.key === 'Escape') {
+          document.removeEventListener('keydown', escHandler);
+          UI.SlideOut._closeBrowserPreview();
+        }
+      };
+      document.addEventListener('keydown', escHandler);
+      closeBtn.onclick = function() {
+        document.removeEventListener('keydown', escHandler);
+        UI.SlideOut._closeBrowserPreview();
+      };
+      overlay.onclick = function(e) {
+        if (e.target === overlay) {
+          document.removeEventListener('keydown', escHandler);
+          UI.SlideOut._closeBrowserPreview();
+        }
+      };
+      return overlay;
+    },
+
+    _previewBlobAsText: function(blob, callback) {
+      if (blob && typeof blob.text === 'function') {
+        blob.text().then(function(text) { callback(null, text); }).catch(function(err) { callback(err); });
+        return;
+      }
+      if (typeof FileReader !== 'function') {
+        callback(new Error('Text preview is unavailable in this host.'));
+        return;
+      }
+      var reader = new FileReader();
+      reader.onload = function() { callback(null, String(reader.result || '')); };
+      reader.onerror = function() { callback(reader.error || new Error('Failed to read preview text.')); };
+      reader.readAsText(blob);
+    },
+
+    _openBrowserPreviewBlob: function(blob, filename, mimeType) {
+      try {
+        var lowerMime = String(mimeType || blob.type || '').toLowerCase();
+        var name = String(filename || 'Preview');
+        var isHtml = lowerMime.indexOf('text/html') !== -1 || /\.(html|htm)$/i.test(name);
+        var isImage = lowerMime.indexOf('image/') === 0 || /\.(png|jpe?g|gif|webp|svg)$/i.test(name);
+        var isPdf = lowerMime.indexOf('application/pdf') !== -1 || /\.pdf$/i.test(name);
+        var isText = lowerMime.indexOf('text/') === 0
+          || lowerMime.indexOf('json') !== -1
+          || lowerMime.indexOf('csv') !== -1
+          || /\.(txt|json|csv)$/i.test(name);
+
+        var overlay = UI.SlideOut._createBrowserPreviewShell(name);
+        var body = overlay.querySelector('.decidr-file-preview-body');
+
+        if (isHtml) {
+          UI.SlideOut._previewBlobAsText(blob, function(err, text) {
+            if (err) {
+              body.innerHTML = '<div class="decidr-file-preview-error">' + UI.escapeHtml(String(err.message || err)) + '</div>';
+              return;
+            }
+            var iframe = document.createElement('iframe');
+            iframe.className = 'decidr-file-preview-frame';
+            iframe.setAttribute('title', name);
+            iframe.setAttribute('sandbox', '');
+            body.innerHTML = '';
+            body.appendChild(iframe);
+            iframe.srcdoc = String(text || '');
+          });
+          return true;
+        }
+
+        if (isText) {
+          UI.SlideOut._previewBlobAsText(blob, function(err, text) {
+            if (err) {
+              body.innerHTML = '<div class="decidr-file-preview-error">' + UI.escapeHtml(String(err.message || err)) + '</div>';
+              return;
+            }
+            var pre = document.createElement('pre');
+            pre.className = 'decidr-file-preview-text';
+            pre.textContent = String(text || '');
+            body.innerHTML = '';
+            body.appendChild(pre);
+          });
+          return true;
+        }
+
+        if (!window.URL || typeof window.URL.createObjectURL !== 'function') {
+          UI.SlideOut._closeBrowserPreview();
+          return false;
+        }
+
+        var url = window.URL.createObjectURL(blob);
+        overlay.setAttribute('data-object-url', url);
+        if (isImage) {
+          body.innerHTML = '<div class="decidr-file-preview-image-wrap"><img class="decidr-file-preview-image" alt="' + UI.escapeHtml(name) + '" src="' + UI.escapeHtml(url) + '"></div>';
+          return true;
+        }
+        if (isPdf) {
+          body.innerHTML = '<iframe class="decidr-file-preview-frame" title="' + UI.escapeHtml(name) + '" src="' + UI.escapeHtml(url) + '"></iframe>';
+          return true;
+        }
+
+        UI.SlideOut._closeBrowserPreview();
+        return false;
+      } catch (err) {
+        console.warn('[decidr] Browser preview failed:', err);
+        UI.SlideOut._closeBrowserPreview();
+        return false;
+      }
+    },
+
+    _blobToBase64: function(blob) {
+      return new Promise(function(resolve, reject) {
+        if (typeof FileReader !== 'function') {
+          reject(new Error('FileReader is unavailable.'));
+          return;
+        }
+        var reader = new FileReader();
+        reader.onload = function() {
+          var value = String(reader.result || '');
+          var comma = value.indexOf(',');
+          resolve(comma >= 0 ? value.slice(comma + 1) : value);
+        };
+        reader.onerror = function() {
+          reject(reader.error || new Error('Failed to read file bytes.'));
+        };
+        reader.readAsDataURL(blob);
+      });
+    },
+
+    _openSystemFilePreview: function(blob, filename, mimeType) {
+      var host = window.__mcpviewsHost || {};
+      var utils = window.__companionUtils || {};
+      var opener = typeof host.openFilePreview === 'function'
+        ? host.openFilePreview
+        : utils.openFilePreview;
+      return UI.SlideOut._blobToBase64(blob).then(function(dataBase64) {
+        var payload = {
+          filename: filename || 'ludflow-document',
+          mimeType: mimeType || blob.type || '',
+          dataBase64: dataBase64
+        };
+        if (typeof opener === 'function') {
+          return opener(payload);
+        }
+        if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
+          return window.__TAURI__.core.invoke('open_file_preview', payload);
+        }
+        throw new Error('System file preview is unavailable in this host.');
+      });
+    },
+
+    _openLudflowDocumentAsset: function(documentId, versionId, fallbackFilename, forceDownload, options) {
+      var API = window.__decidrAPI;
+      options = options || {};
+      if (!API || typeof API.fetchLudflowDocumentAsset !== 'function') {
+        alert('Original file download is unavailable in this plugin version.');
+        return;
+      }
+      if (!documentId || !versionId || String(versionId).indexOf('__') === 0) {
+        alert('Original file is missing a saved Ludflow version id.');
+        return;
+      }
+      var requestedPreviewKind = forceDownload ? 'download' : (options.previewKind || filePreviewKind('', options.mimeType || '', fallbackFilename));
+      if (requestedPreviewKind === 'browser') {
+        UI.SlideOut._createBrowserPreviewShell(fallbackFilename || 'Preview');
+      }
+      API.fetchLudflowDocumentAsset(documentId, versionId).then(function(result) {
+        var response = result && result.response;
+        var filename = fallbackFilename || 'ludflow-document';
+        var mimeType = options.mimeType || '';
+        if (response && response.headers) {
+          filename = UI.SlideOut._filenameFromContentDisposition(response.headers.get('content-disposition'), filename);
+          mimeType = response.headers.get('content-type') || mimeType;
+        }
+        if (result && result.blob && result.blob.type && !mimeType) mimeType = result.blob.type;
+        var previewKind = forceDownload ? 'download' : (options.previewKind || filePreviewKind('', mimeType, filename));
+        if (previewKind === 'system') {
+          UI.SlideOut._openSystemFilePreview(result.blob, filename, mimeType).catch(function(err) {
+            console.warn('[decidr] System preview failed; downloading instead:', err);
+            UI.SlideOut._downloadBlob(result.blob, filename, true);
+          });
+          return;
+        }
+        if (previewKind === 'download') {
+          UI.SlideOut._downloadBlob(result.blob, filename, true);
+          return;
+        }
+        if (!UI.SlideOut._openBrowserPreviewBlob(result.blob, filename, mimeType)) {
+          UI.SlideOut._downloadBlob(result.blob, filename, true);
+        }
+      }).catch(function(err) {
+        console.error('[decidr] Failed to fetch Ludflow document asset:', err);
+        if (requestedPreviewKind === 'browser') UI.SlideOut._closeBrowserPreview();
+        alert('Could not open original file: ' + String((err && err.message) || err || 'Unknown error'));
+      });
     },
 
     _shouldLoadLudflowDocumentVersions: function(data) {
@@ -4645,16 +5191,65 @@
           var provider = doc.provider || doc.externalProvider || '';
           var providerLabel = provider ? String(provider).charAt(0).toUpperCase() + String(provider).slice(1) : 'External';
           var docTitle = doc.title || (isUrl && doc.url) || (isLudflow ? 'LudFlow Document' : (isExternal ? providerLabel + ' Document' : 'Untitled'));
-          html += '<div class="decidr-so-doc-item">';
+          var ludflowMeta = isLudflow ? ludflowLinkedDocumentMeta(doc) : {};
+          var isUploadedAsset = isLudflow && ludflowMeta.isUploadedAsset && ludflowMeta.previewKind !== 'markdown';
+          var docSubtitle = isLudflow ? ludflowDocumentSubtitle(ludflowMeta, docTitle) : '';
+          var docBadge = isLudflow ? (ludflowMeta.typeLabel || 'LudFlow') : (isExternal ? providerLabel : docType);
+          var docOrgId = doc.orgId || doc.organizationId || doc.organization_id || '';
+          var ludflowDocId = doc.ludflowDocumentId || doc.id;
+          html += '<div class="decidr-so-doc-item' + (isUploadedAsset ? ' decidr-so-doc-file-item' : '') + '">';
           if (isUrl && doc.url) {
             html += '<a href="' + UI.escapeHtml(doc.url) + '" target="_blank" rel="noopener" class="decidr-so-doc-link" title="' + UI.escapeHtml(docTitle) + '">'
               + '<span class="decidr-so-doc-link-title">' + UI.escapeHtml(docTitle) + '</span>'
               + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>'
               + '</a>';
+          } else if (isUploadedAsset) {
+            var assetAction = ludflowMeta.previewKind === 'download' ? 'download' : 'preview';
+            var assetActionLabel = ludflowMeta.previewKind === 'download'
+              ? 'Download'
+              : (ludflowMeta.previewKind === 'system' ? 'Open' : 'Preview');
+            var assetAttrsFor = function(action) {
+              return ' data-ludflow-asset-action="' + UI.escapeHtml(action) + '"'
+                + ' data-ludflow-document-id="' + UI.escapeHtml(ludflowDocId) + '"'
+                + ' data-ludflow-version-id="' + UI.escapeHtml(ludflowMeta.versionId || '') + '"'
+                + ' data-ludflow-asset-filename="' + UI.escapeHtml(ludflowMeta.filename || docTitle) + '"'
+                + ' data-ludflow-asset-mime-type="' + UI.escapeHtml(ludflowMeta.mimeType || '') + '"'
+                + ' data-ludflow-asset-preview-kind="' + UI.escapeHtml(ludflowMeta.previewKind || 'download') + '"';
+            };
+            var assetInlineAttrs = ' onclick="return window.__decidrUI.SlideOut._handleLudflowAssetInline(event,this)"';
+            html += '<button type="button" class="decidr-so-doc-link decidr-so-doc-file"' + assetAttrsFor(assetAction) + assetInlineAttrs + ' title="' + UI.escapeHtml(docTitle) + '">';
+            html += '<span class="decidr-so-doc-icon" aria-hidden="true">'
+              + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/></svg>'
+              + '</span>';
+            html += '<span class="decidr-so-doc-link-text"><span class="decidr-so-doc-link-title">' + UI.escapeHtml(docTitle) + '</span>'
+              + (docSubtitle ? '<span class="decidr-so-doc-link-subtitle">' + UI.escapeHtml(docSubtitle) + '</span>' : '')
+              + '</span>';
+            html += '</button>';
+            html += '<span class="decidr-so-doc-actions-inline">';
+            if (ludflowMeta.previewKind !== 'download') {
+              html += '<button type="button" class="decidr-so-doc-file-action"' + assetAttrsFor('preview') + assetInlineAttrs + '>' + UI.escapeHtml(assetActionLabel) + '</button>';
+            }
+            html += '<button type="button" class="decidr-so-doc-file-action"' + assetAttrsFor('download') + assetInlineAttrs + '>Download</button>';
+            html += '</span>';
           } else if (isLudflow) {
-            html += '<button type="button" class="decidr-so-doc-link decidr-so-doc-ludflow" data-entity-type="ludflow_document" data-entity-id="' + UI.escapeHtml(doc.ludflowDocumentId || doc.id) + '" title="' + UI.escapeHtml(docTitle) + '">'
-              + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'
-              + '<span class="decidr-so-doc-link-title">' + UI.escapeHtml(docTitle) + '</span>'
+            html += '<button type="button" class="decidr-so-doc-link decidr-so-doc-ludflow"'
+              + ' data-entity-type="ludflow_document"'
+              + ' data-entity-id="' + UI.escapeHtml(ludflowDocId) + '"'
+              + ' data-ludflow-doc-id="' + UI.escapeHtml(ludflowDocId) + '"'
+              + ' data-ludflow-doc-org-id="' + UI.escapeHtml(docOrgId) + '"'
+              + ' data-ludflow-doc-title="' + UI.escapeHtml(docTitle) + '"'
+              + ' data-ludflow-doc-filename="' + UI.escapeHtml(ludflowMeta.filename || '') + '"'
+              + ' data-ludflow-doc-format="' + UI.escapeHtml(ludflowMeta.format || '') + '"'
+              + ' data-ludflow-doc-mime-type="' + UI.escapeHtml(ludflowMeta.mimeType || '') + '"'
+              + ' data-ludflow-doc-version-id="' + UI.escapeHtml(ludflowMeta.versionId || '') + '"'
+              + ' data-ludflow-doc-lifecycle="' + UI.escapeHtml(ludflowMeta.lifecycleStage || '') + '"'
+              + ' data-ludflow-doc-extraction="' + UI.escapeHtml(ludflowMeta.extractionStatus || '') + '"'
+              + ' data-ludflow-doc-size="' + UI.escapeHtml(ludflowMeta.size || '') + '"'
+              + ' title="' + UI.escapeHtml(docTitle) + '">'
+              + '<span class="decidr-so-doc-icon" aria-hidden="true"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>'
+              + '<span class="decidr-so-doc-link-text"><span class="decidr-so-doc-link-title">' + UI.escapeHtml(docTitle) + '</span>'
+              + (docSubtitle ? '<span class="decidr-so-doc-link-subtitle">' + UI.escapeHtml(docSubtitle) + '</span>' : '')
+              + '</span>'
               + '</button>';
           } else if (isExternal) {
             html += '<button type="button" class="decidr-so-doc-link decidr-so-doc-external"'
@@ -4671,7 +5266,7 @@
           } else {
             html += '<span class="decidr-so-doc-link" title="' + UI.escapeHtml(docTitle) + '"><span class="decidr-so-doc-link-title">' + UI.escapeHtml(docTitle) + '</span></span>';
           }
-          html += '<span class="decidr-so-doc-type-badge">' + UI.escapeHtml(isLudflow ? 'LudFlow' : (isExternal ? providerLabel : docType)) + '</span>';
+          html += '<span class="decidr-so-doc-type-badge">' + UI.escapeHtml(docBadge) + '</span>';
           html += '<button class="decidr-so-btn-unlink-doc" data-doc-unlink-id="' + UI.escapeHtml(doc.id) + '" title="Unlink document">'
             + '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
             + '</button>';
@@ -4726,11 +5321,22 @@
       html += '</div>';
       // Tab: Upload
       html += '<div class="decidr-so-tab-panel' + (state.docFormTab === 'upload' ? ' active' : '') + '" id="decidr-so-doc-tab-upload">';
-      html += '<div class="decidr-so-file-input-wrap">';
-      html += '<span>\u{1F4CE}</span> <span>Coming soon</span>';
-      html += '</div>';
+      html += '<input type="file" id="decidr-so-input-doc-upload-file">';
+      html += '<input type="text" id="decidr-so-input-doc-upload-title" placeholder="Evidence title...">';
+      if (String(entityType).toUpperCase() === 'DECISION') {
+        html += '<select id="decidr-so-input-doc-upload-stage">'
+          + '<option value="PLAN">PLAN</option>'
+          + '<option value="STAGED">STAGED</option>'
+          + '<option value="IMPLEMENTED">IMPLEMENTED</option>'
+          + '</select>';
+      }
+      html += '<input type="text" id="decidr-so-input-doc-upload-tags" placeholder="Tags...">';
+      html += '<textarea id="decidr-so-input-doc-upload-notes" placeholder="Notes..." rows="3"></textarea>';
+      html += '<textarea id="decidr-so-input-doc-upload-metadata" placeholder="Metadata JSON..." rows="3"></textarea>';
+      html += '<div id="decidr-so-doc-upload-status" class="decidr-so-empty-hint"></div>';
       html += '<div class="decidr-so-form-actions">'
         + '<button class="decidr-so-btn decidr-so-btn-sm" id="decidr-so-btn-cancel-doc-upload">Cancel</button>'
+        + '<button class="decidr-so-btn decidr-so-btn-primary decidr-so-btn-sm" id="decidr-so-btn-upload-doc">Upload</button>'
         + '</div>';
       html += '</div>';
       html += '</div>';
@@ -4741,6 +5347,7 @@
 
     _wireDocumentEvents: function(panel, entityType, entityId, state) {
       var API = window.__decidrAPI;
+      UI.SlideOut._wireLudflowAssetButtons(panel, '');
 
       // "Link Document" button opens form
       var addDocBtn = panel.querySelector('#decidr-so-btn-add-doc');
@@ -4905,6 +5512,263 @@
             UI.SlideOut._refetchAndRender();
           }).catch(function(err) { UI.SlideOut._busy = false; console.error('[decidr] Link external doc failed:', err); });
         };
+      }
+
+      // Upload evidence file tab
+      var uploadDocBtn = panel.querySelector('#decidr-so-btn-upload-doc');
+      if (uploadDocBtn) {
+        var unwrapUploadResponse = function(result) {
+          return result && result.data !== undefined ? result.data : result;
+        };
+        var setUploadStatus = function(message, isError) {
+          var statusEl = panel.querySelector('#decidr-so-doc-upload-status');
+          if (!statusEl) return;
+          statusEl.style.color = isError ? 'var(--color-error-text)' : '';
+          statusEl.textContent = message || '';
+        };
+        var parseUploadTags = function(raw) {
+          if (!raw) return [];
+          var parts = raw.split(',');
+          var tags = [];
+          for (var i = 0; i < parts.length; i++) {
+            var tag = parts[i].trim();
+            if (tag && tags.indexOf(tag) === -1) tags.push(tag);
+          }
+          return tags;
+        };
+        var parseUploadMetadata = function(raw) {
+          if (!raw || !raw.trim()) return {};
+          try {
+            var parsed = JSON.parse(raw);
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+              throw new Error('Metadata must be a JSON object');
+            }
+            return parsed;
+          } catch (err) {
+            throw new Error((err && err.message) || 'Metadata JSON is invalid');
+          }
+        };
+        var compactUploadText = function(text) {
+          if (!text) return '';
+          return String(text).replace(/\s+/g, ' ').trim();
+        };
+        var readXmlTag = function(text, tagName) {
+          if (!text) return '';
+          var pattern = new RegExp('<' + tagName + '>([\\s\\S]*?)<\\/' + tagName + '>', 'i');
+          var match = pattern.exec(text);
+          return match ? compactUploadText(match[1]) : '';
+        };
+        var decodeXmlEntities = function(text) {
+          if (!text) return '';
+          return text
+            .replace(/&quot;/g, '"')
+            .replace(/&apos;/g, "'")
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&amp;/g, '&');
+        };
+        var extractUploadResponseMessage = function(text) {
+          text = compactUploadText(text);
+          if (!text) return '';
+          try {
+            var parsed = JSON.parse(text);
+            if (parsed && typeof parsed === 'object') {
+              return compactUploadText(parsed.error || parsed.message || parsed.detail || '');
+            }
+          } catch (ignoreJson) {
+            // Storage providers often return XML.
+          }
+          var xmlMessage = readXmlTag(text, 'Message');
+          var xmlCode = readXmlTag(text, 'Code');
+          if (xmlMessage || xmlCode) {
+            return decodeXmlEntities((xmlCode ? xmlCode + ': ' : '') + (xmlMessage || ''));
+          }
+          return text.length <= 260 ? decodeXmlEntities(text) : decodeXmlEntities(text.slice(0, 260) + '...');
+        };
+        var uploadHttpStatusLabel = function(xhr) {
+          var status = xhr && typeof xhr.status === 'number' ? xhr.status : 0;
+          var statusText = compactUploadText(xhr && xhr.statusText);
+          if (!status) return 'status 0';
+          return 'HTTP ' + status + (statusText ? ' ' + statusText : '');
+        };
+        var directUploadError = function(xhr, fallback) {
+          var status = xhr && typeof xhr.status === 'number' ? xhr.status : 0;
+          var detail = extractUploadResponseMessage(xhr && xhr.responseText);
+          var message = fallback || 'Direct storage upload failed';
+          if (status) {
+            message += ' (' + uploadHttpStatusLabel(xhr) + ')';
+            if (detail) message += ': ' + detail;
+          } else {
+            message += ' before the storage service returned a readable response. Check R2 CORS, signed URL expiry, or network reachability.';
+          }
+          var err = new Error(message);
+          err.uploadStep = 'storage-put';
+          err.status = status;
+          err.responseText = xhr && xhr.responseText;
+          return err;
+        };
+        var formatUploadFailure = function(err) {
+          if (!err) return 'Upload failed';
+          if (err.bodyMessage) return err.bodyMessage;
+          if (err.body && (err.body.error || err.body.message || err.body.detail)) {
+            return err.body.error || err.body.message || err.body.detail;
+          }
+          if (err.status && err.statusText) {
+            return 'Upload API failed (HTTP ' + err.status + ' ' + err.statusText + ')';
+          }
+          return err.message || 'Upload failed';
+        };
+        var putUploadFile = function(uploadUrl, headers, file) {
+          return new Promise(function(resolve, reject) {
+            var xhr = new XMLHttpRequest();
+            xhr.open('PUT', uploadUrl, true);
+            headers = headers || {};
+            for (var key in headers) {
+              if (headers.hasOwnProperty(key)) {
+                xhr.setRequestHeader(key, headers[key]);
+              }
+            }
+            xhr.upload.onprogress = function(event) {
+              if (!event.lengthComputable) {
+                setUploadStatus('Uploading...');
+                return;
+              }
+              var percent = Math.max(1, Math.min(99, Math.round((event.loaded / event.total) * 100)));
+              setUploadStatus('Uploading ' + percent + '%...');
+            };
+            xhr.onload = function() {
+              if (xhr.status >= 200 && xhr.status < 300) {
+                resolve();
+              } else {
+                reject(directUploadError(xhr, 'Direct storage upload failed'));
+              }
+            };
+            xhr.onerror = function() {
+              reject(directUploadError(xhr, 'Direct storage upload failed'));
+            };
+            xhr.onabort = function() {
+              reject(directUploadError(xhr, 'Direct storage upload was cancelled'));
+            };
+            xhr.ontimeout = function() {
+              reject(directUploadError(xhr, 'Direct storage upload timed out'));
+            };
+            xhr.send(file);
+          });
+        };
+        uploadDocBtn.onclick = function() {
+          if (!API) return;
+          var fileInput = panel.querySelector('#decidr-so-input-doc-upload-file');
+          var titleInput = panel.querySelector('#decidr-so-input-doc-upload-title');
+          var stageInput = panel.querySelector('#decidr-so-input-doc-upload-stage');
+          var tagsInput = panel.querySelector('#decidr-so-input-doc-upload-tags');
+          var notesInput = panel.querySelector('#decidr-so-input-doc-upload-notes');
+          var metadataInput = panel.querySelector('#decidr-so-input-doc-upload-metadata');
+          var file = fileInput && fileInput.files && fileInput.files[0] ? fileInput.files[0] : null;
+          if (!file) {
+            setUploadStatus('Select a file.', true);
+            return;
+          }
+          var title = titleInput && titleInput.value.trim() ? titleInput.value.trim() : file.name;
+          var stage = stageInput ? stageInput.value : undefined;
+          var tags = parseUploadTags(tagsInput ? tagsInput.value : '');
+          var notes = notesInput ? notesInput.value.trim() : '';
+          var mimeType = file.type || 'application/octet-stream';
+          var metadata;
+          try {
+            metadata = parseUploadMetadata(metadataInput ? metadataInput.value : '');
+          } catch (err) {
+            setUploadStatus((err && err.message) || 'Metadata JSON is invalid', true);
+            return;
+          }
+          metadata.source = 'decidr-plugin';
+          metadata.notes = notes || null;
+          var basePayload = {
+            entityType: entityType,
+            entityId: entityId,
+            title: title,
+            filename: file.name,
+            mimeType: mimeType,
+            size: file.size,
+            stage: stage,
+            tags: tags,
+            metadata: metadata
+          };
+          if (UI.SlideOut._guardBusy()) return;
+          uploadDocBtn.disabled = true;
+          setUploadStatus('Preparing upload...');
+          API.startEvidenceFileUpload(basePayload).then(function(startResult) {
+            var startData = unwrapUploadResponse(startResult);
+            if (!startData || !startData.uploadUrl || !startData.uploadId) {
+              throw new Error('Upload session response was invalid');
+            }
+            if (typeof startData.maxBytes === 'number' && file.size > startData.maxBytes) {
+              throw new Error('File is ' + Math.round(file.size / 1024 / 1024) + ' MB; upload limit is '
+                + Math.round(startData.maxBytes / 1024 / 1024) + ' MB.');
+            }
+            return putUploadFile(startData.uploadUrl, startData.uploadHeaders, file).then(function() {
+              setUploadStatus('Finalizing...');
+              var completePayload = {};
+              for (var key in basePayload) {
+                if (basePayload.hasOwnProperty(key)) completePayload[key] = basePayload[key];
+              }
+              completePayload.uploadId = startData.uploadId;
+              completePayload.notes = notes;
+              return API.completeEvidenceFileUpload(completePayload);
+            });
+          }).then(function() {
+            setUploadStatus('Uploaded.');
+            state.addDocFormOpen = false;
+            UI.SlideOut._refetchAndRender();
+          }).catch(function(err) {
+            UI.SlideOut._busy = false;
+            uploadDocBtn.disabled = false;
+            setUploadStatus(formatUploadFailure(err), true);
+            console.error('[decidr] Upload evidence file failed:', err);
+          });
+        };
+      }
+
+      // Ludflow document sidecar buttons
+      var ludflowDocBtns = panel.querySelectorAll('[data-ludflow-doc-id]');
+      for (var lb = 0; lb < ludflowDocBtns.length; lb++) {
+        (function(btn) {
+          btn.onclick = function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var docId = btn.getAttribute('data-ludflow-doc-id');
+            if (!docId) return;
+            var filename = btn.getAttribute('data-ludflow-doc-filename') || '';
+            var mimeType = btn.getAttribute('data-ludflow-doc-mime-type') || '';
+            var format = btn.getAttribute('data-ludflow-doc-format') || '';
+            var versionId = btn.getAttribute('data-ludflow-doc-version-id') || '';
+            var lifecycle = btn.getAttribute('data-ludflow-doc-lifecycle') || '';
+            var extraction = btn.getAttribute('data-ludflow-doc-extraction') || '';
+            var size = Number(btn.getAttribute('data-ludflow-doc-size') || 0) || null;
+            var orgId = btn.getAttribute('data-ludflow-doc-org-id') || '';
+            var seedData = {
+              id: docId,
+              title: btn.getAttribute('data-ludflow-doc-title') || 'LudFlow Document',
+              format: format,
+              mimeType: mimeType,
+              orgId: orgId,
+              metadata: {
+                originalFilename: filename,
+                ludflowVersionId: versionId,
+                lifecycleStage: lifecycle,
+                extractionStatus: extraction,
+                asset: filename || mimeType || size ? {
+                  filename: filename,
+                  mimeType: mimeType,
+                  size: size
+                } : null
+              }
+            };
+            UI.SlideOut.open('ludflow_document', docId, {
+              source: panel,
+              seedData: seedData
+            });
+          };
+        })(ludflowDocBtns[lb]);
       }
 
       // External document sidecar buttons
