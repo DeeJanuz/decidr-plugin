@@ -1,5 +1,7 @@
 # Unreleased
 
+- Strengthen the auto-log DecidR setup rule so meaningful work is logged under the closest product/company initiative or project when no exact parent match exists, instead of being skipped.
+
 ## 0.1.51
 
 - Add provider-neutral external document links in decision/project/task slideouts, with a Notion-default external link form and provider badges.
