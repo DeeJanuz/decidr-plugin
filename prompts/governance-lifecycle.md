@@ -21,7 +21,7 @@ Use these checkpoints whenever a new feature, process, public/plugin packaging c
 
 1. **Open discovery:** Gather facts and draft options. Keep DecidR/LudFlow mutations read-only unless the user explicitly asks to log during discovery.
 2. **Human-accepted direction:** When the human says the direction is good enough to preserve, create or update the DecidR decision and save the accepted plan with `save_decision_document_version` using stage `PLAN`. Revisions during approval create additional `PLAN` versions on the same document. Do not mark the decision `STAGED` merely because the plan is accepted.
-3. **Implementation start gate:** Before the first implementation action after discovery/planning, search for a matching decision or task. If a confident record exists, attach work to it. If none exists, choose the right creation path: proceed directly for clear low-risk records after search/context checks, or use MCPViews review for significant, ambiguous, destructive, high-impact, or hard-to-undo changes. If the parent initiative/project/bridge is unclear, ask where the work should live.
+3. **Implementation start gate:** Before the first implementation action after discovery/planning, search for a matching decision or task. If a confident record exists, attach work to it. If none exists, choose the closest relevant project or initiative when product/company context is clear and proceed directly for clear low-risk records after search/context checks. Use MCPViews review or ask for placement only when the closest parent is ambiguous, cross-organization, customer/production-visible, destructive, high-impact, or hard to undo. When using an inferred closest parent, record why it was chosen in the decision rationale or evidence.
 4. **Built and validating:** Move the matching standard decision to `STAGED` only after the code/process/configuration exists and is being tested, reviewed, or validated outside production.
 5. **Live release:** Move a matching `STAGED` decision to `IMPLEMENTED` only after production deployment or the agreed production-equivalent operational release. This includes a successful push/merge to `main`, `master`, `prod`, or another production branch only when that branch is the live release source, and a new versioned release/tag/package only when it is available for users or downstream systems to install.
 
@@ -79,15 +79,15 @@ Workflow:
 ## Planning, implementation-start, and commit governance
 
 - Before logging an implementation plan, follow the selected DecidR work logging startup rule when one is installed. If no policy is known, ask whether the user wants the plan logged in DecidR unless they have already opted in or the user has explicitly accepted the discovery direction as the decision artifact.
-- With `auto_log_confident`, clear low-risk governance writes may proceed directly after search/context checks when organization, parent, target, and impact are confident.
+- With `auto_log_confident`, clear low-risk governance writes may proceed directly after search/context checks when organization, closest parent, target, and impact are confident. Do not skip logging only because the parent is inferred from the closest relevant project or initiative.
 - With `review_first`, present proposed formal writes for review and execute accepted rows only.
 - With `capture_only`, summarize candidate durable memory and ask before creating, updating, or lifecycle-transitioning formal DecidR records.
 - Before leaving plan mode or discovery for implementation, run the implementation start gate. Do not treat local repo work as ordinary implementation prep when it plausibly affects governed DecidR/plugin/process behavior.
-- If governed work has no matching decision/task, create clear low-risk records directly after search/context checks; use MCPViews review only when the proposed mutation is significant, ambiguous, destructive, high-impact, hard to undo, cross-organization, customer/production-visible, or needs row-level accept/reject control.
+- If governed work has no matching decision/task, create clear low-risk records under the closest relevant project or initiative after search/context checks; use MCPViews review only when the proposed mutation is significant, ambiguous, destructive, high-impact, hard to undo, cross-organization, customer/production-visible, or needs row-level accept/reject control.
 - Do not require MCPViews review solely because there are multiple related DecidR/LudFlow writes. Creating one new decision with a linked discovery document, or updating one decision and its accompanying documents, can proceed directly when the user intent, organization, parent entity, and target documents are clear.
 - When committing code, search for confident matching decisions and tasks. Save a `STAGED` LudFlow document version and move confident matching decisions to `STAGED` only after the commit succeeds.
 - When the same workflow also pushes or merges that work to the repository's production release branch, or publishes a versioned release/tag/package that users or downstream systems can install, save an `IMPLEMENTED` LudFlow document version and move confident matching `STAGED` decisions to `IMPLEMENTED` after that release action succeeds.
-- Do not create a new decision merely because a commit happened. If no confident record exists, propose a standard decision, catch-up decision, or task based on scope.
+- Do not create a new decision merely because a commit happened. If no confident record exists, create or propose a standard decision, catch-up decision, or task under the closest relevant project or initiative based on scope and risk.
 
 ## Document handling
 
@@ -98,7 +98,7 @@ Workflow:
 
 ## Failure modes
 
-- If organization or parent context is unclear, ask for placement before mutating.
+- If organization context is unclear, ask for placement before mutating. If parent context is only inferred but the closest relevant project or initiative is clear and low-risk, log there and state the inference in the rationale/evidence.
 - If a draft decision cannot leave `DRAFT`, check whether a linked LudFlow document has a `PLAN` version first.
 - If `STAGED` or `IMPLEMENTED` transitions fail, save the matching lifecycle document version before retrying the status transition.
 - If a requested transition is not in `allowedTransitions`, report the current status and the allowed next states rather than forcing a different status.
