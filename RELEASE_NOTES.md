@@ -1,5 +1,8 @@
 # Unreleased
 
+- Improve DecidR dashboard accessibility by making initiative collapse headers keyboard-operable buttons with explicit expanded state and project-region controls.
+- Improve mobile dashboard and timeline behavior with overflow-safe dashboard rows, stacked decision/pending cards, and a mobile timeline agenda view that preserves Now/Next/Risk scan paths.
+- Improve GitHub PAT and slideout accessibility with labeled form fields, live validation feedback, invalid-field focus, escaped error details, and named close/back controls.
 - Strengthen the auto-log DecidR setup rule so meaningful work is logged under the closest product/company initiative or project when no exact parent match exists, instead of being skipped.
 
 ## 0.1.51
