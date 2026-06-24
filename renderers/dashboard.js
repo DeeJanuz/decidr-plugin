@@ -861,8 +861,9 @@
           animIdx++;
         }
 
+        var initProjectsId = 'decidr-init-projects-' + String(initiative.id || '').replace(/[^A-Za-z0-9_-]/g, '-');
         var collapsedStyle = isCollapsed ? ' style="display: none;"' : '';
-        html += '<div class="decidr-init-projects" data-init-projects="'
+        html += '<div class="decidr-init-projects" id="' + UI.escapeHtml(initProjectsId) + '" data-init-projects="'
           + UI.escapeHtml(initiative.id) + '"' + collapsedStyle + '>'
           + '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));'
           + ' gap: var(--space-4); padding: var(--space-2) 0 var(--space-4) 0;">'
@@ -1215,26 +1216,65 @@
       }
     }
 
+    function initiativeProjectsId(initId) {
+      return 'decidr-init-projects-' + String(initId || '').replace(/[^A-Za-z0-9_-]/g, '-');
+    }
+
+    function setInitiativeToggleState(header, projectsEl, expanded) {
+      header.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      if (projectsEl) {
+        projectsEl.style.display = expanded ? '' : 'none';
+      }
+      var card = header.closest('[data-init-id]');
+      if (card) {
+        card.classList.toggle('decidr-init-card-collapsed', !expanded);
+      }
+    }
+
+    function toggleInitiative(header) {
+      var card = header.closest('[data-init-id]');
+      if (!card) return;
+      var initId = card.getAttribute('data-init-id');
+      var projectsEl = container.querySelector('[data-init-projects="' + initId + '"]');
+      var nextExpanded = !!dashState.collapsedInitiatives[initId];
+
+      if (nextExpanded) {
+        delete dashState.collapsedInitiatives[initId];
+      } else {
+        dashState.collapsedInitiatives[initId] = true;
+      }
+      setInitiativeToggleState(header, projectsEl, nextExpanded);
+    }
+
     function wireInitiativeToggle() {
       var initHeaders = container.querySelectorAll('.decidr-init-header');
       for (var i = 0; i < initHeaders.length; i++) {
         (function(header) {
-          header.style.cursor = 'pointer';
-          header.addEventListener('click', function() {
-            var card = header.closest('[data-init-id]');
-            if (!card) return;
-            var initId = card.getAttribute('data-init-id');
-            var projectsEl = container.querySelector('[data-init-projects="' + initId + '"]');
+          var card = header.closest('[data-init-id]');
+          var initId = card ? card.getAttribute('data-init-id') : '';
+          var projectsEl = initId ? container.querySelector('[data-init-projects="' + initId + '"]') : null;
+          var labelEl = header.querySelector('.decidr-init-name');
+          var label = labelEl ? labelEl.textContent : 'initiative';
 
-            if (dashState.collapsedInitiatives[initId]) {
-              delete dashState.collapsedInitiatives[initId];
-              if (projectsEl) projectsEl.style.display = '';
-              if (card) card.classList.remove('decidr-init-card-collapsed');
-            } else {
-              dashState.collapsedInitiatives[initId] = true;
-              if (projectsEl) projectsEl.style.display = 'none';
-              if (card) card.classList.add('decidr-init-card-collapsed');
-            }
+          header.style.cursor = 'pointer';
+          header.setAttribute('role', 'button');
+          header.setAttribute('tabindex', '0');
+          header.setAttribute('aria-label', 'Toggle ' + label + ' projects');
+          if (projectsEl) {
+            if (!projectsEl.id) projectsEl.id = initiativeProjectsId(initId);
+            header.setAttribute('aria-controls', projectsEl.id);
+          }
+          setInitiativeToggleState(header, projectsEl, !dashState.collapsedInitiatives[initId]);
+
+          header.addEventListener('click', function(e) {
+            if (e.target.closest && e.target.closest('[data-decidr-copy-ref]')) return;
+            toggleInitiative(header);
+          });
+          header.addEventListener('keydown', function(e) {
+            var key = e.key || e.code;
+            if (key !== 'Enter' && key !== ' ' && key !== 'Spacebar') return;
+            e.preventDefault();
+            toggleInitiative(header);
           });
         })(initHeaders[i]);
       }

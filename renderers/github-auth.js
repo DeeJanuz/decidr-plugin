@@ -7,6 +7,15 @@
 
     window.__decidrAPI.withReady(container, meta, function() {
       var API = window.__decidrAPI;
+      var UI = window.__decidrUI || {};
+      var escapeHtml = UI.escapeHtml || function(value) {
+        return String(value == null ? '' : value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      };
 
       var html = '';
       html += '<div style="max-width:420px;margin:0 auto;padding:var(--space-6);">';
@@ -22,12 +31,12 @@
       html += '</div>';
 
       // Form
-      html += '<div id="decidr-gh-form">';
+      html += '<form id="decidr-gh-form">';
 
       // Username field
       html += '<div style="margin-bottom:var(--space-4);">';
-      html += '<label style="display:block;font-size:var(--text-small);color:var(--text-secondary);margin-bottom:var(--space-1);">GitHub Username</label>';
-      html += '<input type="text" id="decidr-gh-username" value="' + ((data && data.github_username) || '') + '" placeholder="octocat" style="';
+      html += '<label for="decidr-gh-username" style="display:block;font-size:var(--text-small);color:var(--text-secondary);margin-bottom:var(--space-1);">GitHub Username</label>';
+      html += '<input type="text" id="decidr-gh-username" value="' + escapeHtml((data && data.github_username) || '') + '" placeholder="octocat" autocomplete="username" style="';
       html += 'width:100%;box-sizing:border-box;padding:var(--space-2) var(--space-3);';
       html += 'background:var(--glass-bg);border:1px solid var(--border-default);border-radius:var(--border-radius-md);';
       html += 'color:var(--text-primary);font-size:var(--text-body);outline:none;';
@@ -36,13 +45,13 @@
 
       // Token field
       html += '<div style="margin-bottom:var(--space-4);">';
-      html += '<label style="display:block;font-size:var(--text-small);color:var(--text-secondary);margin-bottom:var(--space-1);">Personal Access Token</label>';
-      html += '<input type="password" id="decidr-gh-token" placeholder="github_pat_..." style="';
+      html += '<label for="decidr-gh-token" style="display:block;font-size:var(--text-small);color:var(--text-secondary);margin-bottom:var(--space-1);">Personal Access Token</label>';
+      html += '<input type="password" id="decidr-gh-token" placeholder="github_pat_..." autocomplete="off" aria-describedby="decidr-gh-token-help decidr-gh-status" style="';
       html += 'width:100%;box-sizing:border-box;padding:var(--space-2) var(--space-3);';
       html += 'background:var(--glass-bg);border:1px solid var(--border-default);border-radius:var(--border-radius-md);';
       html += 'color:var(--text-primary);font-size:var(--text-body);outline:none;font-family:monospace;';
       html += '" />';
-      html += '<p style="margin:var(--space-1) 0 0;font-size:var(--text-xs);color:var(--text-tertiary);">';
+      html += '<p id="decidr-gh-token-help" style="margin:var(--space-1) 0 0;font-size:var(--text-xs);color:var(--text-tertiary);">';
       html += 'Create at GitHub &rarr; Settings &rarr; Developer settings &rarr; Personal access tokens. ';
       html += 'Your PAT is sent directly to DecidR and encrypted &mdash; it never passes through the AI agent. ';
       html += 'This PAT is used for outbound actions like creating issues, opening PRs, reviews, and merges. ';
@@ -50,17 +59,17 @@
       html += '</div>';
 
       // Status message area
-      html += '<div id="decidr-gh-status" style="margin-bottom:var(--space-4);display:none;"></div>';
+      html += '<div id="decidr-gh-status" role="status" aria-live="polite" aria-atomic="true" style="margin-bottom:var(--space-4);display:none;"></div>';
 
       // Submit button
-      html += '<button id="decidr-gh-submit" style="';
+      html += '<button id="decidr-gh-submit" type="submit" style="';
       html += 'width:100%;padding:var(--space-2) var(--space-4);';
       html += 'background:var(--accent-primary);color:#fff;border:none;border-radius:var(--border-radius-md);';
       html += 'font-size:var(--text-body);font-weight:var(--weight-medium);cursor:pointer;';
       html += 'transition:background 0.15s ease;';
       html += '">Save GitHub PAT</button>';
 
-      html += '</div>'; // form
+      html += '</form>'; // form
       html += '</div>'; // wrapper
 
       container.innerHTML = html;
@@ -68,6 +77,7 @@
       // --- Wire events ---
 
       var submitBtn = container.querySelector('#decidr-gh-submit');
+      var formEl = container.querySelector('#decidr-gh-form');
       var statusEl = container.querySelector('#decidr-gh-status');
       var usernameInput = container.querySelector('#decidr-gh-username');
       var tokenInput = container.querySelector('#decidr-gh-token');
@@ -79,14 +89,20 @@
         statusEl.style.fontSize = 'var(--text-small)';
         statusEl.style.lineHeight = '1.4';
         if (variant === 'error') {
+          statusEl.setAttribute('role', 'alert');
+          statusEl.setAttribute('aria-live', 'assertive');
           statusEl.style.background = 'rgba(239,68,68,0.1)';
           statusEl.style.border = '1px solid rgba(239,68,68,0.3)';
           statusEl.style.color = '#f87171';
         } else if (variant === 'warning') {
+          statusEl.setAttribute('role', 'alert');
+          statusEl.setAttribute('aria-live', 'assertive');
           statusEl.style.background = 'rgba(245,158,11,0.1)';
           statusEl.style.border = '1px solid rgba(245,158,11,0.3)';
           statusEl.style.color = '#fbbf24';
         } else {
+          statusEl.setAttribute('role', 'status');
+          statusEl.setAttribute('aria-live', 'polite');
           statusEl.style.background = 'rgba(34,197,94,0.1)';
           statusEl.style.border = '1px solid rgba(34,197,94,0.3)';
           statusEl.style.color = '#4ade80';
@@ -101,9 +117,14 @@
         submitBtn.style.opacity = '1';
       }
 
+      function resetFieldValidity() {
+        usernameInput.removeAttribute('aria-invalid');
+        tokenInput.removeAttribute('aria-invalid');
+      }
+
       function describeError(err) {
         var status = err && err.status;
-        var detail = (err && (err.bodyMessage || err.message)) || 'Unknown error';
+        var detail = escapeHtml((err && (err.bodyMessage || err.message)) || 'Unknown error');
         if (status === 401) {
           return {
             variant: 'warning',
@@ -145,12 +166,24 @@
         };
       }
 
-      submitBtn.addEventListener('click', function() {
+      formEl.addEventListener('submit', function(e) {
+        e.preventDefault();
         var username = usernameInput.value.trim();
         var token = tokenInput.value.trim();
+        resetFieldValidity();
 
-        if (!username) { showStatus('Please enter your GitHub username.', 'error'); return; }
-        if (!token) { showStatus('Please enter your Personal Access Token.', 'error'); return; }
+        if (!username) {
+          usernameInput.setAttribute('aria-invalid', 'true');
+          showStatus('Please enter your GitHub username.', 'error');
+          usernameInput.focus();
+          return;
+        }
+        if (!token) {
+          tokenInput.setAttribute('aria-invalid', 'true');
+          showStatus('Please enter your Personal Access Token.', 'error');
+          tokenInput.focus();
+          return;
+        }
 
         // Preflight: if we have no DecidR session token, the POST will 401 and
         // look like a bad PAT. Tell the user the real problem instead.
@@ -177,6 +210,7 @@
           submitBtn.textContent = 'Saved';
           submitBtn.style.background = 'rgba(34,197,94,0.8)';
           tokenInput.value = '';
+          resetFieldValidity();
         }).catch(function(err) {
           console.error('[decidr] github-auth submit failed', err);
           var desc = describeError(err);

@@ -2067,7 +2067,7 @@
       var contentStyle = dayPan
         ? 'width:100%;min-width:0;'
         : 'min-width:' + model.range.width + 'px;width:100%;';
-      var html = '<div style="border:1px solid var(--border-color);border-radius:8px;'
+      var html = '<div class="decidr-timeline-board-frame" style="border:1px solid var(--border-color);border-radius:8px;'
         + 'background:var(--decidr-timeline-board-bg);overflow:hidden;'
         + 'box-shadow:var(--decidr-timeline-board-shadow);">'
         + '<div data-timeline-board-scroll data-timeline-day-pan="' + (dayPan ? 'true' : 'false') + '" '
@@ -3135,7 +3135,16 @@
         + '@media (prefers-color-scheme: light){' + timelineLightThemeCss('.decidr-timeline-root') + '}'
         + timelineLightThemeCss('html[data-decidr-theme="light"] .decidr-timeline-root,.decidr-timeline-root[data-decidr-theme="light"]')
         + '.decidr-timeline-root,.decidr-timeline-root *{box-sizing:border-box;}'
-        + '.decidr-timeline-root [data-timeline-board-scroll]{max-width:100%;}</style>';
+        + '.decidr-timeline-root [data-timeline-board-scroll]{max-width:100%;}'
+        + '@media (max-width: 720px){'
+        + '.decidr-timeline-root{width:100%!important;max-width:100%!important;padding:var(--space-4) var(--space-3) var(--space-6)!important;overflow-x:hidden!important;}'
+        + '.decidr-timeline-root select,.decidr-timeline-root input[type="date"]{max-width:100%;min-width:0!important;}'
+        + '.decidr-timeline-root button{max-width:100%;}'
+        + '.decidr-timeline-board-frame{display:none;}'
+        + '[data-timeline-sticky-legend-shell]{position:static!important;height:auto!important;margin:var(--space-3) 0!important;}'
+        + '[data-timeline-sticky-legend]{position:static!important;top:auto!important;left:auto!important;right:auto!important;}'
+        + '}'
+        + '</style>';
       html += renderHeader(model);
       html += renderStats(model);
       html += renderRangeControls(model);

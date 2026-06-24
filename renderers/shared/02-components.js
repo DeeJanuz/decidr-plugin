@@ -2925,7 +2925,7 @@
         };
 
         var headerHtml = '<div class="decidr-so-header-row">'
-          + '<button class="decidr-so-btn-back" id="decidr-so-btn-back" title="' + backLabel + '">'
+          + '<button class="decidr-so-btn-back" id="decidr-so-btn-back" title="' + backLabel + '" aria-label="' + backLabel + '">'
           + backSvg + '</button>'
           + '<span class="decidr-so-type-badge decidr-so-type-' + UI.escapeHtml(top.type) + '">'
           + UI.escapeHtml(typeLabels[top.type] || top.type)
