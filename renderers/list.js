@@ -834,8 +834,9 @@
         // Avoid double-binding by checking a flag
         if (el.getAttribute('data-decidr-wired')) return;
         el.setAttribute('data-decidr-wired', '1');
+        UI.prepareInteractiveEntity(el);
 
-        el.addEventListener('click', function(e) {
+        function openEntity(e) {
           if (e.target.closest && e.target.closest('[data-decidr-copy-ref]')) return;
           e.preventDefault();
           e.stopPropagation();
@@ -844,6 +845,12 @@
           if (type && id) {
             UI.SlideOut.open(type, id, { source: root });
           }
+        }
+
+        el.addEventListener('click', openEntity);
+        el.addEventListener('keydown', function(e) {
+          if (!UI.isActivationKey(e)) return;
+          openEntity(e);
         });
       })(items[i]);
     }

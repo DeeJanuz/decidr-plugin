@@ -132,6 +132,18 @@
     return (typeof c === 'string' && /^#[0-9a-fA-F]{3,8}$/.test(c)) ? c : '#6b7280';
   };
 
+  UI.prepareInteractiveEntity = function(el) {
+    if (!el || !el.tagName) return;
+    var tag = String(el.tagName || '').toLowerCase();
+    if (tag === 'button' || tag === 'a') return;
+    if (!el.getAttribute('role')) el.setAttribute('role', 'button');
+    if (!el.getAttribute('tabindex')) el.setAttribute('tabindex', '0');
+  };
+
+  UI.isActivationKey = function(e) {
+    return e && (e.key === 'Enter' || e.key === ' ');
+  };
+
   UI.truncate = function(str, max) {
     if (!str) return '';
     max = max || 80;
@@ -1442,7 +1454,7 @@
     var s = size || 'md';
     var name = (user && user.name) ? user.name : '?';
     var initials = name.split(' ').map(function(w) { return w.charAt(0).toUpperCase(); }).join('').slice(0,2);
-    var color = UI.sanitizeColor((user && user.avatarColor) ? user.avatarColor : '#6366f1');
+    var color = UI.sanitizeColor((user && user.avatarColor) ? user.avatarColor : '#2563eb');
     return '<span class="decidr-avatar decidr-avatar-' + s + '" style="background-color:' + color + ';">' + UI.escapeHtml(initials) + '</span>';
   };
 
@@ -1751,7 +1763,7 @@
     var pct = taskTotal > 0 ? Math.round((taskDone / taskTotal) * 100) : 0;
     var fillDoneClass = pct === 100 ? ' decidr-progress-fill-done' : '';
 
-    var projColor = project.color || '#6366f1';
+    var projColor = project.color || '#2563eb';
     var styleStr = 'border-left: 3px solid ' + projColor + ';';
     if (typeof o.animDelay === 'number') {
       styleStr += 'animation-delay: ' + o.animDelay.toFixed(2) + 's;';
@@ -2625,7 +2637,7 @@
     var msgHtml = message
       ? '<span class="decidr-glass-loader-text">' + UI.escapeHtml(message) + '</span>'
       : '';
-    return '<div class="decidr-glass-pane">'
+    return '<div class="decidr-glass-pane" role="status" aria-live="polite">'
       + '<div class="decidr-glass-glow-tl"></div>'
       + '<div class="decidr-glass-glow-br"></div>'
       + msgHtml
@@ -3677,7 +3689,9 @@
       var navItems = panel.querySelectorAll('[data-entity-type][data-entity-id]');
       for (var i = 0; i < navItems.length; i++) {
         (function(el) {
-          el.onclick = function(e) {
+          UI.prepareInteractiveEntity(el);
+
+          function openEntity(e) {
             if (e.target.closest && e.target.closest('[data-decidr-copy-ref]')) return;
             // Don't navigate if clicking a task checkbox
             if (e.target.hasAttribute('data-task-toggle')) return;
@@ -3688,6 +3702,12 @@
             if (entityType && entityId) {
               UI.SlideOut.open(entityType, entityId, { source: panel });
             }
+          }
+
+          el.onclick = openEntity;
+          el.onkeydown = function(e) {
+            if (!UI.isActivationKey(e)) return;
+            openEntity(e);
           };
         })(navItems[i]);
       }

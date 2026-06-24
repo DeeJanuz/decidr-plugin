@@ -908,12 +908,15 @@
     // ── Main Render ────────────────────────────────────────
 
     function renderDashboard() {
-      var html = '<div style="max-width: 1200px; margin: 0 auto; padding: var(--space-6) var(--space-4);'
-        + ' font-family: var(--font-sans); color: var(--text-primary);">';
+      var html = '<div class="decidr-dashboard-root">';
 
       // Title with org picker
-      html += '<div style="display: flex; align-items: center; justify-content: space-between; margin: 0 0 var(--space-6) 0;">'
-        + '<h1 style="font-size: var(--text-h1); font-weight: var(--weight-bold); margin: 0;">Dashboard</h1>'
+      html += '<div class="decidr-dashboard-header">'
+        + '<div class="decidr-dashboard-title-block">'
+        + '<p class="decidr-dashboard-kicker">DecidR</p>'
+        + '<h1 class="decidr-dashboard-title">Governance Dashboard</h1>'
+        + '<p class="decidr-dashboard-subtitle">Next decisions, approvals, projects, and proof signals in one workspace.</p>'
+        + '</div>'
         + UI.orgPicker(dashState.organizations, dashState.activeOrgId, { defaultOrgId: dashState.defaultOrgId })
         + '</div>';
 
@@ -1248,8 +1251,9 @@
 
           // Skip init headers — they toggle collapse, not slide-out
           if (el.querySelector('.decidr-init-header')) return;
+          UI.prepareInteractiveEntity(el);
 
-          el.addEventListener('click', function(e) {
+          function openEntity(e) {
             if (e.target.closest && e.target.closest('[data-decidr-copy-ref]')) return;
             // Don't fire if clicking inside init-header (toggle)
             if (e.target.closest('.decidr-init-header')) return;
@@ -1264,6 +1268,12 @@
                 onMutate: function() { refreshDashboard(); }
               });
             }
+          }
+
+          el.addEventListener('click', openEntity);
+          el.addEventListener('keydown', function(e) {
+            if (!UI.isActivationKey(e)) return;
+            openEntity(e);
           });
         })(clickables[i]);
       }
