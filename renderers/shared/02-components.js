@@ -5953,8 +5953,11 @@
       }
     }
 
+    var activeSettingsOrgId = activeOrg ? activeOrg.id : activeOrgId;
     var rawLabel = activeOrg ? (activeOrg.name || activeOrg.id) : 'Select Organization';
     var truncatedLabel = rawLabel.length > 28 ? rawLabel.substring(0, 25) + '...' : rawLabel;
+    var showActiveSettings = opts.showActiveSettings && activeSettingsOrgId;
+    var safeActiveOrgId = activeSettingsOrgId ? UI.escapeHtml(activeSettingsOrgId) : '';
 
     var html = '<div class="decidr-org-picker">'
       + '<button class="decidr-org-picker-btn" id="decidr-org-picker-toggle" aria-haspopup="listbox" aria-label="Switch organization">'
@@ -5962,6 +5965,12 @@
       + '<span class="decidr-org-picker-label">' + UI.escapeHtml(truncatedLabel) + '</span>'
       + ICON_CHEVRON_SMALL
       + '</button>'
+      + (showActiveSettings
+        ? '<button class="decidr-org-picker-active-settings" type="button" data-org-id="' + safeActiveOrgId + '" data-action="open-settings" aria-label="Open organization settings" title="Organization settings">'
+          + ICON_SETTINGS
+          + '<span>Org settings</span>'
+          + '</button>'
+        : '')
       + '<div class="decidr-org-picker-menu" id="decidr-org-picker-menu" role="listbox">'
       + '<div class="decidr-org-picker-menu-header">Organizations</div>';
 

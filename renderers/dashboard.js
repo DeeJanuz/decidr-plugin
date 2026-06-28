@@ -918,7 +918,10 @@
         + '<h1 class="decidr-dashboard-title">Governance Dashboard</h1>'
         + '<p class="decidr-dashboard-subtitle">Next decisions, approvals, projects, and proof signals in one workspace.</p>'
         + '</div>'
-        + UI.orgPicker(dashState.organizations, dashState.activeOrgId, { defaultOrgId: dashState.defaultOrgId })
+        + UI.orgPicker(dashState.organizations, dashState.activeOrgId, {
+          defaultOrgId: dashState.defaultOrgId,
+          showActiveSettings: true
+        })
         + '</div>';
 
       // Stats
@@ -1029,6 +1032,7 @@
       var toggle = container.querySelector('#decidr-org-picker-toggle');
       var menu = container.querySelector('#decidr-org-picker-menu');
       if (!toggle || !menu) return;
+      var activeSettingsBtn = container.querySelector('.decidr-org-picker-active-settings');
 
       function openOrgSettings(orgId) {
         UI.SlideOut.open('organization-settings', orgId, {
@@ -1055,10 +1059,39 @@
         }
       }
 
+      function openOrgSettingsForOrg(settingsOrgId) {
+        if (!settingsOrgId) return;
+        menu.classList.remove('open');
+        if (settingsOrgId === API.getActiveOrgId()) {
+          openOrgSettings(settingsOrgId);
+          return;
+        }
+        dashState.activeOrgId = settingsOrgId;
+        container.innerHTML = UI.loadingSpinner('Switching organization...');
+        API.switchOrg(settingsOrgId).then(function() {
+          return refreshDashboard();
+        }).then(function() {
+          openOrgSettings(settingsOrgId);
+        }).catch(function(err) {
+          console.error('[decidr] Org switch failed:', err);
+          showOrgAuthPrompt(settingsOrgId);
+        });
+      }
+
       toggle.addEventListener('click', function(e) {
         e.stopPropagation();
         menu.classList.toggle('open');
       });
+
+      if (activeSettingsBtn) {
+        activeSettingsBtn.addEventListener('click', function(e) {
+          e.stopPropagation();
+          e.preventDefault();
+          var settingsOrgId = activeSettingsBtn.getAttribute('data-org-id') || dashState.activeOrgId;
+          if (!settingsOrgId) return;
+          openOrgSettingsForOrg(settingsOrgId);
+        });
+      }
 
       document.addEventListener('click', function() {
         menu.classList.remove('open');
@@ -1083,21 +1116,7 @@
           e.stopPropagation();
           e.preventDefault();
           var settingsOrgId = settingsBtn.getAttribute('data-org-id');
-          menu.classList.remove('open');
-          if (settingsOrgId === dashState.activeOrgId) {
-            openOrgSettings(settingsOrgId);
-            return;
-          }
-          dashState.activeOrgId = settingsOrgId;
-          container.innerHTML = UI.loadingSpinner('Switching organization...');
-          API.switchOrg(settingsOrgId).then(function() {
-            return refreshDashboard();
-          }).then(function() {
-            openOrgSettings(settingsOrgId);
-          }).catch(function(err) {
-            console.error('[decidr] Org switch failed:', err);
-            showOrgAuthPrompt(settingsOrgId);
-          });
+          openOrgSettingsForOrg(settingsOrgId);
           return;
         }
         var btn = e.target.closest('[data-org-id]');
