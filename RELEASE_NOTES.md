@@ -1,6 +1,6 @@
 # Unreleased
 
-## 0.1.56-rc.1
+## 0.1.56
 
 - **feat**: Add a visible `Org settings` button next to the dashboard organization picker so organization settings are discoverable without opening the picker menu.
 - **fix**: Reuse the existing organization settings slideout flow for both the new dashboard button and per-organization menu settings actions, including organization switching and sign-in fallback handling.
