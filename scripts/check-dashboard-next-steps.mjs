@@ -112,6 +112,21 @@ assert.match(
 );
 assert.match(
   dashboard,
+  /function isPendingDecision\(dec\)[\s\S]*?isSupersededDecision\(dec\)[\s\S]*?return false/,
+  'Dashboard pending decisions must exclude superseded decisions.'
+);
+assert.match(
+  dashboard,
+  /if \(isPendingDecision\(dec\)\)/,
+  'Pending Approvals section must use the shared pending-decision predicate.'
+);
+assert.match(
+  dashboard,
+  /if \(isPendingDecision\(pDec\)\)/,
+  'Project pending badges must use the shared pending-decision predicate.'
+);
+assert.match(
+  dashboard,
   /showWorkflow:\s*true/,
   'Dashboard cards must opt into workflow pills.'
 );

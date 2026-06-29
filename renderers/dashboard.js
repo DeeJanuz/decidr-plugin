@@ -387,6 +387,16 @@
       return dec.status ? String(dec.status).toUpperCase() : '';
     }
 
+    function isSupersededDecision(dec) {
+      return !!(dec && dec.supersededById);
+    }
+
+    function isPendingDecision(dec) {
+      if (isSupersededDecision(dec)) return false;
+      var status = normalizeStatus(dec);
+      return status === 'PROPOSED' || status === 'IN_PROGRESS' || status === 'STAGED';
+    }
+
     function sortByCreatedDesc(arr) {
       return arr.slice().sort(function(a, b) {
         return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
@@ -416,8 +426,7 @@
       }
       for (var i = 0; i < dashState.allDecisions.length; i++) {
         var dec = dashState.allDecisions[i];
-        var status = normalizeStatus(dec);
-        if (status === 'PROPOSED' || status === 'IN_PROGRESS' || status === 'STAGED') {
+        if (isPendingDecision(dec)) {
           results.push({ decision: dec, projectName: projectMap[dec.projectId] || '' });
         }
       }
@@ -832,8 +841,7 @@
           var needsReviewCount = 0;
           for (var pd = 0; pd < projDecisions.length; pd++) {
             var pDec = projDecisions[pd];
-            var pStatus = normalizeStatus(pDec);
-            if (pStatus === 'PROPOSED' || pStatus === 'IN_PROGRESS' || pStatus === 'STAGED') {
+            if (isPendingDecision(pDec)) {
               pendingCount++;
               // Check if current user is a reviewer on this decision
               if (currentUserId && pDec.reviewers && Array.isArray(pDec.reviewers)) {
