@@ -795,9 +795,36 @@
       return window.__TAURI__.core.invoke('list_plugin_orgs', { pluginName: 'decidr' });
     },
 
+    listPluginContexts: function() {
+      if (!_hasTauri()) return Promise.resolve(null);
+      return window.__TAURI__.core.invoke('list_plugin_contexts', {
+        pluginNames: ['decidr'],
+        includeContexts: true,
+        includeLabels: false,
+        includeApps: false,
+        maxContextsPerPlugin: 50
+      }).catch(function() {
+        return null;
+      });
+    },
+
     listPluginOrgAuth: function() {
       if (!_hasTauri()) return Promise.resolve([]);
-      return window.__TAURI__.core.invoke('list_plugin_org_auth', { pluginName: 'decidr' })
+      return api.listPluginContexts().then(function(contextResult) {
+        var plugins = contextResult && contextResult.plugins;
+        var plugin = plugins && plugins.length ? plugins[0] : null;
+        if (!plugin || !Array.isArray(plugin.contexts)) return null;
+        return plugin.contexts.map(function(context) {
+          return {
+            org_id: context.context_id,
+            status: context.status || (context.refreshable ? 'expired_refreshable' : 'valid'),
+            refreshable: !!context.refreshable
+          };
+        });
+      }).then(function(sharedContexts) {
+        if (Array.isArray(sharedContexts)) return sharedContexts;
+        return window.__TAURI__.core.invoke('list_plugin_org_auth', { pluginName: 'decidr' });
+      })
         .catch(function() {
           return api.listPluginOrgs().then(function(orgs) {
             return (orgs || []).map(function(orgId) {
@@ -863,10 +890,10 @@
     },
 
     /**
-     * Fetches organizations, plugin-org tokens, and user preferences in
-     * parallel, annotates each org with `tokenStatus`, and — if no org is
-     * currently bound to the client — resolves a target org and calls
-     * switchOrg. Returns `{ organizations, defaultOrgId, activeOrgId }`.
+     * Fetches organizations, shared MCPViews contexts, plugin-org tokens, and
+     * user preferences in parallel, annotates each org with `tokenStatus`, and
+     * — if no org is currently bound to the client — resolves a target org and
+     * calls switchOrg. Returns `{ organizations, defaultOrgId, activeOrgId }`.
      *
      * Routing is a no-op when `_activeOrgId` is already set, so this is safe
      * to call on every fetch pass (initial mount and subsequent refetches).
@@ -875,21 +902,24 @@
      *
      * Target precedence when nothing is bound:
      *   1. `opts.pushedOrgId` (from MCP push data)
-     *   2. `preferences.defaultOrganizationId` (if the user has a stored
+     *   2. project default context from MCPViews (if usable)
+     *   3. `preferences.defaultOrganizationId` (if the user has a stored
      *      plugin token for it)
-     *   3. first stored plugin org token
+     *   4. first stored plugin org token
      */
     resolveAndBindTargetOrg: function(opts) {
       opts = opts || {};
       var pushedOrgId = opts.pushedOrgId || null;
       return Promise.all([
         api.listOrganizations().catch(function() { return []; }),
+        api.listPluginContexts().catch(function() { return null; }),
         api.listPluginOrgAuth().catch(function() { return []; }),
         api.getUserPreferences().catch(function() { return null; })
       ]).then(function(results) {
         var orgs = results[0] || [];
-        var pluginOrgAuth = results[1] || [];
-        var prefs = results[2] || null;
+        var contextResult = results[1] || null;
+        var pluginOrgAuth = results[2] || [];
+        var prefs = results[3] || null;
 
         var pluginOrgStatus = {};
         var firstUsablePluginOrgId = null;
@@ -903,6 +933,21 @@
           }
         }
 
+        var projectDefaultOrgId = null;
+        var projectDefaultUsable = false;
+        var contextPlugin = contextResult && contextResult.plugins && contextResult.plugins.length
+          ? contextResult.plugins[0]
+          : null;
+        var defaultContext = contextPlugin && contextPlugin.default_context;
+        if (defaultContext && defaultContext.source === 'project') {
+          projectDefaultOrgId = defaultContext.context_id || null;
+          projectDefaultUsable = defaultContext.usable !== false
+            && _statusHasUsableToken(defaultContext.status || pluginOrgStatus[projectDefaultOrgId]);
+          if (projectDefaultOrgId && defaultContext.status) {
+            pluginOrgStatus[projectDefaultOrgId] = defaultContext.status;
+          }
+        }
+
         var defaultOrgId = (prefs && prefs.defaultOrganizationId) || null;
         var currentlyBound = api.getActiveOrgId();
 
@@ -913,6 +958,8 @@
         if (!currentlyBound) {
           if (pushedOrgId) {
             targetOrgId = pushedOrgId;
+          } else if (projectDefaultOrgId) {
+            targetOrgId = projectDefaultOrgId;
           } else if (defaultOrgId && _statusHasUsableToken(pluginOrgStatus[defaultOrgId])) {
             targetOrgId = defaultOrgId;
           } else if (firstUsablePluginOrgId) {
@@ -939,11 +986,18 @@
           }
 
           var switchPromise = Promise.resolve();
+          var strictTarget = !!(pushedOrgId || projectDefaultOrgId);
+          if (strictTarget) {
+            var strictTargetStatus = pluginOrgStatus[targetOrgId] || 'no-token';
+            if (!_statusHasUsableToken(strictTargetStatus)) {
+              throw new Error('DecidR organization context cannot be bound: ' + targetOrgId + ' is ' + strictTargetStatus + '. Connect this organization before opening the renderer.');
+            }
+          }
           if (targetOrgId && _statusHasUsableToken(pluginOrgStatus[targetOrgId])) {
-            switchPromise = api.switchOrg(targetOrgId).catch(function() {
-              // Fall through to whatever token autoInit last bound. The
-              // backend resolver fallback can still route MCP calls to the
-              // user's default via their session preference.
+            switchPromise = api.switchOrg(targetOrgId).catch(function(err) {
+              if (strictTarget) throw err;
+              // Fall through to whatever token autoInit last bound for
+              // implicit preference/first-token routing only.
             });
           }
 
@@ -951,7 +1005,7 @@
         }).then(function() {
           return {
             organizations: orgs,
-            defaultOrgId: defaultOrgId,
+            defaultOrgId: projectDefaultOrgId || defaultOrgId,
             activeOrgId: api.getActiveOrgId()
           };
         });
