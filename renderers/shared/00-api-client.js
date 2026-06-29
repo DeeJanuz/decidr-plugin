@@ -895,10 +895,9 @@
      * — if no org is currently bound to the client — resolves a target org and
      * calls switchOrg. Returns `{ organizations, defaultOrgId, activeOrgId }`.
      *
-     * Routing is a no-op when `_activeOrgId` is already set, so this is safe
-     * to call on every fetch pass (initial mount and subsequent refetches).
-     * That invariant is what prevents refetches after a user click from
-     * looping back to the default org.
+     * Routing is a no-op when `_activeOrgId` is already set unless the caller
+     * supplied an explicit pushed org. That keeps manual org switches stable
+     * while still honoring renderer launch data from the Apps menu.
      *
      * Target precedence when nothing is bound:
      *   1. `opts.pushedOrgId` (from MCP push data)
@@ -955,10 +954,10 @@
         // is active (initial resolution, user click, or earlier refetch),
         // leave it alone and just return fresh org data.
         var targetOrgId = null;
-        if (!currentlyBound) {
-          if (pushedOrgId) {
-            targetOrgId = pushedOrgId;
-          } else if (projectDefaultOrgId) {
+        if (pushedOrgId && currentlyBound !== pushedOrgId) {
+          targetOrgId = pushedOrgId;
+        } else if (!currentlyBound) {
+          if (projectDefaultOrgId) {
             targetOrgId = projectDefaultOrgId;
           } else if (defaultOrgId && _statusHasUsableToken(pluginOrgStatus[defaultOrgId])) {
             targetOrgId = defaultOrgId;
@@ -986,11 +985,12 @@
           }
 
           var switchPromise = Promise.resolve();
-          var strictTarget = !!(pushedOrgId || projectDefaultOrgId);
+          var strictTargetId = pushedOrgId || (!currentlyBound ? projectDefaultOrgId : null);
+          var strictTarget = !!strictTargetId;
           if (strictTarget) {
-            var strictTargetStatus = pluginOrgStatus[targetOrgId] || 'no-token';
+            var strictTargetStatus = pluginOrgStatus[strictTargetId] || 'no-token';
             if (!_statusHasUsableToken(strictTargetStatus)) {
-              throw new Error('DecidR organization context cannot be bound: ' + targetOrgId + ' is ' + strictTargetStatus + '. Connect this organization before opening the renderer.');
+              throw new Error('DecidR organization context cannot be bound: ' + strictTargetId + ' is ' + strictTargetStatus + '. Connect this organization before opening the renderer.');
             }
           }
           if (targetOrgId && _statusHasUsableToken(pluginOrgStatus[targetOrgId])) {
