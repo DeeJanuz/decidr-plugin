@@ -2383,7 +2383,7 @@
         : 'var(--decidr-timeline-project-header-alt-bg)';
       var html = '<div aria-hidden="true" '
         + 'style="position:absolute;left:10px;right:10px;top:' + top + 'px;height:' + group.height + 'px;'
-        + 'border:1px solid var(--decidr-timeline-project-border);border-left:3px solid ' + accent + ';'
+        + 'border:1px solid var(--decidr-timeline-project-border);'
         + 'border-radius:8px;background:' + sectionBg + ';'
         + 'box-shadow:var(--decidr-timeline-project-shadow);z-index:1;pointer-events:none;"></div>';
       html += '<div ' + attrs
@@ -2489,7 +2489,7 @@
       var startLabel = formatDateTime(span.startDate);
       return '<span title="' + UI.escapeHtml('Started before this view: ' + startLabel) + '" '
         + 'style="display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 6px 0 5px;'
-        + 'border-radius:999px;border:1px solid var(--decidr-timeline-pill-border);border-left:2px solid ' + color + ';'
+        + 'border-radius:999px;border:1px solid var(--decidr-timeline-pill-border);'
         + 'background:var(--decidr-timeline-overflow-bg);color:var(--text-secondary);font-size:9px;'
         + 'font-weight:var(--weight-medium);white-space:nowrap;flex:0 0 auto;">'
         + '&larr; ' + UI.escapeHtml(startLabel) + '</span>';

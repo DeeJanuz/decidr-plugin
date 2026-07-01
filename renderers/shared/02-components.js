@@ -1763,8 +1763,7 @@
     var pct = taskTotal > 0 ? Math.round((taskDone / taskTotal) * 100) : 0;
     var fillDoneClass = pct === 100 ? ' decidr-progress-fill-done' : '';
 
-    var projColor = project.color || '#2563eb';
-    var styleStr = 'border-left: 3px solid ' + projColor + ';';
+    var styleStr = '';
     if (typeof o.animDelay === 'number') {
       styleStr += 'animation-delay: ' + o.animDelay.toFixed(2) + 's;';
     }
@@ -1948,7 +1947,7 @@
     var statusColor = _graphStatusColor(statusNorm);
     var statusLabel = statusNorm.replace(/_/g, ' ');
 
-    return '<div xmlns="http://www.w3.org/1999/xhtml" class="decidr-graph-proj-card" style="border-left-color:' + UI.sanitizeColor(node.color || '#60a5fa') + ';">'
+    return '<div xmlns="http://www.w3.org/1999/xhtml" class="decidr-graph-proj-card">'
       + '<div class="decidr-graph-proj-card-name">' + UI.escapeHtml(node.label || '') + '</div>'
       + '<div class="decidr-graph-proj-card-owner">'
       + '<span class="decidr-graph-proj-card-avatar" style="background:' + UI.sanitizeColor(node.ownerColor || '#6b7280') + ';">'
