@@ -7,6 +7,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 
 const dashboard = read('renderers/dashboard.js');
+const apiClient = read('renderers/shared/00-api-client.js');
 const theme = read('renderers/shared/01-theme.js');
 const components = read('renderers/shared/02-components.js');
 const slideouts = read('renderers/shared/03-slideouts.js');
@@ -199,6 +200,46 @@ assert.doesNotMatch(
   dashboard,
   /'TODO task':\s*\{\s*badge:\s*'Tasks'/,
   'Task cards must not render the redundant TASKS action pill.'
+);
+assert.match(
+  apiClient,
+  /err\.code\s*=\s*'DECIDR_API_ERROR'/,
+  'API HTTP errors must expose a stable code.'
+);
+assert.match(
+  apiClient,
+  /describeError:\s*function\(err,\s*fallback\)/,
+  'API must expose describeError() for renderer-safe error messages.'
+);
+assert.match(
+  apiClient,
+  /contextError\.code\s*=\s*'DECIDR_ORG_CONTEXT_UNAVAILABLE'/,
+  'Org binding failures must expose an auth-specific error code.'
+);
+assert.match(
+  dashboard,
+  /function loadDashboard\(\)/,
+  'Dashboard initial load must be retryable through loadDashboard().'
+);
+assert.match(
+  dashboard,
+  /function requiredLoad\(label,\s*promise,\s*assign\)/,
+  'Dashboard required API calls must attach operation labels.'
+);
+assert.match(
+  dashboard,
+  /Dashboard initial load failed/,
+  'Dashboard initial load failures must be logged.'
+);
+assert.match(
+  dashboard,
+  /decidr-dashboard-retry-load/,
+  'Dashboard load error state must include a retry control.'
+);
+assert.match(
+  dashboard,
+  /decidr-dashboard-auth-load/,
+  'Dashboard auth failures must include a DecidR sign-in control.'
 );
 
 console.log('Dashboard Next Steps renderer checks passed.');

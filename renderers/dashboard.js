@@ -46,13 +46,24 @@
 
     // ── Fetch all data ─────────────────────────────────────
 
-    var fetches = {
-      initiatives: null,
-      decisions: null,
-      tasks: null,
-      bridges: null,
-      actionItems: null
-    };
+    function freshFetches() {
+      return {
+        organizations: null,
+        defaultOrgId: null,
+        activeOrgId: null,
+        initiatives: null,
+        projects: null,
+        decisions: null,
+        tasks: null,
+        bridges: null,
+        issues: null,
+        prs: null,
+        actionItems: null,
+        timeline: null
+      };
+    }
+
+    var fetches = freshFetches();
 
     function unwrapList(resp) {
       if (resp && Array.isArray(resp.data)) return resp.data;
@@ -88,31 +99,35 @@
       return null;
     }
 
-    // Preflight: resolve the user's target org BEFORE firing the main data
-    // fetches. Without this, data fetches run against whatever token withReady
-    // picked first (usually the currently-connected org), and the user's
-    // default-org preference is ignored on fresh mount.
-    API.resolveAndBindTargetOrg({
-      pushedOrgId: (data && data.organization_id) ? data.organization_id : null
-    }).then(function(preflight) {
-      fetches.organizations = preflight.organizations;
-      fetches.defaultOrgId = preflight.defaultOrgId;
-      // Phase 2: actual data fetches now run against the correct org token.
+    function requiredLoad(label, promise, assign) {
+      return promise.then(function(resp) {
+        assign(unwrapList(resp));
+      }).catch(function(err) {
+        if (err && typeof err === 'object' && !err._decidrOperation) {
+          err._decidrOperation = label;
+        }
+        throw err;
+      });
+    }
+
+    function loadRequiredDashboardData(target) {
       return Promise.all([
-        API.listInitiatives({ take: 200 }).then(function(resp) { fetches.initiatives = unwrapList(resp); }),
-        API.listProjects({ take: 200 }).then(function(resp) { fetches.projects = unwrapList(resp); }),
-        API.listDecisions({ take: 200 }).then(function(resp) { fetches.decisions = unwrapList(resp); }),
-        API.listTasks({ take: 200 }).then(function(resp) { fetches.tasks = unwrapList(resp); }),
-        API.listBridges({ take: 200 }).then(function(resp) { fetches.bridges = unwrapList(resp); }),
-        API.listIssues({ take: 200 }).then(function(resp) { fetches.issues = unwrapList(resp); }).catch(function() { fetches.issues = []; }),
-        API.listPRs({ take: 200 }).then(function(resp) { fetches.prs = unwrapList(resp); }).catch(function() { fetches.prs = []; }),
-        API.getActionItems({ take: 200 }).then(function(resp) { fetches.actionItems = unwrapList(resp); }).catch(function() { fetches.actionItems = []; }),
-        API.getTimeline({ take: 200 }).then(function(resp) { fetches.timeline = unwrapList(resp); }).catch(function() { fetches.timeline = []; })
+        requiredLoad('Initiatives', API.listInitiatives({ take: 200 }), function(rows) { target.initiatives = rows; }),
+        requiredLoad('Projects', API.listProjects({ take: 200 }), function(rows) { target.projects = rows; }),
+        requiredLoad('Decisions', API.listDecisions({ take: 200 }), function(rows) { target.decisions = rows; }),
+        requiredLoad('Tasks', API.listTasks({ take: 200 }), function(rows) { target.tasks = rows; }),
+        requiredLoad('Bridges', API.listBridges({ take: 200 }), function(rows) { target.bridges = rows; }),
+        API.listIssues({ take: 200 }).then(function(resp) { target.issues = unwrapList(resp); }).catch(function() { target.issues = []; }),
+        API.listPRs({ take: 200 }).then(function(resp) { target.prs = unwrapList(resp); }).catch(function() { target.prs = []; }),
+        API.getActionItems({ take: 200 }).then(function(resp) { target.actionItems = unwrapList(resp); }).catch(function() { target.actionItems = []; }),
+        API.getTimeline({ take: 200 }).then(function(resp) { target.timeline = unwrapList(resp); }).catch(function() { target.timeline = []; })
       ]);
-    }).then(function() {
+    }
+
+    function projectMapFromProjects(projects) {
       // Projects have direct initiativeId
       var projectToInit = {};
-      var projects = fetches.projects || [];
+      projects = projects || [];
       for (var p = 0; p < projects.length; p++) {
         var proj = projects[p];
         var initId = proj.initiativeId || proj.initiative_id;
@@ -129,7 +144,59 @@
         projectMap[initId].push(proj);
       }
       return projectMap;
-    }).then(function(projectMap) {
+    }
+
+    function isAuthLoadError(err) {
+      return !!(err && (
+        err.code === 'DECIDR_ORG_CONTEXT_UNAVAILABLE' ||
+        err.status === 401 ||
+        err.status === 403
+      ));
+    }
+
+    function authOrgIdForError(err) {
+      return (err && (err.organizationId || err.orgId)) || _orgId || API.getActiveOrgId();
+    }
+
+    function renderDashboardLoadError(err) {
+      var detail = API.describeError
+        ? API.describeError(err, 'Please try again.')
+        : ((err && err.message) || 'Please try again.');
+      var orgId = authOrgIdForError(err);
+      var canAuth = isAuthLoadError(err) && orgId;
+      container.innerHTML = '<div style="padding:var(--space-6);">'
+        + '<div class="decidr-empty-state">'
+        + '<p class="decidr-empty-message">Failed to load dashboard data: ' + UI.escapeHtml(detail) + '</p>'
+        + '<div style="display:flex;justify-content:center;gap:var(--space-2);flex-wrap:wrap;margin-top:var(--space-4);">'
+        + '<button id="decidr-dashboard-retry-load" type="button" class="decidr-so-btn decidr-so-btn-primary decidr-so-btn-sm">Retry</button>'
+        + (canAuth ? '<button id="decidr-dashboard-auth-load" type="button" class="decidr-so-btn decidr-so-btn-sm">Sign in to DecidR</button>' : '')
+        + '</div>'
+        + '<p id="decidr-dashboard-load-hint" style="color:var(--text-secondary);font-size:12px;margin-top:var(--space-3);"></p>'
+        + '</div>'
+        + '</div>';
+      var retry = container.querySelector('#decidr-dashboard-retry-load');
+      if (retry) {
+        retry.addEventListener('click', function() {
+          loadDashboard();
+        });
+      }
+      var auth = container.querySelector('#decidr-dashboard-auth-load');
+      if (auth && canAuth) {
+        auth.addEventListener('click', function() {
+          var hint = container.querySelector('#decidr-dashboard-load-hint');
+          if (hint) hint.textContent = 'Opening DecidR sign-in...';
+          API.openPluginAuth(orgId).then(function() {
+            if (hint) hint.textContent = 'Sign-in opened. Retry after connecting this organization.';
+          }).catch(function(error) {
+            console.warn('[decidr] Failed to open DecidR sign-in:', error);
+            if (hint) hint.textContent = 'Could not open sign-in. Retry or open DecidR auth from MCPViews.';
+          });
+        });
+      }
+    }
+
+    function applyLoadedDashboardState() {
+      var projectMap = projectMapFromProjects(fetches.projects || []);
       // Org list + tokenStatus + defaultOrgId come pre-annotated from the
       // API.resolveAndBindTargetOrg preflight — no local recomputation.
       var orgs = fetches.organizations || [];
@@ -179,41 +246,44 @@
       }
 
       renderDashboard();
-    }).catch(function(err) {
-      dashState.error = err;
-      container.innerHTML = UI.emptyState('Failed to load dashboard data. Please try again.');
-    });
+    }
+
+    function loadDashboard() {
+      dashState.loaded = false;
+      dashState.error = null;
+      fetches = freshFetches();
+      container.innerHTML = UI.loadingSpinner('Loading dashboard...');
+      // Preflight: resolve the user's target org BEFORE firing the main data
+      // fetches. Without this, data fetches run against whatever token withReady
+      // picked first (usually the currently-connected org), and the user's
+      // default-org preference is ignored on fresh mount.
+      return API.resolveAndBindTargetOrg({
+        pushedOrgId: (data && data.organization_id) ? data.organization_id : null
+      }).then(function(preflight) {
+        fetches.organizations = preflight.organizations;
+        fetches.defaultOrgId = preflight.defaultOrgId;
+        fetches.activeOrgId = preflight.activeOrgId;
+        // Phase 2: actual data fetches now run against the correct org token.
+        return loadRequiredDashboardData(fetches);
+      }).then(function() {
+        applyLoadedDashboardState();
+      }).catch(function(err) {
+        dashState.error = err;
+        console.error('[decidr] Dashboard initial load failed:', err);
+        renderDashboardLoadError(err);
+      });
+    }
+
+    loadDashboard();
 
     function refreshDashboard() {
       var rf = {
         initiatives: null, projects: null, decisions: null, tasks: null,
         bridges: null, issues: null, prs: null, actionItems: null, timeline: null
       };
-      return Promise.all([
-        API.listInitiatives({ take: 200 }).then(function(resp) { rf.initiatives = unwrapList(resp); }),
-        API.listProjects({ take: 200 }).then(function(resp) { rf.projects = unwrapList(resp); }),
-        API.listDecisions({ take: 200 }).then(function(resp) { rf.decisions = unwrapList(resp); }),
-        API.listTasks({ take: 200 }).then(function(resp) { rf.tasks = unwrapList(resp); }),
-        API.listBridges({ take: 200 }).then(function(resp) { rf.bridges = unwrapList(resp); }),
-        API.listIssues({ take: 200 }).then(function(resp) { rf.issues = unwrapList(resp); }).catch(function() { rf.issues = []; }),
-        API.listPRs({ take: 200 }).then(function(resp) { rf.prs = unwrapList(resp); }).catch(function() { rf.prs = []; }),
-        API.getActionItems({ take: 200 }).then(function(resp) { rf.actionItems = unwrapList(resp); }).catch(function() { rf.actionItems = []; }),
-        API.getTimeline({ take: 200 }).then(function(resp) { rf.timeline = unwrapList(resp); }).catch(function() { rf.timeline = []; })
-      ]).then(function() {
+      return loadRequiredDashboardData(rf).then(function() {
         var projects = rf.projects || [];
-        var projectToInit = {};
-        for (var p = 0; p < projects.length; p++) {
-          var proj = projects[p];
-          var initId = proj.initiativeId || proj.initiative_id;
-          if (initId) { projectToInit[proj.id] = initId; }
-        }
-        var projectMap = {};
-        for (var p = 0; p < projects.length; p++) {
-          var proj = projects[p];
-          var initId = projectToInit[proj.id] || '_ungrouped';
-          if (!projectMap[initId]) projectMap[initId] = [];
-          projectMap[initId].push(proj);
-        }
+        var projectMap = projectMapFromProjects(projects);
         dashState.initiatives = rf.initiatives;
         dashState.projectsByInitiative = projectMap;
         dashState.allDecisions = rf.decisions;

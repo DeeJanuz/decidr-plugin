@@ -74,7 +74,35 @@
     err.body = parsedBody;
     err.bodyText = bodyText || '';
     err.bodyMessage = bodyMessage;
+    err.code = 'DECIDR_API_ERROR';
     return err;
+  }
+
+  function _compactErrorMessage(value) {
+    var text = String(value || '').replace(/\s+/g, ' ').trim();
+    if (!text) return '';
+    return text.length > 240 ? text.slice(0, 237) + '...' : text;
+  }
+
+  function _describeError(err, fallback) {
+    var message = '';
+    if (!err) {
+      message = fallback || 'Unknown error';
+    } else if (err.code === 'DECIDR_ORG_CONTEXT_UNAVAILABLE') {
+      message = 'Organization ' + (err.organizationId || 'context') + ' is '
+        + (err.tokenStatus || 'not connected') + '. Connect this organization before opening the renderer.';
+    } else if (err.status) {
+      message = 'HTTP ' + err.status + (err.statusText ? ' ' + err.statusText : '');
+      if (err.bodyMessage) message += ': ' + err.bodyMessage;
+    } else if (err.message) {
+      message = err.message;
+    } else {
+      message = String(err);
+    }
+    message = _compactErrorMessage(message) || (fallback || 'Unknown error');
+    var op = err && (err.operationLabel || err._decidrOperation);
+    if (op) return op + ' failed: ' + message;
+    return message;
   }
 
   function _handleResponse(response) {
@@ -320,6 +348,10 @@
           + 'Failed to initialize. Please check your connection and try again.'
           + '</div>';
       });
+    },
+
+    describeError: function(err, fallback) {
+      return _describeError(err, fallback);
     },
 
     get: function(path) {
@@ -990,7 +1022,11 @@
           if (strictTarget) {
             var strictTargetStatus = pluginOrgStatus[strictTargetId] || 'no-token';
             if (!_statusHasUsableToken(strictTargetStatus)) {
-              throw new Error('DecidR organization context cannot be bound: ' + strictTargetId + ' is ' + strictTargetStatus + '. Connect this organization before opening the renderer.');
+              var contextError = new Error('DecidR organization context cannot be bound: ' + strictTargetId + ' is ' + strictTargetStatus + '. Connect this organization before opening the renderer.');
+              contextError.code = 'DECIDR_ORG_CONTEXT_UNAVAILABLE';
+              contextError.organizationId = strictTargetId;
+              contextError.tokenStatus = strictTargetStatus;
+              throw contextError;
             }
           }
           if (targetOrgId && _statusHasUsableToken(pluginOrgStatus[targetOrgId])) {
