@@ -2,7 +2,7 @@
 
 MCPViews plugin for [DecidR](https://app.decidrmcp.com) — decision governance for solo builders and teams.
 
-Current source line: `manifest.json` version `0.1.60`, MCP endpoint `https://app.decidrmcp.com/api/mcp`, OAuth/email-code auth through Ludflow, and release asset `release/decidr.zip`.
+Current source line: `manifest.json` version `0.1.61`, MCP endpoint `https://app.decidrmcp.com/api/mcp`, OAuth/email-code auth through Ludflow, and release asset `release/decidr.zip`.
 
 ## Renderers
 

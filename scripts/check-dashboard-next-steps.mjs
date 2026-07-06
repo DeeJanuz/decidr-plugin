@@ -241,5 +241,15 @@ assert.match(
   /decidr-dashboard-auth-load/,
   'Dashboard auth failures must include a DecidR sign-in control.'
 );
+assert.doesNotMatch(
+  components,
+  /\bprojColor\b/,
+  'Dashboard project cards must not reference the old undefined projColor fallback.'
+);
+assert.match(
+  components,
+  /project\.createdBy\.avatarColor\s*\|\|\s*project\.color\s*\|\|\s*'#6366f1'/,
+  'Dashboard project owner avatars must fall back to the project color.'
+);
 
 console.log('Dashboard Next Steps renderer checks passed.');

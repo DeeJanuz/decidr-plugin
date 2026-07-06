@@ -1787,7 +1787,7 @@
     if (project.createdBy && project.createdBy.name) {
       var ownerName = project.createdBy.name;
       var initials = ownerName.split(' ').map(function(w) { return w.charAt(0).toUpperCase(); }).join('').slice(0, 2);
-      var avatarColor = UI.sanitizeColor(project.createdBy.avatarColor || projColor);
+      var avatarColor = UI.sanitizeColor(project.createdBy.avatarColor || project.color || '#6366f1');
       ownerHtml = '<div class="decidr-dash-proj-owner">'
         + '<span class="decidr-dash-proj-owner-avatar" style="background:' + avatarColor + ';">' + UI.escapeHtml(initials) + '</span>'
         + '<span>' + UI.escapeHtml(ownerName) + '</span>'
