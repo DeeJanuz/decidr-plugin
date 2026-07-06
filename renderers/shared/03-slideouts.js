@@ -1307,21 +1307,42 @@
   UI.slideOutProject = function(project) {
     var state = UI.SlideOut._projectPanelState;
     var enriched = project._enriched || {};
+    var canRename = UI.SlideOut._canRenameEntity('project', project);
+    if (!canRename && state.editMode) state.editMode = false;
     var html = '<div class="decidr-so-detail">';
 
     // Action bar
     html += '<div class="decidr-so-action-bar">';
+    if (canRename) {
+      html += '<button class="decidr-so-btn" id="decidr-so-btn-project-edit">'
+        + ICON_EDIT + ' ' + (state.editMode ? 'Cancel Edit' : 'Edit') + '</button>';
+    }
     html += '<span class="decidr-so-spacer"></span>';
     html += UI.copyRefButton('project', project.id);
     html += '<button class="decidr-so-btn decidr-so-btn-danger decidr-so-btn-sm" id="decidr-so-btn-project-archive">' + ICON_TRASH + ' Archive</button>';
     html += '</div>';
 
     // Title row
-    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:var(--space-2);">';
-    html += '<div class="decidr-so-color-dot" style="background:' + UI.sanitizeColor(project.color || '#6366f1') + ';"></div>';
-    html += '<h3 class="decidr-so-detail-title" style="margin:0;">' + UI.escapeHtml(project.name) + '</h3>';
-    html += UI.statusBadge(project.status);
-    html += '</div>';
+    if (canRename && state.editMode) {
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:var(--space-2);">';
+      html += '<div class="decidr-so-color-dot" style="background:' + UI.sanitizeColor(project.color || '#6366f1') + ';"></div>';
+      html += '<input type="text" class="decidr-so-edit-input" id="decidr-so-edit-project-name" value="'
+        + UI.escapeHtml(project.name || '') + '" style="margin:0;flex:1;">';
+      html += UI.statusBadge(project.status);
+      html += '</div>';
+      html += '<textarea class="decidr-so-edit-textarea" id="decidr-so-edit-project-description" rows="4">'
+        + UI.escapeHtml(project.description || '') + '</textarea>';
+      html += '<div class="decidr-so-form-actions">'
+        + '<button class="decidr-so-btn" id="decidr-so-btn-cancel-project-edit">Cancel</button>'
+        + '<button class="decidr-so-btn decidr-so-btn-primary" id="decidr-so-btn-save-project-edit">Save</button>'
+        + '</div>';
+    } else {
+      html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:var(--space-2);">';
+      html += '<div class="decidr-so-color-dot" style="background:' + UI.sanitizeColor(project.color || '#6366f1') + ';"></div>';
+      html += '<h3 class="decidr-so-detail-title" style="margin:0;">' + UI.escapeHtml(project.name) + '</h3>';
+      html += UI.statusBadge(project.status);
+      html += '</div>';
+    }
 
     // Parent initiative link
     if (project.initiativeId && enriched.initiative) {
@@ -1339,7 +1360,7 @@
     if (metaItems.length > 0) html += UI.SlideOut._renderMeta(metaItems);
 
     // Description
-    if (project.description) {
+    if (!state.editMode && project.description) {
       html += UI.richDescription(project.description, { className: 'decidr-so-description' });
     }
 
@@ -1542,6 +1563,8 @@
     var state = UI.SlideOut._decisionPanelState;
     var enriched = decision._enriched || {};
     var isCatchUp = UI.isCatchUpDecision && UI.isCatchUpDecision(decision);
+    var canRename = UI.SlideOut._canRenameEntity('decision', decision);
+    if (!canRename && state.editMode) state.editMode = false;
     var html = '<div class="decidr-so-detail">';
 
     // Meta row
@@ -1568,8 +1591,10 @@
     var transitions = decision.allowedTransitions || [];
 
     html += '<div class="decidr-so-action-bar">';
-    html += '<button class="decidr-so-btn" id="decidr-so-btn-edit">'
-      + ICON_EDIT + ' ' + (state.editMode ? 'Cancel Edit' : 'Edit') + '</button>';
+    if (canRename) {
+      html += '<button class="decidr-so-btn" id="decidr-so-btn-edit">'
+        + ICON_EDIT + ' ' + (state.editMode ? 'Cancel Edit' : 'Edit') + '</button>';
+    }
     if (transitions.length > 0) {
       html += '<div class="decidr-so-status-dropdown">';
       html += '<button class="decidr-so-btn" id="decidr-so-btn-status">Status ' + ICON_CHEVRON_DOWN + '</button>';
@@ -1679,7 +1704,7 @@
     html += UI.SlideOut._renderSupersessionBanner(decision);
 
     // Title + Description (view/edit mode)
-    if (state.editMode) {
+    if (canRename && state.editMode) {
       html += '<input type="text" class="decidr-so-edit-input" id="decidr-so-edit-title" value="'
         + UI.escapeHtml(decision.title) + '">';
       html += '<textarea class="decidr-so-edit-textarea" id="decidr-so-edit-description" rows="4">'
@@ -1830,14 +1855,18 @@
   UI.slideOutTask = function(task) {
     var state = UI.SlideOut._taskPanelState;
     var enriched = task._enriched || {};
+    var canRename = UI.SlideOut._canRenameEntity('task', task);
+    if (!canRename && state.editMode) state.editMode = false;
     var html = '<div class="decidr-so-detail">';
 
     // Action bar
     var transitions = task.allowedTransitions || [];
 
     html += '<div class="decidr-so-action-bar">';
-    html += '<button class="decidr-so-btn" id="decidr-so-btn-task-edit">'
-      + (state.editMode ? 'Cancel Edit' : 'Edit') + '</button>';
+    if (canRename) {
+      html += '<button class="decidr-so-btn" id="decidr-so-btn-task-edit">'
+        + (state.editMode ? 'Cancel Edit' : 'Edit') + '</button>';
+    }
     if (transitions.length > 0) {
       html += '<div class="decidr-so-status-dropdown">';
       html += '<button class="decidr-so-btn" id="decidr-so-btn-task-status">Status \u25BE</button>';
@@ -1873,7 +1902,7 @@
     });
 
     // Title + Description
-    if (state.editMode) {
+    if (canRename && state.editMode) {
       html += '<input type="text" class="decidr-so-edit-input" id="decidr-so-edit-task-title" value="'
         + UI.escapeHtml(task.title) + '">';
       html += '<textarea class="decidr-so-edit-textarea" id="decidr-so-edit-task-description" rows="3">'
@@ -2067,9 +2096,22 @@
   UI.slideOutInitiative = function(initiative) {
     var state = UI.SlideOut._initiativePanelState;
     var enriched = initiative._enriched || {};
+    var canRename = UI.SlideOut._canRenameEntity('initiative', initiative);
+    if (!canRename && state.editMode) state.editMode = false;
     var html = '<div class="decidr-so-detail">';
 
-    html += '<h3 class="decidr-so-detail-title">' + UI.escapeHtml(initiative.name) + '</h3>';
+    if (canRename && state.editMode) {
+      html += '<input type="text" class="decidr-so-edit-input" id="decidr-so-edit-initiative-name" value="'
+        + UI.escapeHtml(initiative.name || '') + '">';
+      html += '<textarea class="decidr-so-edit-textarea" id="decidr-so-edit-initiative-description" rows="4">'
+        + UI.escapeHtml(initiative.description || '') + '</textarea>';
+      html += '<div class="decidr-so-form-actions">'
+        + '<button class="decidr-so-btn" id="decidr-so-btn-cancel-initiative-edit">Cancel</button>'
+        + '<button class="decidr-so-btn decidr-so-btn-primary" id="decidr-so-btn-save-initiative-edit">Save</button>'
+        + '</div>';
+    } else {
+      html += '<h3 class="decidr-so-detail-title">' + UI.escapeHtml(initiative.name) + '</h3>';
+    }
 
     // Meta
     var metaItems = [];
@@ -2091,13 +2133,17 @@
 
     // Action bar
     html += '<div class="decidr-so-action-bar">';
+    if (canRename) {
+      html += '<button class="decidr-so-btn" id="decidr-so-btn-initiative-edit">'
+        + ICON_EDIT + ' ' + (state.editMode ? 'Cancel Edit' : 'Edit') + '</button>';
+    }
     html += '<span class="decidr-so-spacer"></span>';
     html += UI.copyRefButton('initiative', initiative.id);
     html += '<button class="decidr-so-btn decidr-so-btn-danger decidr-so-btn-sm" id="decidr-so-btn-initiative-archive">' + ICON_TRASH + ' Archive</button>';
     html += '</div>';
 
     // Description
-    if (initiative.description) {
+    if (!state.editMode && initiative.description) {
       html += UI.richDescription(initiative.description, { className: 'decidr-so-description' });
     }
 

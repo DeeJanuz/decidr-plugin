@@ -1,6 +1,6 @@
 {
   "name": "decidr",
-  "version": "0.1.58",
+  "version": "0.1.59",
   "prompt_definitions": [
     {
       "name": "initiative_planning",
@@ -176,7 +176,7 @@
       ]
     }
   ],
-  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.58/decidr.zip",
+  "download_url": "https://github.com/DeeJanuz/decidr-plugin/releases/download/0.1.59/decidr.zip",
   "registry_index": {
     "summary": "Decision governance \u2014 initiatives, projects, decisions, tasks, and bridges with approval workflows",
     "tags": [
@@ -338,13 +338,13 @@
     "create_audit_event": "Create a factual project-ledger audit event. Admins may create new free-form categories. external_reference_id plus created_by_client is idempotent.",
     "create_task": "Create a new task. Returns full created entity. Before passing assignee_id, call list_members and use only an active member user ID; pending invitation IDs are not assignable. Pass status BACKLOG for future/non-actionable work that should stay out of Next Steps. Use for lightweight implementation follow-up that did not need a decision approval flow, under the relevant project or existing decision. When creating a missing task from implementation discovery, proceed directly for clear low-risk tasks after search/context checks; use MCPViews review only for significant, ambiguous, destructive, high-impact, or hard-to-undo changes.",
     "create_bridge": "Create a bridge between two projects or two decisions. Returns full created entity.",
-    "update_initiative": "Update initiative fields. Returns full updated entity.",
-    "update_project": "Update project fields and/or transition status. Before changing owner_id or project members, call list_members and use only active member user IDs; pending invitation IDs are not assignable. Returns full updated entity.",
-    "update_decision": "Update standard decision fields, responsibilities, and/or transition status. Before changing owner_id or implementer_id, call list_members and use only active member user IDs. Use action param for approve/reject/supersede/unsupersede. Use BACKLOG for future/non-actionable decisions that should stay out of Next Steps. Draft decisions require a linked Ludflow PLAN document version before transitioning to PROPOSED or STAGED. Before implementation starts after discovery/planning, verify or propose the governing decision/task; do not mark accepted plans as STAGED. Move matching decisions to STAGED only after the work is built/configured and in test/review or non-production validation and a STAGED document version has been saved. Move matching STAGED decisions to IMPLEMENTED only after live or production-equivalent release and an IMPLEMENTED document version has been saved: production deployment, deployment-codebase migration, push/merge to the repo live release branch (main/master/prod/production when applicable), or an installable versioned release. If a draft/backlog decision is actually small already-implemented catch-up work, use mark_decision_as_catch_up instead. Returns the full updated entity. Field updates are applied before status transition.",
+    "update_initiative": "Update initiative fields. Only the initiative creator can rename/update it. Returns full updated entity.",
+    "update_project": "Update project fields and/or transition status. Project creators and project owners can rename/update it. Before changing owner_id or project members, call list_members and use only active member user IDs; pending invitation IDs are not assignable. Returns full updated entity.",
+    "update_decision": "Update standard decision fields, responsibilities, and/or transition status. Decision creators, owners, implementers, and parent creators can rename/update it. Before changing owner_id or implementer_id, call list_members and use only active member user IDs. Use action param for approve/reject/supersede/unsupersede. Use BACKLOG for future/non-actionable decisions that should stay out of Next Steps. Draft decisions require a linked Ludflow PLAN document version before transitioning to PROPOSED or STAGED. Before implementation starts after discovery/planning, verify or propose the governing decision/task; do not mark accepted plans as STAGED. Move matching decisions to STAGED only after the work is built/configured and in test/review or non-production validation and a STAGED document version has been saved. Move matching STAGED decisions to IMPLEMENTED only after live or production-equivalent release and an IMPLEMENTED document version has been saved: production deployment, deployment-codebase migration, push/merge to the repo live release branch (main/master/prod/production when applicable), or an installable versioned release. If a draft/backlog decision is actually small already-implemented catch-up work, use mark_decision_as_catch_up instead. Returns the full updated entity. Field updates are applied before status transition.",
     "mark_decision_as_catch_up": "Convert an existing DRAFT or BACKLOG decision into an IMPLEMENTED catch-up decision. Use when the record captures small already-implemented work after the fact and a full standard document-gated workflow would add noise. Provide description if the existing decision lacks rationale, and optional implemented_at for the actual implementation time.",
     "update_decision_stage_time": "Correct when a decision stage/status actually occurred without changing live decision status. Provide id, status, occurred_at ISO timestamp, and optional reason. Updates the matching STATUS_CHANGED timeline event occurred_at while preserving createdAt as the write/correction audit timestamp. For v1, only the decision creator or organization admins/owners may correct timing.",
     "update_audit_event": "Edit an audit event and create visible revision history. Only admins can change occurred_at.",
-    "update_task": "Update task fields and/or transition status. Before changing assignee_id, call list_members and use only an active member user ID; pending invitation IDs are not assignable. Use BACKLOG for future/non-actionable work that should stay out of Next Steps. Set status to DONE to complete a task. Returns full updated entity.",
+    "update_task": "Update task fields and/or transition status. Task creators and assignees can rename/update it. Before changing assignee_id, call list_members and use only an active member user ID; pending invitation IDs are not assignable. Use BACKLOG for future/non-actionable work that should stay out of Next Steps. Set status to DONE to complete a task. Returns full updated entity.",
     "update_task_stage_time": "Correct when a task stage/status actually occurred without changing live task status. Provide id, status, occurred_at ISO timestamp, and optional reason. Updates the matching STATUS_CHANGED timeline event occurred_at while preserving createdAt as the write/correction audit timestamp. For v1, only the task creator or organization admins/owners may correct timing.",
     "update_bridge": "Update bridge fields and/or transition status. Returns full updated entity.",
     "create_organization": "Create a new organization. The caller becomes OWNER. Use invite_member to invite others. DecidR setup/onboarding agents must pass creation_source: \"DECIDR_ONBOARDING\" so the starter initiative, project, decision, and Ludflow document are seeded. Other callers should omit creation_source or pass GENERIC.",
@@ -648,7 +648,7 @@
   "plugin_rule_definitions": [
     {
       "id": "decidr_auth_status",
-      "rule": "DecidR MCPViews auth uses in-app six-digit email-code authentication by default. Use init_session org_tokens to inspect org auth. If target org auth is missing or expired_unrefreshable, call start_plugin_auth with plugin_name 'decidr' and organization_id before retrying. Treat expired_refreshable as connected while MCPViews refreshes it; use auth_flow 'browser' only for advanced OAuth recovery.",
+      "rule": "DecidR MCPViews auth uses in-app six-digit email-code authentication by default. A successful DecidR or Ludflow email-code login bulk-seeds org-scoped tokens for every organization returned by the login backend and mirrors them into both plugin stores. Use init_session org_tokens to inspect org auth. If target org auth is still missing or expired_unrefreshable, call start_plugin_auth with plugin_name 'decidr' and organization_id before retrying; that single flow should refresh all returned memberships. Treat expired_refreshable as connected while MCPViews refreshes it; use auth_flow 'browser' only for advanced OAuth recovery.",
       "tags": [
         "auth",
         "organization"

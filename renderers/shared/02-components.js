@@ -3455,6 +3455,62 @@
       return html;
     },
 
+    _entityUserId: function(entity, objectNames, idNames) {
+      var id = fieldValue(entity, idNames || []);
+      if (id) return String(id);
+      var user = fieldValue(entity, objectNames || []);
+      if (!user) return '';
+      if (typeof user === 'string') return user;
+      return user.id || user.userId || user.user_id || '';
+    },
+
+    _entityHasUser: function(entity, objectNames, idNames, userId) {
+      return !!userId && UI.SlideOut._entityUserId(entity, objectNames, idNames) === userId;
+    },
+
+    _canRenameEntity: function(entityType, entity) {
+      var API = window.__decidrAPI;
+      var currentUserId = API && API._currentUserId ? API._currentUserId : '';
+      if (!currentUserId || !entity) return true;
+
+      var type = normalizeStatus(entityType);
+      var isCreator = UI.SlideOut._entityHasUser(
+        entity,
+        ['createdBy', 'created_by'],
+        ['createdById', 'created_by_id'],
+        currentUserId
+      );
+      if (type === 'initiative') return isCreator;
+      if (type === 'project') {
+        return isCreator || UI.SlideOut._entityHasUser(
+          entity,
+          ['owner', 'owner_user'],
+          ['ownerId', 'owner_id'],
+          currentUserId
+        );
+      }
+      if (type === 'decision') {
+        return isCreator
+          || UI.SlideOut._entityHasUser(entity, ['owner', 'owner_user'], ['ownerId', 'owner_id'], currentUserId)
+          || UI.SlideOut._entityHasUser(entity, ['implementer', 'implementor'], ['implementerId', 'implementer_id', 'implementorId', 'implementor_id'], currentUserId)
+          || UI.SlideOut._entityHasUser(
+            entity._enriched && entity._enriched.parentEntity,
+            ['createdBy', 'created_by'],
+            ['createdById', 'created_by_id'],
+            currentUserId
+          );
+      }
+      if (type === 'task') {
+        return isCreator || UI.SlideOut._entityHasUser(
+          entity,
+          ['assignee', 'assignedTo', 'assigned_to'],
+          ['assigneeId', 'assignee_id', 'assignedToId', 'assigned_to_id'],
+          currentUserId
+        );
+      }
+      return true;
+    },
+
     // Panel state objects for stateful interactions
     _decisionPanelState: {
       editMode: false,
@@ -3474,6 +3530,7 @@
     },
 
     _projectPanelState: {
+      editMode: false,
       timelineFilter: 'all',
       addDocFormOpen: false,
       addTaskFormOpen: false,
@@ -3492,6 +3549,7 @@
     },
 
     _initiativePanelState: {
+      editMode: false,
       addDocFormOpen: false,
       docFormTab: 'search'
     },
@@ -3784,9 +3842,10 @@
           var titleInput = panel.querySelector(config.titleInputId);
           var descInput = panel.querySelector(config.descInputId);
           var updates = {};
-          if (titleInput) updates.title = titleInput.value.trim();
+          var titleField = config.titleField || 'title';
+          if (titleInput) updates[titleField] = titleInput.value.trim();
           if (descInput) updates.description = descInput.value.trim();
-          if (API && updates.title) {
+          if (API && config.updateFn && updates[titleField]) {
             if (UI.SlideOut._guardBusy()) return;
             config.updateFn(config.entityId, updates).then(function() {
               state.editMode = false;
@@ -4827,6 +4886,18 @@
       var state = UI.SlideOut._projectPanelState;
       var API = window.__decidrAPI;
 
+      UI.SlideOut._wireEditMode(panel, {
+        state: state,
+        entityId: id,
+        editBtnId: '#decidr-so-btn-project-edit',
+        saveBtnId: '#decidr-so-btn-save-project-edit',
+        cancelBtnId: '#decidr-so-btn-cancel-project-edit',
+        titleInputId: '#decidr-so-edit-project-name',
+        descInputId: '#decidr-so-edit-project-description',
+        titleField: 'name',
+        updateFn: API && API.updateProject
+      });
+
       var tabButtons = panel.querySelectorAll('[data-project-tab]');
       for (var pt = 0; pt < tabButtons.length; pt++) {
         (function(btn) {
@@ -5025,6 +5096,18 @@
     _wireInitiativeEvents: function(panel, id, data) {
       var state = UI.SlideOut._initiativePanelState;
       var API = window.__decidrAPI;
+
+      UI.SlideOut._wireEditMode(panel, {
+        state: state,
+        entityId: id,
+        editBtnId: '#decidr-so-btn-initiative-edit',
+        saveBtnId: '#decidr-so-btn-save-initiative-edit',
+        cancelBtnId: '#decidr-so-btn-cancel-initiative-edit',
+        titleInputId: '#decidr-so-edit-initiative-name',
+        descInputId: '#decidr-so-edit-initiative-description',
+        titleField: 'name',
+        updateFn: API && API.updateInitiative
+      });
 
       // Archive
       UI.SlideOut._wireArchiveEvent(panel, '#decidr-so-btn-initiative-archive', 'initiative', id, API.archiveInitiative);
