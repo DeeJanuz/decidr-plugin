@@ -3166,6 +3166,12 @@
         if (data.projectId && !data.project) {
           fetches.push({ key: 'parentProject', promise: API.getProject(data.projectId) });
         }
+        if (data.bridgeId && !data.bridge) {
+          fetches.push({ key: 'parentBridge', promise: API.getBridge(data.bridgeId) });
+        }
+        if (data.initiativeId && !data.initiative) {
+          fetches.push({ key: 'parentInitiative', promise: API.getInitiative(data.initiativeId) });
+        }
         fetches.push({ key: 'githubSummary', promise: API.getEntityGithubSummary('TASK', id) });
       } else if (type === 'issue') {
         fetches.push({ key: 'linkedPRs', promise: API.listPRs({ issueRefId: id }) });

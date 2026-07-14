@@ -1930,6 +1930,18 @@
       html += UI.SlideOut._renderParentLink(ENTITY_ICONS.project, 'Project', 'project', parentProject);
     }
 
+    // Parent Bridge link
+    var parentBridge = task.bridge || enriched.parentBridge;
+    if (parentBridge) {
+      html += UI.SlideOut._renderParentLink(ENTITY_ICONS.bridge, 'Bridge', 'bridge', parentBridge);
+    }
+
+    // Parent Initiative link
+    var parentInitiative = task.initiative || enriched.parentInitiative;
+    if (parentInitiative) {
+      html += UI.SlideOut._renderParentLink(ENTITY_ICONS.initiative, 'Initiative', 'initiative', parentInitiative);
+    }
+
     // Completed by
     var taskStatus = (task.status || '').toUpperCase();
     if (taskStatus === 'DONE' && task.completedBy && task.completedBy.name) {

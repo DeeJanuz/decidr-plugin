@@ -8,12 +8,12 @@ Use this runbook when the user asks you to create, update, implement, stage, app
 2. **Use the selected work logging policy.** If a DecidR work logging startup rule is installed, follow it. `auto_log_confident` means clear low-risk DecidR writes may proceed directly after search/context checks; `review_first` means present formal writes for review before execution; `capture_only` means manual logging only: summarize candidate durable memory and ask before formal DecidR writes.
 3. **Search before creating.** Search existing initiatives, projects, decisions, tasks, and LudFlow documents before creating new records.
 4. **Prefer continuity.** Update matching decisions and documents when they already exist. Create a new decision only when no suitable record exists.
-5. **Use decision-first mapping.** Durable choices, tradeoffs, architecture direction, approval-worthy implementation paths, or persistent behavior become standard decisions. Small already-completed rationale becomes catch-up decisions. Lightweight execution follow-up becomes tasks. Commit, release, deploy, or operational proof updates lifecycle documents or audit evidence.
+5. **Use decision-first mapping.** Durable choices, tradeoffs, architecture direction, approval-worthy implementation paths, or persistent behavior become standard decisions. Small one-off completed work becomes a `DONE` task with optional `completed_at`. Lightweight execution follow-up becomes `TODO` tasks. Commit, release, deploy, or operational proof updates matching lifecycle documents or audit evidence when one exists; otherwise it may be captured as a completed task.
 6. **Do not fake lifecycle state.** Use `get_decision` and `allowedTransitions` before status changes. If the backend requires an intermediate state, use that actual transition path.
 7. **Save lifecycle document versions.** Standard decisions need a linked LudFlow document with a `PLAN` version before leaving `DRAFT`, a `STAGED` version before moving to `STAGED`, and an `IMPLEMENTED` version before moving to `IMPLEMENTED`. Use `save_decision_document_version` for these snapshots. Approval remains DecidR status/progress, not LudFlow version metadata.
 8. **Run the implementation start gate.** When leaving discovery or planning for governed feature/process work, fetch this runbook and verify or propose the governing decision/task before the first repo edit, packaging command, deployment prep, or external write.
 9. **Stage built work, implement live work.** `STAGED` means built/configured and in test/review or non-production validation. It is not approval-to-build or acceptance of a plan. `IMPLEMENTED` means the work is live or production-equivalent: deployed to production, merged/pushed to a branch that is the repository's live release source such as `main`, `master`, `prod`, or `production`, or published as a versioned release, tag, or package users or downstream systems can install. Do not treat `main` or `master` as `IMPLEMENTED` when that branch is only staging or pre-production.
-10. **Use catch-up decisions only for small already-implemented work.** Use `create_catch_up_decision` or `mark_decision_as_catch_up` for post-implementation rationale capture, not active approval workflows.
+10. **Never create catch-up decisions.** Use `create_task` with `status: DONE` and optional `completed_at` for small one-off work recorded after completion. Keep legacy `CATCH_UP` decisions read-only.
 
 ## Discovery and implementation gates
 
@@ -87,7 +87,7 @@ Workflow:
 - Do not require MCPViews review solely because there are multiple related DecidR/LudFlow writes. Creating one new decision with a linked discovery document, or updating one decision and its accompanying documents, can proceed directly when the user intent, organization, parent entity, and target documents are clear.
 - When committing code, search for confident matching decisions and tasks. Save a `STAGED` LudFlow document version and move confident matching decisions to `STAGED` only after the commit succeeds.
 - When the same workflow also pushes or merges that work to the repository's production release branch, or publishes a versioned release/tag/package that users or downstream systems can install, save an `IMPLEMENTED` LudFlow document version and move confident matching `STAGED` decisions to `IMPLEMENTED` after that release action succeeds.
-- Do not create a new decision merely because a commit happened. If no confident record exists, create or propose a standard decision, catch-up decision, or task under the closest relevant project or initiative based on scope and risk.
+- Do not create a new decision merely because a commit happened. If no confident record exists, create or propose a standard decision for durable direction, a `DONE` task for one-off completed work, or a `TODO`/`BACKLOG` task for follow-up under the closest relevant project or initiative based on scope and risk.
 
 ## Document handling
 
@@ -108,4 +108,4 @@ Workflow:
 
 - Do not replace GitHub PR lifecycle guidance. Fetch `github_pr_lifecycle` for GitHub issue/PR actions linked to DecidR.
 - Do not use historical timestamp correction tools to transition live status.
-- Do not use catch-up decisions for large active work that needs review.
+- Do not create or convert catch-up decisions. Legacy `CATCH_UP` records remain historical read-only data.
