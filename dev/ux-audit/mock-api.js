@@ -88,6 +88,15 @@
   var actionItems = [
     {
       entityType: 'DECISION',
+      entityId: 'decision-filter-draft',
+      title: 'Define dashboard filtering behavior for governed next steps',
+      reason: 'Open decision needs attention',
+      status: 'DRAFT',
+      parentName: 'DecidR development',
+      createdAt: '2026-06-06T15:10:00.000Z'
+    },
+    {
+      entityType: 'DECISION',
       entityId: 'decision-project-grouping',
       title: 'Group timeline work by project inside initiative lanes',
       reason: 'Open decision needs attention',

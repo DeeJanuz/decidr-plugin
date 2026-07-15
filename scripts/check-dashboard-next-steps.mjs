@@ -27,6 +27,51 @@ assert.match(
   /nextStepsGroupExpanded\[groupType\]\s*!==\s*false/,
   'Next Steps groups must default expanded.'
 );
+assert.match(
+  dashboard,
+  /nextStepsHiddenTypes:\s*\{\}/,
+  'Next Steps type filters must default to including every entity type.'
+);
+assert.match(
+  dashboard,
+  /nextStepsHiddenStatuses:\s*\{\}/,
+  'Next Steps stage filters must default to including every status.'
+);
+assert.match(
+  dashboard,
+  /function getFilteredActionItems\(items\)[\s\S]*?nextStepsHiddenTypes\[type\][\s\S]*?nextStepsHiddenStatuses\[status\]/,
+  'Next Steps must combine entity-type and stage filters.'
+);
+assert.match(
+  dashboard,
+  /data-next-steps-filter-kind="type"|renderNextStepsFilterPill\('type'/,
+  'Next Steps must render entity-type filter controls.'
+);
+assert.match(
+  dashboard,
+  /renderNextStepsFilterPill\('status'/,
+  'Next Steps must render stage/status filter controls.'
+);
+assert.match(
+  dashboard,
+  /Showing '\s*\+\s*visibleCount\s*\+\s*' of '\s*\+\s*items\.length\s*\+\s*' next steps/,
+  'Next Steps must show visible and total counts.'
+);
+assert.match(
+  dashboard,
+  /No next steps match these filters\. Reset filters to show everything\./,
+  'Next Steps must explain a filtered-empty result.'
+);
+assert.match(
+  dashboard,
+  /decidr-next-steps-filter-reset[\s\S]*?nextStepsHiddenTypes\s*=\s*\{\}[\s\S]*?nextStepsHiddenStatuses\s*=\s*\{\}/,
+  'Next Steps must reset both filter dimensions.'
+);
+assert.match(
+  theme,
+  /\.decidr-next-steps-filters/,
+  'Theme must include Next Steps filter styles.'
+);
 assert.doesNotMatch(
   dashboard,
   /Inject open PRs/,
