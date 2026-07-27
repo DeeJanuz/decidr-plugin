@@ -1754,12 +1754,20 @@
     var pendingCount = o.pendingDecisions || 0;
     var needsYourReview = o.needsYourReview || 0;
 
-    var taskTotal = tasks.length;
-    var taskDone = 0;
-    for (var i = 0; i < tasks.length; i++) {
-      var ts = normalizeStatus(tasks[i].status);
-      if (ts === 'done' || ts === 'completed') taskDone++;
+    var decisionCount = typeof o.decisionCount === 'number'
+      ? o.decisionCount : decisions.length;
+    var taskTotal = typeof o.taskCount === 'number'
+      ? o.taskCount : tasks.length;
+    var taskDone = typeof o.taskDoneCount === 'number'
+      ? o.taskDoneCount : 0;
+    if (typeof o.taskDoneCount !== 'number') {
+      for (var i = 0; i < tasks.length; i++) {
+        var ts = normalizeStatus(tasks[i].status);
+        if (ts === 'done' || ts === 'completed') taskDone++;
+      }
     }
+    var bridgeCount = typeof o.bridgeCount === 'number'
+      ? o.bridgeCount : bridges.length;
     var pct = taskTotal > 0 ? Math.round((taskDone / taskTotal) * 100) : 0;
     var fillDoneClass = pct === 100 ? ' decidr-progress-fill-done' : '';
 
@@ -1796,16 +1804,16 @@
 
     // Stats line
     var statParts = [];
-    if (decisions.length > 0) {
+    if (decisionCount > 0) {
       statParts.push('<span class="decidr-inline-icon">' + ENTITY_ICONS.decision + '</span>'
-        + decisions.length + ' decision' + (decisions.length !== 1 ? 's' : ''));
+        + decisionCount + ' decision' + (decisionCount !== 1 ? 's' : ''));
     }
     if (taskTotal > 0) {
       statParts.push(taskDone + '/' + taskTotal + ' tasks');
     }
-    if (bridges.length > 0) {
+    if (bridgeCount > 0) {
       statParts.push('<span class="decidr-inline-icon">' + ENTITY_ICONS.bridge + '</span>'
-        + bridges.length + ' bridge' + (bridges.length !== 1 ? 's' : ''));
+        + bridgeCount + ' bridge' + (bridgeCount !== 1 ? 's' : ''));
     }
     var statHtml = statParts.length > 0
       ? '<div class="decidr-dash-proj-stat">' + statParts.join(' &middot; ') + '</div>'
@@ -2877,6 +2885,9 @@
             });
           }).catch(function(err) {
             UI.SlideOut._withContextKey(contextKey, function() {
+              if (err && err.status === 404 && API.evictDashboardEntity) {
+                API.evictDashboardEntity(id);
+              }
               // Render error state with debug info
               console.error('[decidr] SlideOut fetch failed:', err);
               console.error('[decidr] API baseUrl:', window.__decidrAPI ? window.__decidrAPI._baseUrl : 'NO API');
@@ -3101,6 +3112,9 @@
         }).catch(function(err) {
           UI.SlideOut._withContextKey(contextKey, function() {
             UI.SlideOut._busy = false;
+            if (err && err.status === 404 && API.evictDashboardEntity) {
+              API.evictDashboardEntity(id);
+            }
             console.error('[decidr] Refetch failed:', err);
           });
         });

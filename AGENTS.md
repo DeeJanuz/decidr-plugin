@@ -78,9 +78,22 @@ node scripts/check-dashboard-next-steps.mjs # Static dashboard/workflow check
 - `API.setDefaultOrg(orgId)` → `PATCH /me/preferences` with `{ defaultOrganizationId: orgId }`.
 - `API.clearDefaultOrg()` → `PATCH /me/preferences` with `{ defaultOrganizationId: null }`.
 
-## Dashboard / Timeline Two-Phase Init
+## Dashboard Summary Init / Timeline Two-Phase Init
 
-Renderers that boot with a default-org preference MUST use two-phase initial fetch:
+The `decidr_dashboard` renderer uses the manifest-injected `organization_id` as
+its strict routing key. It must bind that org token with
+`autoInit(..., { skipSession: true })`, then call
+`GET /api/dashboard/summary`. The authenticated `dashboard.v1` response supplies
+the verified viewer, organization list, default preference, counts, and visible
+rows. After the summary paints, one bounded `/api/dashboard/drilldowns` request
+may preload collapsed sections. Do not run the list/prefs preflight or
+`/api/auth/get-session` on this normal path.
+
+For one compatibility release, dashboard may use the old two-phase path only
+when the summary endpoint returns 404 or 501. Never fall back after 401, 403,
+network, timeout, or 5xx errors.
+
+Timeline and legacy dashboard fallback still use two-phase initial fetch:
 
 1. **Phase 1 (preflight)**: `Promise.all` of `listOrganizations`, plugin-org tokens, and `getUserPreferences`. Resolve target org with precedence `pushed organization_id > default-with-token > current`. If target differs from currently-bound token, call `api.switchOrg(targetId)` and await it.
 2. **Phase 2 (data)**: Run the big data `Promise.all` against the correct token.

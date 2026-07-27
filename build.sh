@@ -98,34 +98,9 @@ PY
 echo "  Version: ${VERSION}"
 echo "  Download URL: ${DOWNLOAD_URL}"
 
-# Bundle shared files into each renderer
-# Companion loads one renderer file per tool — shared deps must be inlined
-SHARED_BUNDLE=$(cat \
-  renderers/shared/00-api-client.js \
-  renderers/shared/01-theme.js \
-  renderers/shared/02-components.js \
-  renderers/shared/03-slideouts.js)
-
-# Companion resolves renderer name (underscores) to filename (hyphens)
-# e.g. decidr_list -> decidr-list.js
-bundle_renderer() {
-  local src="$1" outname="$2"
-  {
-    echo "/* === Bundled shared dependencies === */"
-    echo "$SHARED_BUNDLE"
-    echo ""
-    echo "/* === Renderer: ${outname} === */"
-    cat "$src"
-  } > "${BUILD_DIR}/renderers/${outname}"
-}
-
-bundle_renderer renderers/list.js        decidr-list.js
-bundle_renderer renderers/dashboard.js  decidr-dashboard.js
-bundle_renderer renderers/audit-dashboard.js decidr-audit-dashboard.js
-bundle_renderer renderers/audit-reports.js decidr-audit-reports.js
-bundle_renderer renderers/timeline.js   decidr-timeline.js
-bundle_renderer renderers/graph.js      decidr-graph.js
-bundle_renderer renderers/github-auth.js decidr-github-auth.js
+# Companion loads one renderer file per tool, so shared dependencies remain
+# inlined. Safe modules are formatting-minified before concatenation.
+node scripts/build-renderers.mjs
 
 # Copy prompts directory
 cp -r prompts "${BUILD_DIR}/prompts"

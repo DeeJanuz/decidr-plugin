@@ -3,6 +3,74 @@
 
   var _token = '';
   var _activeOrgId = null;
+  var _currentMembershipRole = null;
+  var _currentOAuthClientId = null;
+  var _currentOAuthScopes = [];
+  var DASHBOARD_CACHE_MAX_AGE_MS = 60000;
+  var DASHBOARD_CACHE_MAX_ENTRIES = 4;
+  var DASHBOARD_CACHE_MAX_BYTES = 512 * 1024;
+  var _dashboardCacheEntries = [];
+
+  function _jsonBytes(value) {
+    var json = JSON.stringify(value);
+    if (typeof TextEncoder !== 'undefined') {
+      return new TextEncoder().encode(json).length;
+    }
+    return unescape(encodeURIComponent(json)).length;
+  }
+
+  function _dashboardPluginVersion() {
+    var plugin = window.__mcpviews_plugins
+      && window.__mcpviews_plugins.decidr;
+    return (plugin && plugin.version) || 'unknown';
+  }
+
+  function _dashboardCacheKey(orgId, userId, membershipRole) {
+    return [
+      api._baseUrl || '',
+      _dashboardPluginVersion(),
+      'dashboard.v1',
+      orgId || '',
+      userId || '',
+      membershipRole || '',
+      _currentOAuthClientId || '',
+      _currentOAuthScopes.join(' '),
+      'decidr_dashboard',
+      'summary-default'
+    ].join('|');
+  }
+
+  function _purgeDashboardPreview(orgId) {
+    if (!orgId) {
+      _dashboardCacheEntries = [];
+      return;
+    }
+    var retained = [];
+    for (var i = 0; i < _dashboardCacheEntries.length; i++) {
+      if (_dashboardCacheEntries[i].organizationId !== orgId) {
+        retained.push(_dashboardCacheEntries[i]);
+      }
+    }
+    _dashboardCacheEntries = retained;
+  }
+
+  function _trimDashboardCache() {
+    _dashboardCacheEntries.sort(function(a, b) {
+      return b.lastAccessedAt - a.lastAccessedAt;
+    });
+    while (_dashboardCacheEntries.length > DASHBOARD_CACHE_MAX_ENTRIES) {
+      _dashboardCacheEntries.pop();
+    }
+    var total = 0;
+    var retained = [];
+    for (var i = 0; i < _dashboardCacheEntries.length; i++) {
+      var entry = _dashboardCacheEntries[i];
+      if (total + entry.bytes > DASHBOARD_CACHE_MAX_BYTES) continue;
+      total += entry.bytes;
+      retained.push(entry);
+    }
+    _dashboardCacheEntries = retained;
+  }
 
   function isValidId(id) {
     return typeof id === 'string' && /^[a-zA-Z0-9_-]+$/.test(id);
@@ -107,6 +175,9 @@
 
   function _handleResponse(response) {
     if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        _purgeDashboardPreview(_activeOrgId);
+      }
       return response.text().then(function(text) {
         throw _buildApiError(response, text);
       }, function() {
@@ -159,6 +230,7 @@
     return window.__TAURI__.core.invoke('get_plugin_auth_header', ipcArgs)
       .then(function(authHeader) {
         var t = (authHeader || '').replace(/^Bearer\s+/i, '');
+        if (_token && _token !== t) _purgeDashboardPreview();
         _token = t;
         return _token;
       });
@@ -217,10 +289,14 @@
   var api = {
     _baseUrl: '',
     _currentUserId: null,
+    _currentMembershipRole: null,
     _initialized: false,
+    _sessionInitialized: false,
 
     setToken: function(t) {
-      _token = t || '';
+      var next = t || '';
+      if (_token && _token !== next) _purgeDashboardPreview();
+      _token = next;
     },
 
     hasToken: function() {
@@ -240,9 +316,13 @@
       _token = token || '';
     },
 
-    autoInit: function(meta) {
+    autoInit: function(meta, options) {
+      options = options || {};
       if (api._initialized) {
-        return Promise.resolve();
+        if (options.skipSession || api._sessionInitialized) {
+          return Promise.resolve();
+        }
+        return api._fetchCurrentUser();
       }
 
       // Resolve base URL from MCPViews plugin config, meta override, or fallback
@@ -267,7 +347,7 @@
             var t = (authHeader || '').replace(/^Bearer\s+/i, '');
             _token = t;
             api._initialized = true;
-            return api._fetchCurrentUser();
+            return options.skipSession ? null : api._fetchCurrentUser();
           })
           .catch(function(err) {
             // If caller explicitly targeted an org and Tauri has no stored token
@@ -281,13 +361,13 @@
             }
             _token = window.__decidrToken || '';
             api._initialized = true;
-            return api._fetchCurrentUser();
+            return options.skipSession ? null : api._fetchCurrentUser();
           });
       }
 
       _token = window.__decidrToken || '';
       api._initialized = true;
-      return api._fetchCurrentUser();
+      return options.skipSession ? Promise.resolve() : api._fetchCurrentUser();
     },
 
     _fetchCurrentUser: function() {
@@ -296,6 +376,7 @@
         credentials: 'include'
       }).then(function(r) { return r.ok ? r.json() : null; })
         .then(function(data) {
+          api._sessionInitialized = true;
           if (data && data.user && data.user.id) {
             api._currentUserId = data.user.id;
           }
@@ -307,10 +388,14 @@
           ) {
             _activeOrgId = data.session.currentOrganizationId;
           }
-        }).catch(function() { /* session fetch is best-effort */ });
+        }).catch(function() {
+          api._sessionInitialized = true;
+          /* session fetch is best-effort */
+        });
     },
 
-    withReady: function(container, meta, renderFn, orgId) {
+    withReady: function(container, meta, renderFn, orgId, options) {
+      options = options || {};
       // Dependency guard
       if (!window.__decidrUI || !window.__decidrAPI) {
         var _retries = 0;
@@ -318,7 +403,7 @@
           _retries++;
           if (window.__decidrUI && window.__decidrAPI) {
             clearInterval(_check);
-            api.withReady(container, meta, renderFn, orgId);
+            api.withReady(container, meta, renderFn, orgId, options);
           } else if (_retries >= 10) {
             clearInterval(_check);
             container.innerHTML = '<div style="color:var(--color-error-text);padding:var(--space-4);">'
@@ -330,9 +415,11 @@
 
       var UI = window.__decidrUI;
 
-      container.innerHTML = '<div style="padding:var(--space-6);">'
-        + UI.loadingSpinner('Initializing...')
-        + '</div>';
+      if (!options.preserveLoading) {
+        container.innerHTML = '<div style="padding:var(--space-6);">'
+          + UI.loadingSpinner('Initializing...')
+          + '</div>';
+      }
 
       var targetOrg = orgId || null;
       if (targetOrg !== _activeOrgId) {
@@ -340,7 +427,7 @@
         api._initialized = false;
       }
 
-      api.autoInit(meta || {}).then(function() {
+      api.autoInit(meta || {}, options).then(function() {
         renderFn(UI, api);
       }).catch(function(err) {
         console.error('[decidr] Init error:', err);
@@ -354,11 +441,13 @@
       return _describeError(err, fallback);
     },
 
-    get: function(path) {
+    get: function(path, options) {
+      options = options || {};
       _validatePathIds(path);
       return _fetchWithRetry(api._baseUrl + path, {
         method: 'GET',
-        headers: _headers(false)
+        headers: _headers(false),
+        signal: options.signal
       });
     },
 
@@ -368,6 +457,9 @@
         method: 'POST',
         headers: _headers(true),
         body: JSON.stringify(body)
+      }).then(function(result) {
+        _purgeDashboardPreview(_activeOrgId);
+        return result;
       });
     },
 
@@ -377,6 +469,9 @@
         method: 'PATCH',
         headers: _headers(true),
         body: JSON.stringify(body)
+      }).then(function(result) {
+        _purgeDashboardPreview(_activeOrgId);
+        return result;
       });
     },
 
@@ -385,6 +480,9 @@
       return _fetchWithRetry(api._baseUrl + path, {
         method: 'DELETE',
         headers: _headers(false)
+      }).then(function(result) {
+        _purgeDashboardPreview(_activeOrgId);
+        return result;
       });
     },
 
@@ -458,8 +556,85 @@
 
     // --- Special endpoints ---
 
-    getActionItems: function(params) {
-      return api.get('/action-items' + _qs(params));
+    getActionItems: function(params, options) {
+      return api.get('/action-items' + _qs(params), options || {});
+    },
+
+    getDashboardSummary: function(options) {
+      return api.get('/dashboard/summary', options || {});
+    },
+
+    getDashboardDrilldowns: function(params, options) {
+      return api.get('/dashboard/drilldowns' + _qs(params), options || {});
+    },
+
+    setVerifiedPrincipal: function(viewer) {
+      viewer = viewer || {};
+      api._currentUserId = viewer.id || null;
+      _currentMembershipRole = viewer.membership_role || viewer.membershipRole || null;
+      _currentOAuthClientId = viewer.oauth_client_id || viewer.oauthClientId || null;
+      _currentOAuthScopes = (viewer.oauth_scopes || viewer.oauthScopes || []).slice().sort();
+      api._currentMembershipRole = _currentMembershipRole;
+      api._sessionInitialized = !!api._currentUserId;
+    },
+
+    getDashboardPreview: function(orgId) {
+      if (!orgId || !api._currentUserId || !_currentMembershipRole) return null;
+      var key = _dashboardCacheKey(orgId, api._currentUserId, _currentMembershipRole);
+      var now = Date.now();
+      for (var i = 0; i < _dashboardCacheEntries.length; i++) {
+        var entry = _dashboardCacheEntries[i];
+        if (entry.key !== key) continue;
+        if (now - entry.createdAt > DASHBOARD_CACHE_MAX_AGE_MS) {
+          _dashboardCacheEntries.splice(i, 1);
+          return null;
+        }
+        entry.lastAccessedAt = now;
+        return JSON.parse(JSON.stringify(entry.value));
+      }
+      return null;
+    },
+
+    putDashboardPreview: function(orgId, summary, drilldowns) {
+      if (!summary || !summary.viewer || !orgId) return;
+      api.setVerifiedPrincipal(summary.viewer);
+      var userId = api._currentUserId;
+      var role = _currentMembershipRole;
+      if (!userId || !role) return;
+      var value = {
+        summary: summary,
+        drilldowns: drilldowns || null
+      };
+      var bytes = _jsonBytes(value);
+      if (bytes > DASHBOARD_CACHE_MAX_BYTES) return;
+      var key = _dashboardCacheKey(orgId, userId, role);
+      _purgeDashboardPreview(orgId);
+      _dashboardCacheEntries.push({
+        key: key,
+        organizationId: orgId,
+        createdAt: Date.now(),
+        lastAccessedAt: Date.now(),
+        bytes: bytes,
+        value: JSON.parse(JSON.stringify(value))
+      });
+      _trimDashboardCache();
+    },
+
+    purgeDashboardPreview: function(orgId) {
+      _purgeDashboardPreview(orgId);
+    },
+
+    evictDashboardEntity: function(entityId) {
+      if (!entityId) return;
+      _purgeDashboardPreview(_activeOrgId);
+      if (typeof window.CustomEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('decidr:dashboard-entity-evicted', {
+          detail: {
+            entityId: entityId,
+            organizationId: _activeOrgId
+          }
+        }));
+      }
     },
 
     search: function(query) {
@@ -902,11 +1077,19 @@
       return Promise.reject(new Error('MCPViews authentication UI is not available.'));
     },
 
-    switchOrg: function(orgId) {
+    switchOrg: function(orgId, options) {
+      var previousOrgId = _activeOrgId;
+      if (previousOrgId) _purgeDashboardPreview(previousOrgId);
       _activeOrgId = orgId || null;
       _token = '';
       api._initialized = false;
-      return api.autoInit({});
+      api._sessionInitialized = false;
+      api._currentUserId = null;
+      api._currentMembershipRole = null;
+      _currentMembershipRole = null;
+      _currentOAuthClientId = null;
+      _currentOAuthScopes = [];
+      return api.autoInit({}, options || {});
     },
 
     getUserPreferences: function() {

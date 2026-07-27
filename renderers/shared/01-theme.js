@@ -4315,6 +4315,9 @@
     + '  .decidr-copy-ref-btn { flex: 0 0 auto; }'
     + '}';
 
-  style.textContent = css;
+  style.textContent = css
+    + '.decidr-dashboard-below-fold{content-visibility:auto;contain-intrinsic-size:1px 360px;}'
+    + '.decidr-dashboard-skeleton>div,.decidr-dashboard-section-skeleton{animation:decidr-pulse 1.4s ease-in-out infinite;}'
+    + '@keyframes decidr-pulse{0%,100%{opacity:.55}50%{opacity:1}}';
   document.head.appendChild(style);
 })();

@@ -2,7 +2,7 @@
 
 MCPViews plugin for [DecidR](https://app.decidrmcp.com) — decision governance for solo builders and teams.
 
-Current source line: `manifest.json` version `0.1.66`, MCP endpoint `https://app.decidrmcp.com/api/mcp`, OAuth/email-code auth through Ludflow, and release asset `release/decidr.zip`.
+Current source line: `manifest.json` version `0.1.67`, MCP endpoint `https://app.decidrmcp.com/api/mcp`, OAuth/email-code auth through Ludflow, and release asset `release/decidr.zip`.
 
 ## Renderers
 
@@ -22,7 +22,10 @@ Audit dashboard, audit report, and graph renderer source remains in the reposito
 ## Build
 
 ```bash
-bash build.sh
+npm ci
+npm test
+npm run check:bundle
+npm run build
 ```
 
 Produces `release/decidr.zip`. Production is the default build channel and
@@ -30,7 +33,7 @@ uses `https://app.decidrmcp.com` with Ludflow auth at `https://app.ludflow.com`.
 For a staging package, run:
 
 ```bash
-DECIDR_MCPVIEWS_BUILD_CHANNEL=staging bash build.sh
+DECIDR_MCPVIEWS_BUILD_CHANNEL=staging npm run build
 ```
 
 The source manifest remains production-default. The generated ZIP is guarded so

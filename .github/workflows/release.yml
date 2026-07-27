@@ -30,7 +30,11 @@ jobs:
 
       - name: Build plugin
         if: steps.version.outputs.changed == 'true'
-        run: bash build.sh
+        run: |
+          npm ci
+          npm test
+          npm run check:bundle
+          bash build.sh
 
       - name: Create release
         if: steps.version.outputs.changed == 'true'

@@ -3,7 +3,19 @@
   window.__renderers = window.__renderers || {};
 
   window.__renderers.decidr_dashboard = function(container, data, meta, toolArgs, reviewRequired, onDecision) {
-    container.innerHTML = '';
+    container.innerHTML = '<div class="decidr-dashboard-root decidr-dashboard-skeleton" aria-busy="true"'
+      + ' aria-label="Loading governance dashboard" style="min-height:1120px;padding:24px;">'
+      + '<div data-dashboard-skeleton="header" style="height:92px;border-radius:12px;background:var(--surface-secondary);"></div>'
+      + '<div data-dashboard-skeleton="stats" style="height:88px;margin-top:24px;border-radius:12px;background:var(--surface-secondary);"></div>'
+      + '<div data-dashboard-skeleton="next-steps" style="height:300px;margin-top:32px;border-radius:12px;background:var(--surface-secondary);"></div>'
+      + '<div data-dashboard-skeleton="active-decisions" style="height:120px;margin-top:32px;border-radius:12px;background:var(--surface-secondary);"></div>'
+      + '<div data-dashboard-skeleton="initiatives" style="height:260px;margin-top:32px;border-radius:12px;background:var(--surface-secondary);"></div>'
+      + '<div data-dashboard-skeleton="recent-decisions" style="height:150px;margin-top:32px;border-radius:12px;background:var(--surface-secondary);"></div>'
+      + '<div data-dashboard-skeleton="approvals" style="height:150px;margin-top:32px;border-radius:12px;background:var(--surface-secondary);"></div>'
+      + '</div>';
+    if (window.performance && window.performance.mark) {
+      window.performance.mark('decidr-dashboard-ack');
+    }
 
     var _orgId = (data && data.organization_id) ? data.organization_id : null;
     window.__decidrAPI.withReady(container, meta, function() {
@@ -25,6 +37,21 @@
       allTasks: [],
       allBridges: [],
       lastActivityByEntity: {},  // { entityId: { action, label, createdAt } }
+      totals: { initiatives: 0, projects: 0, decisions: 0, tasks: 0, needs_action: 0 },
+      recentDecisions: [],
+      pendingApprovals: [],
+      activeDecisionTotal: 0,
+      activeDecisionStatusCounts: {},
+      summary: null,
+      drilldowns: null,
+      drilldownPromise: null,
+      summaryController: null,
+      drilldownController: null,
+      actionItemsController: null,
+      loadGeneration: 0,
+      legacyMode: false,
+      readOnlyPreview: false,
+      previewError: null,
       loaded: false,
       error: null,
       // New section state
@@ -37,6 +64,7 @@
       nextStepsInitiativeMode: 'ALL',
       nextStepsSelectedInitiatives: {},
       nextStepsIncludeUnassigned: true,
+      nextStepsFacets: null,
       nextStepsInitiativeFilterOpen: false,
       nextStepsPreferenceWarning: '',
       nextStepsSaveTimer: null,
@@ -52,7 +80,8 @@
 
     // ── Show loading ───────────────────────────────────────
 
-    container.innerHTML = UI.loadingSpinner('Loading dashboard...');
+    // The stable shell was painted before auth initialization. Keep it in place
+    // until a scoped preview or authoritative summary can replace it.
 
     // ── Fetch all data ─────────────────────────────────────
 
@@ -76,6 +105,24 @@
     }
 
     var fetches = freshFetches();
+
+    function emitDashboardMetric(outcome, detail) {
+      var safeDetail = {
+        route: 'dashboard',
+        representation_version: 'dashboard.v1',
+        outcome: outcome
+      };
+      detail = detail || {};
+      if (typeof detail.status === 'number') safeDetail.status = detail.status;
+      if (window.performance && window.performance.mark) {
+        window.performance.mark('decidr-dashboard-' + outcome);
+      }
+      if (typeof window.CustomEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('decidr:dashboard-performance', {
+          detail: safeDetail
+        }));
+      }
+    }
 
     function unwrapList(resp) {
       if (resp && Array.isArray(resp.data)) return resp.data;
@@ -269,7 +316,8 @@
       renderDashboard();
     }
 
-    function loadDashboard() {
+    function loadLegacyDashboard() {
+      dashState.legacyMode = true;
       dashState.loaded = false;
       dashState.error = null;
       fetches = freshFetches();
@@ -295,9 +343,197 @@
       });
     }
 
+    function mergeDecisionRows(groups) {
+      var seen = {};
+      var rows = [];
+      for (var g = 0; g < groups.length; g++) {
+        var group = groups[g] || [];
+        for (var i = 0; i < group.length; i++) {
+          var row = group[i];
+          if (!row || !row.id || seen[row.id]) continue;
+          seen[row.id] = true;
+          rows.push(row);
+        }
+      }
+      return rows;
+    }
+
+    function applyDashboardSummary(summary, readOnlyPreview) {
+      if (!summary || summary.representation_version !== 'dashboard.v1') {
+        var versionError = new Error('Unsupported dashboard representation');
+        versionError.code = 'DECIDR_DASHBOARD_REPRESENTATION';
+        throw versionError;
+      }
+      var responseOrgId = summary.organization && summary.organization.id;
+      if (_orgId && responseOrgId !== _orgId) {
+        API.purgeDashboardPreview(_orgId);
+        var scopeError = new Error('Dashboard organization did not match the requested organization');
+        scopeError.code = 'DECIDR_DASHBOARD_SCOPE_MISMATCH';
+        scopeError.status = 403;
+        throw scopeError;
+      }
+
+      API.setVerifiedPrincipal(summary.viewer);
+      dashState.summary = summary;
+      dashState.activeOrgId = responseOrgId;
+      dashState.defaultOrgId = summary.default_organization_id || null;
+      dashState.organizations = summary.organizations || [];
+      for (var o = 0; o < dashState.organizations.length; o++) {
+        if (dashState.organizations[o].id === responseOrgId) {
+          dashState.organizations[o].tokenStatus = 'valid';
+        }
+      }
+      dashState.totals = summary.totals || dashState.totals;
+      dashState.actionItems = (summary.next_steps && summary.next_steps.data) || [];
+      dashState.nextStepsFacets = (summary.next_steps && summary.next_steps.facets) || null;
+      dashState.initiatives = (summary.initiatives && summary.initiatives.data) || [];
+      dashState.recentDecisions = summary.recent_decisions || [];
+      dashState.pendingApprovals = (summary.pending_approvals && summary.pending_approvals.data) || [];
+      dashState.activeDecisionTotal = (summary.active_decisions && summary.active_decisions.total_count) || 0;
+      dashState.activeDecisionStatusCounts = (summary.active_decisions && summary.active_decisions.status_counts) || {};
+      dashState.allDecisions = mergeDecisionRows([
+        dashState.recentDecisions,
+        dashState.pendingApprovals
+      ]);
+      dashState.projectsByInitiative = {};
+      applyNextStepsPreference(summary.next_steps_preference, null);
+      dashState.loaded = true;
+      dashState.error = null;
+      dashState.readOnlyPreview = !!readOnlyPreview;
+      dashState.previewError = null;
+
+      for (var i = 0; i < dashState.initiatives.length; i++) {
+        var initiativeId = dashState.initiatives[i].id;
+        if (dashState.collapsedInitiatives[initiativeId] === undefined) {
+          dashState.collapsedInitiatives[initiativeId] = true;
+        }
+      }
+      renderDashboard();
+      if (window.performance && window.performance.mark) {
+        window.performance.mark(readOnlyPreview
+          ? 'decidr-dashboard-preview'
+          : 'decidr-dashboard-authoritative');
+      }
+    }
+
+    function applyDashboardDrilldowns(drilldowns, readOnlyPreview) {
+      if (!drilldowns || drilldowns.representation_version !== 'dashboard.v1') return;
+      if (dashState.activeOrgId && drilldowns.organization_id !== dashState.activeOrgId) {
+        API.purgeDashboardPreview(dashState.activeOrgId);
+        return;
+      }
+      dashState.drilldowns = drilldowns;
+      var activeRows = (drilldowns.active_decisions && drilldowns.active_decisions.data) || [];
+      var projectRows = (drilldowns.projects && drilldowns.projects.data) || [];
+      dashState.allDecisions = mergeDecisionRows([
+        activeRows,
+        dashState.recentDecisions,
+        dashState.pendingApprovals
+      ]);
+      dashState.projectsByInitiative = projectMapFromProjects(projectRows);
+      dashState.lastActivityByEntity = {};
+      for (var i = 0; i < activeRows.length; i++) {
+        if (!activeRows[i].lastActivityAt) continue;
+        dashState.lastActivityByEntity[activeRows[i].id] = {
+          action: activeRows[i].lastActivityAction,
+          label: ACTIVITY_LABELS[activeRows[i].lastActivityAction] || activeRows[i].lastActivityAction,
+          createdAt: activeRows[i].lastActivityAt
+        };
+      }
+      dashState.readOnlyPreview = !!readOnlyPreview;
+      renderDashboard();
+    }
+
+    function preloadDashboardDrilldowns(generation) {
+      if (dashState.drilldownController) dashState.drilldownController.abort();
+      dashState.drilldownController = new AbortController();
+      var controller = dashState.drilldownController;
+      dashState.drilldownPromise = API.getDashboardDrilldowns({
+        include: 'active_decisions,projects'
+      }, {
+        signal: controller.signal
+      }).then(function(drilldowns) {
+        if (generation !== dashState.loadGeneration) return drilldowns;
+        applyDashboardDrilldowns(drilldowns, false);
+        API.putDashboardPreview(dashState.activeOrgId, dashState.summary, drilldowns);
+        return drilldowns;
+      }).catch(function(err) {
+        if (err && err.name === 'AbortError') return null;
+        if (err && (err.status === 401 || err.status === 403)) {
+          API.purgeDashboardPreview(dashState.activeOrgId);
+          renderDashboardLoadError(err);
+          return null;
+        }
+        console.warn('[decidr] Dashboard drilldown preload failed:', err);
+        return null;
+      });
+      return dashState.drilldownPromise;
+    }
+
+    function loadDashboard() {
+      var options = arguments[0] || {};
+      dashState.legacyMode = false;
+      dashState.loadGeneration++;
+      var generation = dashState.loadGeneration;
+      if (dashState.summaryController) dashState.summaryController.abort();
+      if (dashState.drilldownController) dashState.drilldownController.abort();
+      dashState.summaryController = new AbortController();
+
+      if (!_orgId) {
+        return loadLegacyDashboard();
+      }
+
+      var preview = options.ignorePreview ? null : API.getDashboardPreview(_orgId);
+      if (preview && preview.summary) {
+        applyDashboardSummary(preview.summary, true);
+        if (preview.drilldowns) applyDashboardDrilldowns(preview.drilldowns, true);
+        emitDashboardMetric('preview-hit');
+      }
+
+      return API.getDashboardSummary({
+        signal: dashState.summaryController.signal
+      }).then(function(summary) {
+        if (generation !== dashState.loadGeneration) return;
+        applyDashboardSummary(summary, false);
+        emitDashboardMetric('authoritative');
+        API.putDashboardPreview(_orgId, summary, null);
+        preloadDashboardDrilldowns(generation);
+        API.listPluginOrgAuth().then(function(entries) {
+          var statusByOrg = {};
+          for (var i = 0; i < (entries || []).length; i++) {
+            var entry = entries[i] || {};
+            statusByOrg[entry.org_id || entry.orgId] = entry.status || 'valid';
+          }
+          for (var o = 0; o < dashState.organizations.length; o++) {
+            dashState.organizations[o].tokenStatus = statusByOrg[dashState.organizations[o].id] || 'no-token';
+          }
+          renderDashboard();
+        }).catch(function() {});
+      }).catch(function(err) {
+        if (err && err.name === 'AbortError') return;
+        if (err && (err.status === 404 || err.status === 501)) {
+          emitDashboardMetric('legacy-fallback', { status: err.status });
+          return loadLegacyDashboard();
+        }
+        if (err && (err.status === 401 || err.status === 403)) {
+          API.purgeDashboardPreview(_orgId);
+          renderDashboardLoadError(err);
+          return;
+        }
+        if (preview && preview.summary) {
+          dashState.readOnlyPreview = true;
+          dashState.previewError = API.describeError(err, 'Fresh dashboard data is unavailable.');
+          emitDashboardMetric('locked-preview-error', { status: err && err.status });
+          renderDashboard();
+          return;
+        }
+        renderDashboardLoadError(err);
+      });
+    }
+
     loadDashboard();
 
-    function refreshDashboard() {
+    function refreshLegacyDashboard() {
       var rf = {
         initiatives: null, projects: null, decisions: null, tasks: null,
         bridges: null, issues: null, prs: null, actionItems: null, timeline: null,
@@ -324,6 +560,60 @@
         console.error('[decidr] Dashboard refresh failed:', err);
       });
     }
+
+    function refreshDashboard() {
+      var orgId = dashState.activeOrgId || _orgId;
+      API.purgeDashboardPreview(orgId);
+      if (dashState.legacyMode) return refreshLegacyDashboard();
+      return loadDashboard({ ignorePreview: true });
+    }
+
+    function evictEntityFromDashboardState(entityId) {
+      function withoutEntity(rows) {
+        var retained = [];
+        for (var i = 0; i < (rows || []).length; i++) {
+          var row = rows[i] || {};
+          if (row.id === entityId || row.entityId === entityId || row.entity_id === entityId) continue;
+          retained.push(row);
+        }
+        return retained;
+      }
+
+      dashState.actionItems = withoutEntity(dashState.actionItems);
+      dashState.allDecisions = withoutEntity(dashState.allDecisions);
+      dashState.recentDecisions = withoutEntity(dashState.recentDecisions);
+      dashState.pendingApprovals = withoutEntity(dashState.pendingApprovals);
+      for (var initiativeId in dashState.projectsByInitiative) {
+        if (!dashState.projectsByInitiative.hasOwnProperty(initiativeId)) continue;
+        dashState.projectsByInitiative[initiativeId] = withoutEntity(
+          dashState.projectsByInitiative[initiativeId]
+        );
+      }
+    }
+
+    if (container._decidrDashboardEntityEvictedHandler) {
+      window.removeEventListener(
+        'decidr:dashboard-entity-evicted',
+        container._decidrDashboardEntityEvictedHandler
+      );
+    }
+    container._decidrDashboardEntityEvictedHandler = function(event) {
+      var detail = event && event.detail ? event.detail : {};
+      if (
+        detail.organizationId &&
+        dashState.activeOrgId &&
+        detail.organizationId !== dashState.activeOrgId
+      ) return;
+      evictEntityFromDashboardState(detail.entityId);
+      dashState.readOnlyPreview = true;
+      dashState.previewError = 'This item no longer exists. Refreshing dashboard data.';
+      renderDashboard();
+      refreshDashboard();
+    };
+    window.addEventListener(
+      'decidr:dashboard-entity-evicted',
+      container._decidrDashboardEntityEvictedHandler
+    );
 
     // ── Data Helpers ───────────────────────────────────────
 
@@ -441,6 +731,14 @@
       }).then(function() {
         return API.saveNextStepsFilters(payload);
       }).then(function() {
+        if (dashState.summary) {
+          dashState.summary.next_steps_preference = payload;
+          API.putDashboardPreview(
+            dashState.activeOrgId,
+            dashState.summary,
+            dashState.drilldowns
+          );
+        }
         dashState.nextStepsPreferenceWarning = '';
         syncNextStepsPreferenceWarning();
       }).catch(function(err) {
@@ -472,6 +770,21 @@
       }).then(function() {
         return API.clearNextStepsFilters(orgId);
       }).then(function() {
+        if (dashState.summary) {
+          dashState.summary.next_steps_preference = {
+            organizationId: orgId,
+            initiativeMode: 'ALL',
+            initiativeIds: [],
+            includeUnassigned: true,
+            hiddenTypes: [],
+            hiddenStatuses: []
+          };
+          API.putDashboardPreview(
+            dashState.activeOrgId,
+            dashState.summary,
+            dashState.drilldowns
+          );
+        }
         dashState.nextStepsPreferenceWarning = '';
         syncNextStepsPreferenceWarning();
       }).catch(function(err) {
@@ -982,15 +1295,14 @@
     // ── Section Renderers ──────────────────────────────────
 
     function renderStatsSection() {
-      var allProjects = getAllProjects();
-      var actionCount = dashState.actionItems.length;
+      var totals = dashState.totals || {};
 
       return UI.statsRow([
-        { value: dashState.initiatives.length, label: 'Initiatives', opts: { animDelay: 0.05 } },
-        { value: allProjects.length, label: 'Projects', opts: { animDelay: 0.10 } },
-        { value: dashState.allDecisions.length, label: 'Decisions', opts: { animDelay: 0.15 } },
-        { value: dashState.allTasks.length, label: 'Tasks', opts: { animDelay: 0.20 } },
-        { value: actionCount, label: 'Needs Action', opts: { animDelay: 0.25 } }
+        { value: totals.initiatives || 0, label: 'Initiatives', opts: { animDelay: 0.05 } },
+        { value: totals.projects || 0, label: 'Projects', opts: { animDelay: 0.10 } },
+        { value: totals.decisions || 0, label: 'Decisions', opts: { animDelay: 0.15 } },
+        { value: totals.tasks || 0, label: 'Tasks', opts: { animDelay: 0.20 } },
+        { value: totals.needs_action || 0, label: 'Needs Action', opts: { animDelay: 0.25 } }
       ]);
     }
 
@@ -1048,16 +1360,22 @@
 
     function renderInitiativeFilter(items) {
       var initiatives = sortedInitiativesForFilter();
-      var counts = {};
-      var unassignedCount = 0;
-      for (var i = 0; i < items.length; i++) {
-        var initiativeIds = items[i].initiativeIds || [];
-        if (initiativeIds.length === 0) {
-          unassignedCount++;
-          continue;
-        }
-        for (var j = 0; j < initiativeIds.length; j++) {
-          counts[initiativeIds[j]] = (counts[initiativeIds[j]] || 0) + 1;
+      var counts = dashState.nextStepsFacets && dashState.nextStepsFacets.initiatives
+        ? dashState.nextStepsFacets.initiatives
+        : {};
+      var unassignedCount = dashState.nextStepsFacets
+        ? Number(dashState.nextStepsFacets.unassigned || 0)
+        : 0;
+      if (!dashState.nextStepsFacets) {
+        for (var i = 0; i < items.length; i++) {
+          var initiativeIds = items[i].initiativeIds || [];
+          if (initiativeIds.length === 0) {
+            unassignedCount++;
+            continue;
+          }
+          for (var j = 0; j < initiativeIds.length; j++) {
+            counts[initiativeIds[j]] = (counts[initiativeIds[j]] || 0) + 1;
+          }
         }
       }
 
@@ -1118,13 +1436,19 @@
     }
 
     function renderNextStepsFilters(items, visibleCount) {
-      var typeCounts = {};
-      var statusCounts = {};
-      for (var i = 0; i < items.length; i++) {
-        var type = normalizeActionItemType(items[i]);
-        var status = normalizeActionItemStatus(items[i]);
-        typeCounts[type] = (typeCounts[type] || 0) + 1;
-        statusCounts[status] = (statusCounts[status] || 0) + 1;
+      var typeCounts = dashState.nextStepsFacets && dashState.nextStepsFacets.types
+        ? dashState.nextStepsFacets.types
+        : {};
+      var statusCounts = dashState.nextStepsFacets && dashState.nextStepsFacets.statuses
+        ? dashState.nextStepsFacets.statuses
+        : {};
+      if (!dashState.nextStepsFacets) {
+        for (var i = 0; i < items.length; i++) {
+          var type = normalizeActionItemType(items[i]);
+          var status = normalizeActionItemStatus(items[i]);
+          typeCounts[type] = (typeCounts[type] || 0) + 1;
+          statusCounts[status] = (statusCounts[status] || 0) + 1;
+        }
       }
 
       var types = orderedFilterValues(typeCounts, ['DECISION', 'TASK', 'PROJECT', 'BRIDGE', 'INITIATIVE', 'ISSUE', 'PULL_REQUEST', 'OTHER']);
@@ -1261,6 +1585,10 @@
       var decisions = getActiveDecisions();
 
       if (decisions.length === 0) {
+        if (dashState.activeDecisionTotal > 0 && dashState.drilldownPromise) {
+          return '<div class="decidr-dashboard-section-skeleton" aria-busy="true"'
+            + ' style="height:160px;border-radius:12px;background:var(--surface-secondary);"></div>';
+        }
         return UI.emptyState('No decisions in this view.');
       }
 
@@ -1291,6 +1619,7 @@
 
     function renderActiveDecisionsSection() {
       var decisions = getActiveDecisions();
+      var totalCount = dashState.activeDecisionTotal || decisions.length;
       var visible = !!dashState.activeDecisionsVisible;
       var toggleLabel = visible ? 'Hide active decisions' : 'Show active decisions';
       var html = '<div class="decidr-active-decisions-toggle-row">'
@@ -1299,15 +1628,18 @@
         + '</div>';
 
       if (!visible) {
-        return UI.section('decision', 'Active Decisions', decisions.length, html,
+        return UI.section('decision', 'Active Decisions', totalCount, html,
           { actions: [{ label: '+ Decision', action: 'decision', title: 'Create decision' }] });
       }
 
-      // Scan all decisions for unique statuses
       var statusSet = {};
+      var summaryStatuses = dashState.activeDecisionStatusCounts || {};
+      for (var summaryStatus in summaryStatuses) {
+        if (summaryStatuses.hasOwnProperty(summaryStatus)) statusSet[summaryStatus] = true;
+      }
       for (var i = 0; i < dashState.allDecisions.length; i++) {
-        var s = normalizeStatus(dashState.allDecisions[i]);
-        if (s) statusSet[s] = true;
+        var loadedStatus = normalizeStatus(dashState.allDecisions[i]);
+        if (loadedStatus) statusSet[loadedStatus] = true;
       }
 
       var STATUS_ORDER = ['BACKLOG', 'DRAFT', 'PROPOSED', 'IN_PROGRESS', 'STAGED', 'APPROVED', 'IMPLEMENTED', 'REJECTED', 'ARCHIVED'];
@@ -1326,16 +1658,13 @@
         var isActive = !!dashState.activeDecisionFilters[st];
         var label = st.charAt(0).toUpperCase() + st.slice(1).toLowerCase().replace(/_/g, ' ');
         // Count decisions with this status
-        var count = 0;
-        for (var c = 0; c < dashState.allDecisions.length; c++) {
-          if (normalizeStatus(dashState.allDecisions[c]) === st) count++;
-        }
+        var count = summaryStatuses[st] || 0;
         pillBar += '<button class="decidr-dash-status-pill' + (isActive ? ' active' : '') + '" data-decision-status="' + UI.escapeHtml(st) + '">'
           + UI.escapeHtml(label) + ' (' + count + ')</button>';
       }
       pillBar += '</div>';
 
-      return UI.section('decision', 'Active Decisions', decisions.length,
+      return UI.section('decision', 'Active Decisions', totalCount,
         html + pillBar + '<div id="decidr-active-decisions-container">' + renderActiveDecisionsContent() + '</div>',
         { actions: [{ label: '+ Decision', action: 'decision', title: 'Create decision' }] });
     }
@@ -1363,12 +1692,16 @@
         var initiative = initiatives[i];
         var initProjects = dashState.projectsByInitiative[initiative.id] || [];
         var initDecisions = getDecisionsForInitiative(initiative.id);
-        var decsByStatus = groupDecisionsByStatus(initDecisions);
+        var decsByStatus = initiative.decision_status_counts || groupDecisionsByStatus(initDecisions);
+        var initiativeProjectCount = typeof initiative.project_count === 'number'
+          ? initiative.project_count : initProjects.length;
+        var initiativeDecisionCount = typeof initiative.decision_count === 'number'
+          ? initiative.decision_count : initDecisions.length;
         var isCollapsed = !!dashState.collapsedInitiatives[initiative.id];
 
         html += UI.initiativeCard(initiative, {
-          projectCount: initProjects.length,
-          totalDecisions: initDecisions.length,
+          projectCount: initiativeProjectCount,
+          totalDecisions: initiativeDecisionCount,
           decisionsByStatus: decsByStatus,
           collapsed: isCollapsed
         });
@@ -1400,14 +1733,21 @@
             }
           }
           var isOwner = currentUserId && (proj.ownerId === currentUserId || proj.createdById === currentUserId);
-          var ghCounts = (dashState.githubCounts || {})[proj.id] || {};
+          var ghCounts = {
+            issues: Number(proj.githubIssueCount || 0),
+            pullRequests: Number(proj.githubPrCount || 0)
+          };
           cards += UI.dashboardProjectCard(proj, {
             decisions: projDecisions,
             tasks: projTasks,
             bridges: projBridges,
+            decisionCount: Number(proj.decisionCount || 0),
+            taskCount: Number(proj.taskCount || 0),
+            taskDoneCount: Number(proj.taskDoneCount || 0),
+            bridgeCount: Number(proj.bridgeCount || 0),
             isOwner: isOwner,
-            pendingDecisions: pendingCount,
-            needsYourReview: needsReviewCount,
+            pendingDecisions: Number(proj.pendingDecisionCount || pendingCount),
+            needsYourReview: Number(proj.needsYourReviewCount || needsReviewCount),
             githubCounts: ghCounts,
             animDelay: 0.05 + animIdx * 0.05
           });
@@ -1427,7 +1767,8 @@
     }
 
     function renderRecentDecisionsSection() {
-      var recent = getRecentDecisions(5);
+      var recent = dashState.recentDecisions.length
+        ? dashState.recentDecisions : getRecentDecisions(5);
       if (recent.length === 0) return '';
 
       var html = '';
@@ -1444,7 +1785,20 @@
     }
 
     function renderPendingApprovalsSection() {
-      var pending = getPendingDecisions();
+      var pending = [];
+      if (dashState.pendingApprovals.length) {
+        for (var pi = 0; pi < dashState.pendingApprovals.length; pi++) {
+          var pendingDecision = dashState.pendingApprovals[pi];
+          pending.push({
+            decision: pendingDecision,
+            projectName: pendingDecision.project
+              ? pendingDecision.project.name
+              : (pendingDecision.projectName || '')
+          });
+        }
+      } else {
+        pending = getPendingDecisions();
+      }
       if (pending.length === 0) return '';
 
       var html = '';
@@ -1463,6 +1817,16 @@
 
     function renderDashboard() {
       var html = '<div class="decidr-dashboard-root">';
+      if (dashState.readOnlyPreview) {
+        html += '<div class="decidr-dashboard-preview-banner" role="status"'
+          + ' style="margin-bottom:var(--space-4);padding:var(--space-3);border:1px solid var(--border-subtle);'
+          + 'border-radius:var(--border-radius-md);background:var(--surface-secondary);color:var(--text-secondary);">'
+          + '<strong>Refreshing dashboard.</strong> Cached data is read-only until access and state are verified.'
+          + (dashState.previewError
+            ? '<div style="margin-top:4px;">' + UI.escapeHtml(dashState.previewError) + '</div>'
+            : '')
+          + '</div>';
+      }
 
       // Title with org picker
       html += '<div class="decidr-dashboard-header">'
@@ -1486,26 +1850,26 @@
         + '</div>';
 
       // Active Decisions
-      html += '<div style="margin-top: var(--space-8);">'
+      html += '<div class="decidr-dashboard-below-fold" style="margin-top: var(--space-8);">'
         + renderActiveDecisionsSection()
         + '</div>';
 
       // Initiative sections
-      html += '<div style="margin-top: var(--space-8);">'
+      html += '<div class="decidr-dashboard-below-fold" style="margin-top: var(--space-8);">'
         + renderInitiativeSections()
         + '</div>';
 
       // Recent Decisions
       var recentHtml = renderRecentDecisionsSection();
       if (recentHtml) {
-        html += '<div style="margin-top: var(--space-8);">'
+        html += '<div class="decidr-dashboard-below-fold" style="margin-top: var(--space-8);">'
           + recentHtml + '</div>';
       }
 
       // Pending Approvals
       var pendingHtml = renderPendingApprovalsSection();
       if (pendingHtml) {
-        html += '<div style="margin-top: var(--space-8);">'
+        html += '<div class="decidr-dashboard-below-fold" style="margin-top: var(--space-8);">'
           + pendingHtml + '</div>';
       }
 
@@ -1513,12 +1877,21 @@
       html += renderCreateDialog();
 
       container.innerHTML = html;
+      container.setAttribute('aria-busy', dashState.readOnlyPreview ? 'true' : 'false');
+      if (dashState.readOnlyPreview) {
+        var lockedControls = container.querySelectorAll('button, input, select, textarea');
+        for (var lockedIndex = 0; lockedIndex < lockedControls.length; lockedIndex++) {
+          lockedControls[lockedIndex].disabled = true;
+          lockedControls[lockedIndex].setAttribute('aria-disabled', 'true');
+        }
+      }
       wireInteractions();
     }
 
     // ── Event Wiring ───────────────────────────────────────
 
     function wireInteractions() {
+      if (dashState.readOnlyPreview) return;
       wireNextStepsFilters();
       wireNextStepsShowMore();
       wireActiveDecisionsToggle();
@@ -1622,8 +1995,10 @@
         }
         container.innerHTML = UI.loadingSpinner('Switching organization...');
         flushNextStepsFilterSave().then(function() {
+          API.purgeDashboardPreview(dashState.activeOrgId);
           dashState.activeOrgId = settingsOrgId;
-          return API.switchOrg(settingsOrgId);
+          _orgId = settingsOrgId;
+          return API.switchOrg(settingsOrgId, { skipSession: true });
         }).then(function() {
           return refreshDashboard();
         }).then(function() {
@@ -1661,6 +2036,14 @@
           var starOrgId = starBtn.getAttribute('data-org-id');
           API.setDefaultOrg(starOrgId).then(function() {
             dashState.defaultOrgId = starOrgId;
+            if (dashState.summary) {
+              dashState.summary.default_organization_id = starOrgId;
+              API.putDashboardPreview(
+                dashState.activeOrgId,
+                dashState.summary,
+                dashState.drilldowns
+              );
+            }
             renderDashboard();
           }).catch(function(err) {
             console.error('[decidr] setDefaultOrg failed', err);
@@ -1685,8 +2068,10 @@
         menu.classList.remove('open');
         container.innerHTML = UI.loadingSpinner('Switching organization...');
         flushNextStepsFilterSave().then(function() {
+          API.purgeDashboardPreview(dashState.activeOrgId);
           dashState.activeOrgId = orgId;
-          return API.switchOrg(orgId);
+          _orgId = orgId;
+          return API.switchOrg(orgId, { skipSession: true });
         }).then(function() {
           refreshDashboard();
         }).catch(function(err) {
@@ -1729,6 +2114,84 @@
         var focusTarget = container.querySelector(focusSelector);
         if (focusTarget) focusTarget.focus();
       }
+    }
+
+    function refreshActionItemsFromServer(focusSelector) {
+      if (dashState.legacyMode || dashState.readOnlyPreview) return Promise.resolve();
+      if (dashState.actionItemsController) dashState.actionItemsController.abort();
+      dashState.actionItemsController = new AbortController();
+
+      var params = { take: 50 };
+      var knownTypes = {};
+      var knownStatuses = {};
+      var sourceItems = dashState.actionItems || [];
+      for (var i = 0; i < sourceItems.length; i++) {
+        knownTypes[normalizeActionItemType(sourceItems[i])] = true;
+        knownStatuses[normalizeActionItemStatus(sourceItems[i])] = true;
+      }
+      var visibleTypes = [];
+      var hiddenTypeCount = 0;
+      for (var type in knownTypes) {
+        if (!knownTypes.hasOwnProperty(type)) continue;
+        if (dashState.nextStepsHiddenTypes[type]) hiddenTypeCount++;
+        else visibleTypes.push(type);
+      }
+      var visibleStatuses = [];
+      var hiddenStatusCount = 0;
+      for (var status in knownStatuses) {
+        if (!knownStatuses.hasOwnProperty(status)) continue;
+        if (dashState.nextStepsHiddenStatuses[status]) hiddenStatusCount++;
+        else visibleStatuses.push(status);
+      }
+      if (hiddenTypeCount > 0) {
+        if (visibleTypes.length === 0) {
+          refreshNextStepsSection(focusSelector);
+          return Promise.resolve();
+        }
+        params.types = visibleTypes.join(',');
+      }
+      if (hiddenStatusCount > 0) {
+        if (visibleStatuses.length === 0) {
+          refreshNextStepsSection(focusSelector);
+          return Promise.resolve();
+        }
+        params.statuses = visibleStatuses.join(',');
+      }
+      if (dashState.nextStepsInitiativeMode === 'CUSTOM') {
+        var selectedInitiatives = truthyMapKeys(dashState.nextStepsSelectedInitiatives);
+        if (selectedInitiatives.length === 0 && !dashState.nextStepsIncludeUnassigned) {
+          refreshNextStepsSection(focusSelector);
+          return Promise.resolve();
+        }
+        if (selectedInitiatives.length > 0) {
+          params.initiative_ids = selectedInitiatives.join(',');
+        }
+        params.include_unassigned = dashState.nextStepsIncludeUnassigned ? 'true' : 'false';
+      }
+
+      return API.getActionItems(params, {
+        signal: dashState.actionItemsController.signal
+      }).then(function(result) {
+        dashState.actionItems = unwrapList(result);
+        dashState.totals.needs_action = result.total_count || dashState.actionItems.length;
+        if (dashState.summary && dashState.summary.next_steps) {
+          dashState.summary.next_steps.data = dashState.actionItems;
+          dashState.summary.next_steps.total_count = result.total_count || dashState.actionItems.length;
+          dashState.summary.next_steps.has_more = !!result.has_more;
+          dashState.summary.next_steps.next_cursor = result.next_cursor || null;
+          API.putDashboardPreview(dashState.activeOrgId, dashState.summary, dashState.drilldowns);
+        }
+        refreshNextStepsSection(focusSelector);
+      }).catch(function(err) {
+        if (err && err.name === 'AbortError') return;
+        if (err && (err.status === 401 || err.status === 403)) {
+          API.purgeDashboardPreview(dashState.activeOrgId);
+          renderDashboardLoadError(err);
+          return;
+        }
+        dashState.nextStepsPreferenceWarning = 'Fresh filtered results could not be loaded.';
+        syncNextStepsPreferenceWarning();
+      });
     }
 
     function wireNextStepsFilters() {
@@ -1801,6 +2264,7 @@
           dashState.nextStepsInitiativeFilterOpen = true;
           queueNextStepsFilterSave();
           refreshNextStepsSection('[data-next-steps-initiative-select-all]');
+          refreshActionItemsFromServer('[data-next-steps-initiative-select-all]');
         });
       }
 
@@ -1818,6 +2282,7 @@
             dashState.nextStepsInitiativeFilterOpen = true;
             queueNextStepsFilterSave();
             refreshNextStepsSection('[data-next-steps-initiative-id="' + initiativeId + '"]');
+            refreshActionItemsFromServer('[data-next-steps-initiative-id="' + initiativeId + '"]');
           });
         })(initiativeCheckboxes[initiativeIndex]);
       }
@@ -1830,6 +2295,7 @@
           dashState.nextStepsInitiativeFilterOpen = true;
           queueNextStepsFilterSave();
           refreshNextStepsSection('[data-next-steps-initiative-unassigned]');
+          refreshActionItemsFromServer('[data-next-steps-initiative-unassigned]');
         });
       }
 
@@ -1849,6 +2315,7 @@
             }
             queueNextStepsFilterSave();
             refreshNextStepsSection();
+            refreshActionItemsFromServer();
           });
         })(pills[i]);
       }
@@ -1865,6 +2332,7 @@
           dashState.nextStepsInitiativeFilterOpen = false;
           clearNextStepsFilterPreference();
           refreshNextStepsSection();
+          refreshActionItemsFromServer();
         });
       }
     }
@@ -2049,6 +2517,6 @@
       }
     }
 
-    }, _orgId);
+    }, _orgId, { preserveLoading: true, skipSession: true });
   };
 })();

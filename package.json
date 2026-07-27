@@ -1,0 +1,13 @@
+{
+  "name": "decidr-mcpviews-plugin",
+  "private": true,
+  "scripts": {
+    "build": "bash build.sh",
+    "check:dashboard": "node scripts/check-dashboard-next-steps.mjs && node scripts/check-dashboard-performance.mjs",
+    "check:bundle": "node scripts/check-bundle-budgets.mjs",
+    "test": "node scripts/test-dashboard-runtime.mjs && npm run check:dashboard"
+  },
+  "devDependencies": {
+    "terser": "5.44.0"
+  }
+}
