@@ -34,6 +34,14 @@
       nextStepsGroupExpanded: {},
       nextStepsHiddenTypes: {},
       nextStepsHiddenStatuses: {},
+      nextStepsInitiativeMode: 'ALL',
+      nextStepsSelectedInitiatives: {},
+      nextStepsIncludeUnassigned: true,
+      nextStepsInitiativeFilterOpen: false,
+      nextStepsPreferenceWarning: '',
+      nextStepsSaveTimer: null,
+      nextStepsPendingSave: null,
+      nextStepsSavePromise: Promise.resolve(),
       decisionsExpanded: false,
       createDialog: null,
       // Org picker
@@ -61,7 +69,9 @@
         issues: null,
         prs: null,
         actionItems: null,
-        timeline: null
+        timeline: null,
+        nextStepsFilters: null,
+        nextStepsPreferenceError: null
       };
     }
 
@@ -113,6 +123,7 @@
     }
 
     function loadRequiredDashboardData(target) {
+      var targetOrgId = target.activeOrgId || dashState.activeOrgId || API.getActiveOrgId();
       return Promise.all([
         requiredLoad('Initiatives', API.listInitiatives({ take: 200 }), function(rows) { target.initiatives = rows; }),
         requiredLoad('Projects', API.listProjects({ take: 200 }), function(rows) { target.projects = rows; }),
@@ -122,7 +133,14 @@
         API.listIssues({ take: 200 }).then(function(resp) { target.issues = unwrapList(resp); }).catch(function() { target.issues = []; }),
         API.listPRs({ take: 200 }).then(function(resp) { target.prs = unwrapList(resp); }).catch(function() { target.prs = []; }),
         API.getActionItems({ take: 200 }).then(function(resp) { target.actionItems = unwrapList(resp); }).catch(function() { target.actionItems = []; }),
-        API.getTimeline({ take: 200 }).then(function(resp) { target.timeline = unwrapList(resp); }).catch(function() { target.timeline = []; })
+        API.getTimeline({ take: 200 }).then(function(resp) { target.timeline = unwrapList(resp); }).catch(function() { target.timeline = []; }),
+        API.getNextStepsFilters(targetOrgId).then(function(resp) {
+          target.nextStepsFilters = resp;
+          target.nextStepsPreferenceError = null;
+        }).catch(function(err) {
+          target.nextStepsFilters = null;
+          target.nextStepsPreferenceError = err;
+        })
       ]);
     }
 
@@ -222,6 +240,7 @@
       dashState.allIssues = fetches.issues || [];
       dashState.allPRs = fetches.prs || [];
       dashState.actionItems = fetches.actionItems || [];
+      applyNextStepsPreference(fetches.nextStepsFilters, fetches.nextStepsPreferenceError);
 
       // Build last-activity-per-entity map from timeline events
       dashState.lastActivityByEntity = buildActivityMap(fetches.timeline || []);
@@ -281,7 +300,9 @@
     function refreshDashboard() {
       var rf = {
         initiatives: null, projects: null, decisions: null, tasks: null,
-        bridges: null, issues: null, prs: null, actionItems: null, timeline: null
+        bridges: null, issues: null, prs: null, actionItems: null, timeline: null,
+        activeOrgId: API.getActiveOrgId() || dashState.activeOrgId,
+        nextStepsFilters: null, nextStepsPreferenceError: null
       };
       return loadRequiredDashboardData(rf).then(function() {
         var projects = rf.projects || [];
@@ -294,6 +315,7 @@
         dashState.allIssues = rf.issues || [];
         dashState.allPRs = rf.prs || [];
         dashState.actionItems = rf.actionItems || [];
+        applyNextStepsPreference(rf.nextStepsFilters, rf.nextStepsPreferenceError);
 
         dashState.lastActivityByEntity = buildActivityMap(rf.timeline || []);
 
@@ -350,6 +372,116 @@
       return out;
     }
 
+    function truthyMapFromArray(values) {
+      var out = {};
+      values = Array.isArray(values) ? values : [];
+      for (var i = 0; i < values.length; i++) {
+        if (typeof values[i] === 'string' && values[i]) out[values[i]] = true;
+      }
+      return out;
+    }
+
+    function truthyMapKeys(map) {
+      var values = [];
+      map = map || {};
+      for (var key in map) {
+        if (map.hasOwnProperty(key) && map[key]) values.push(key);
+      }
+      return values;
+    }
+
+    function applyNextStepsPreference(preference, loadError) {
+      preference = preference || {};
+      dashState.nextStepsInitiativeMode = preference.initiativeMode === 'CUSTOM' ? 'CUSTOM' : 'ALL';
+      dashState.nextStepsSelectedInitiatives = truthyMapFromArray(preference.initiativeIds);
+      dashState.nextStepsIncludeUnassigned = dashState.nextStepsInitiativeMode === 'ALL'
+        ? true
+        : preference.includeUnassigned === true;
+      dashState.nextStepsHiddenTypes = truthyMapFromArray(preference.hiddenTypes);
+      dashState.nextStepsHiddenStatuses = truthyMapFromArray(preference.hiddenStatuses);
+      dashState.nextStepsInitiativeFilterOpen = false;
+      dashState.nextStepsPreferenceWarning = loadError
+        ? 'Saved filters could not be loaded. Showing defaults; account sync may be unavailable.'
+        : '';
+    }
+
+    function nextStepsPreferenceSnapshot() {
+      return {
+        organizationId: dashState.activeOrgId || API.getActiveOrgId(),
+        initiativeMode: dashState.nextStepsInitiativeMode,
+        initiativeIds: dashState.nextStepsInitiativeMode === 'CUSTOM'
+          ? truthyMapKeys(dashState.nextStepsSelectedInitiatives)
+          : [],
+        includeUnassigned: dashState.nextStepsInitiativeMode === 'ALL'
+          ? true
+          : dashState.nextStepsIncludeUnassigned,
+        hiddenTypes: truthyMapKeys(dashState.nextStepsHiddenTypes),
+        hiddenStatuses: truthyMapKeys(dashState.nextStepsHiddenStatuses)
+      };
+    }
+
+    function syncNextStepsPreferenceWarning() {
+      var warning = container.querySelector('#decidr-next-steps-filter-warning');
+      if (!warning) return;
+      warning.textContent = dashState.nextStepsPreferenceWarning || '';
+      warning.hidden = !dashState.nextStepsPreferenceWarning;
+    }
+
+    function flushNextStepsFilterSave() {
+      if (dashState.nextStepsSaveTimer) {
+        clearTimeout(dashState.nextStepsSaveTimer);
+        dashState.nextStepsSaveTimer = null;
+      }
+      var payload = dashState.nextStepsPendingSave;
+      dashState.nextStepsPendingSave = null;
+      if (!payload || !payload.organizationId) return dashState.nextStepsSavePromise;
+
+      dashState.nextStepsSavePromise = dashState.nextStepsSavePromise.catch(function() {
+        return null;
+      }).then(function() {
+        return API.saveNextStepsFilters(payload);
+      }).then(function() {
+        dashState.nextStepsPreferenceWarning = '';
+        syncNextStepsPreferenceWarning();
+      }).catch(function(err) {
+        console.warn('[decidr] Failed to save Next Steps filters:', err);
+        dashState.nextStepsPreferenceWarning = 'Filter applied, but account sync failed. Change a filter to retry.';
+        syncNextStepsPreferenceWarning();
+      });
+      return dashState.nextStepsSavePromise;
+    }
+
+    function queueNextStepsFilterSave() {
+      dashState.nextStepsPendingSave = nextStepsPreferenceSnapshot();
+      if (dashState.nextStepsSaveTimer) clearTimeout(dashState.nextStepsSaveTimer);
+      dashState.nextStepsSaveTimer = setTimeout(function() {
+        flushNextStepsFilterSave();
+      }, 200);
+    }
+
+    function clearNextStepsFilterPreference() {
+      if (dashState.nextStepsSaveTimer) {
+        clearTimeout(dashState.nextStepsSaveTimer);
+        dashState.nextStepsSaveTimer = null;
+      }
+      dashState.nextStepsPendingSave = null;
+      var orgId = dashState.activeOrgId || API.getActiveOrgId();
+      if (!orgId) return Promise.resolve();
+      dashState.nextStepsSavePromise = dashState.nextStepsSavePromise.catch(function() {
+        return null;
+      }).then(function() {
+        return API.clearNextStepsFilters(orgId);
+      }).then(function() {
+        dashState.nextStepsPreferenceWarning = '';
+        syncNextStepsPreferenceWarning();
+      }).catch(function(err) {
+        console.warn('[decidr] Failed to reset saved Next Steps filters:', err);
+        dashState.nextStepsPreferenceWarning = 'Filters reset here, but the saved preference could not be cleared.';
+        syncNextStepsPreferenceWarning();
+      });
+      return dashState.nextStepsSavePromise;
+    }
+
     function enrichActionItem(item) {
       if (!item) return item;
       var type = String(item.entityType || item.entity_type || '').toUpperCase();
@@ -359,6 +491,8 @@
         full = findEntityById(dashState.allDecisions, id);
       } else if (type === 'TASK') {
         full = findEntityById(dashState.allTasks, id);
+      } else if (type === 'ISSUE') {
+        full = findEntityById(dashState.allIssues, id);
       }
       if (!full) return item;
       var enriched = shallowMerge(full, item);
@@ -375,6 +509,119 @@
       return String((item && item.status) || 'UNKNOWN').toUpperCase();
     }
 
+    function addUniqueValue(values, value) {
+      if (typeof value === 'string' && value && values.indexOf(value) === -1) {
+        values.push(value);
+      }
+    }
+
+    function projectInitiativeId(projectId) {
+      if (!projectId) return null;
+      for (var initiativeId in dashState.projectsByInitiative) {
+        if (!dashState.projectsByInitiative.hasOwnProperty(initiativeId)) continue;
+        var projects = dashState.projectsByInitiative[initiativeId] || [];
+        for (var i = 0; i < projects.length; i++) {
+          if (projects[i].id === projectId) {
+            return initiativeId === '_ungrouped' ? null : initiativeId;
+          }
+        }
+      }
+      return null;
+    }
+
+    function addBridgeInitiativeIds(values, bridge) {
+      if (!bridge) return;
+      addUniqueValue(values, projectInitiativeId(
+        bridge.fromProjectId || bridge.from_project_id || bridge.sourceProjectId || bridge.source_project_id
+      ));
+      addUniqueValue(values, projectInitiativeId(
+        bridge.toProjectId || bridge.to_project_id || bridge.targetProjectId || bridge.target_project_id
+      ));
+    }
+
+    function addDecisionInitiativeIds(values, decision, includeBridge) {
+      if (!decision) return;
+      addUniqueValue(values, decision.initiativeId || decision.initiative_id);
+      addUniqueValue(values, projectInitiativeId(decision.projectId || decision.project_id));
+      var parentType = String(decision.entityType || decision.entity_type || '').toUpperCase();
+      var parentId = decision.entityId || decision.entity_id;
+      if (parentType === 'INITIATIVE') addUniqueValue(values, parentId);
+      if (parentType === 'PROJECT') addUniqueValue(values, projectInitiativeId(parentId));
+      if (includeBridge !== false) {
+        addBridgeInitiativeIds(values, findEntityById(
+          dashState.allBridges,
+          decision.bridgeId || decision.bridge_id
+        ));
+      }
+    }
+
+    function addTaskInitiativeIds(values, task) {
+      if (!task) return;
+      addUniqueValue(values, task.initiativeId || task.initiative_id);
+      addUniqueValue(values, projectInitiativeId(task.projectId || task.project_id));
+      addDecisionInitiativeIds(values, findEntityById(
+        dashState.allDecisions,
+        task.decisionId || task.decision_id
+      ), true);
+      addBridgeInitiativeIds(values, findEntityById(
+        dashState.allBridges,
+        task.bridgeId || task.bridge_id
+      ));
+    }
+
+    function resolveActionItemInitiativeIds(item) {
+      var values = [];
+      var supplied = item && (item.initiativeIds || item.initiative_ids);
+      if (Array.isArray(supplied)) {
+        for (var i = 0; i < supplied.length; i++) addUniqueValue(values, supplied[i]);
+      }
+      if (!item) return values;
+
+      addUniqueValue(values, item.initiativeId || item.initiative_id);
+      var type = normalizeActionItemType(item);
+      if (type === 'DECISION') {
+        addDecisionInitiativeIds(values, item, true);
+      } else if (type === 'TASK') {
+        addTaskInitiativeIds(values, item);
+      } else if (type === 'ISSUE') {
+        addUniqueValue(values, projectInitiativeId(
+          item.projectId || item.project_id || item.linkedProjectId || item.linked_project_id
+        ));
+        var links = item.entityLinks || item.entity_links || [];
+        for (var l = 0; l < links.length; l++) {
+          var linkedType = String(links[l].entityType || links[l].entity_type || '').toUpperCase();
+          var linkedId = links[l].entityId || links[l].entity_id;
+          if (linkedType === 'PROJECT') {
+            addUniqueValue(values, projectInitiativeId(linkedId));
+          } else if (linkedType === 'TASK') {
+            addTaskInitiativeIds(values, findEntityById(dashState.allTasks, linkedId));
+          } else if (linkedType === 'DECISION') {
+            addDecisionInitiativeIds(values, findEntityById(dashState.allDecisions, linkedId), true);
+          }
+        }
+      } else if (type === 'PROJECT') {
+        addUniqueValue(values, projectInitiativeId(item.entityId || item.entity_id || item.id));
+      } else if (type === 'INITIATIVE') {
+        addUniqueValue(values, item.entityId || item.entity_id || item.id);
+      } else if (type === 'BRIDGE') {
+        addBridgeInitiativeIds(values, findEntityById(
+          dashState.allBridges,
+          item.entityId || item.entity_id || item.id
+        ));
+      }
+      return values;
+    }
+
+    function actionItemMatchesInitiativeFilter(item) {
+      if (dashState.nextStepsInitiativeMode !== 'CUSTOM') return true;
+      var initiativeIds = item.initiativeIds || [];
+      if (initiativeIds.length === 0) return dashState.nextStepsIncludeUnassigned;
+      for (var i = 0; i < initiativeIds.length; i++) {
+        if (dashState.nextStepsSelectedInitiatives[initiativeIds[i]]) return true;
+      }
+      return false;
+    }
+
     function getEnrichedActionItems() {
       var results = [];
       var rawItems = dashState.actionItems || [];
@@ -382,7 +629,8 @@
         var enriched = enrichActionItem(rawItems[i]) || {};
         var normalized = shallowMerge(enriched, {
           entityType: normalizeActionItemType(enriched),
-          status: normalizeActionItemStatus(enriched)
+          status: normalizeActionItemStatus(enriched),
+          initiativeIds: resolveActionItemInitiativeIds(enriched)
         });
         results.push(normalized);
       }
@@ -394,6 +642,7 @@
       for (var i = 0; i < items.length; i++) {
         var type = normalizeActionItemType(items[i]);
         var status = normalizeActionItemStatus(items[i]);
+        if (!actionItemMatchesInitiativeFilter(items[i])) continue;
         if (dashState.nextStepsHiddenTypes[type]) continue;
         if (dashState.nextStepsHiddenStatuses[status]) continue;
         results.push(items[i]);
@@ -409,6 +658,7 @@
       for (key in dashState.nextStepsHiddenStatuses) {
         if (dashState.nextStepsHiddenStatuses.hasOwnProperty(key) && dashState.nextStepsHiddenStatuses[key]) return true;
       }
+      if (dashState.nextStepsInitiativeMode === 'CUSTOM') return true;
       return false;
     }
 
@@ -777,6 +1027,96 @@
         + UI.escapeHtml(label) + ' <span class="decidr-next-steps-filter-count">' + count + '</span></button>';
     }
 
+    function sortedInitiativesForFilter() {
+      var initiatives = (dashState.initiatives || []).slice();
+      initiatives.sort(function(a, b) {
+        return String(a.name || '').localeCompare(String(b.name || ''));
+      });
+      return initiatives;
+    }
+
+    function initiativeFilterTriggerLabel(initiatives) {
+      if (dashState.nextStepsInitiativeMode === 'ALL') return 'All initiatives';
+      var selectedCount = 0;
+      for (var i = 0; i < initiatives.length; i++) {
+        if (dashState.nextStepsSelectedInitiatives[initiatives[i].id]) selectedCount++;
+      }
+      if (selectedCount === 0 && dashState.nextStepsIncludeUnassigned) return 'No initiative';
+      if (selectedCount === 0) return 'None selected';
+      return selectedCount + ' selected';
+    }
+
+    function renderInitiativeFilter(items) {
+      var initiatives = sortedInitiativesForFilter();
+      var counts = {};
+      var unassignedCount = 0;
+      for (var i = 0; i < items.length; i++) {
+        var initiativeIds = items[i].initiativeIds || [];
+        if (initiativeIds.length === 0) {
+          unassignedCount++;
+          continue;
+        }
+        for (var j = 0; j < initiativeIds.length; j++) {
+          counts[initiativeIds[j]] = (counts[initiativeIds[j]] || 0) + 1;
+        }
+      }
+
+      var allSelected = dashState.nextStepsInitiativeMode === 'ALL';
+      var anySelected = allSelected || dashState.nextStepsIncludeUnassigned;
+      if (!allSelected) {
+        allSelected = true;
+        for (var s = 0; s < initiatives.length; s++) {
+          if (dashState.nextStepsSelectedInitiatives[initiatives[s].id]) {
+            anySelected = true;
+          } else {
+            allSelected = false;
+          }
+        }
+        if (unassignedCount > 0 && !dashState.nextStepsIncludeUnassigned) allSelected = false;
+      }
+
+      var html = '<div class="decidr-next-steps-initiative-filter">';
+      html += '<button type="button" id="decidr-next-steps-initiative-trigger"'
+        + ' class="decidr-next-steps-initiative-trigger" aria-haspopup="true"'
+        + ' aria-expanded="' + (dashState.nextStepsInitiativeFilterOpen ? 'true' : 'false') + '"'
+        + ' aria-controls="decidr-next-steps-initiative-menu">'
+        + '<span>' + UI.escapeHtml(initiativeFilterTriggerLabel(initiatives)) + '</span>'
+        + '<span class="decidr-next-steps-initiative-chevron" aria-hidden="true">\u25BE</span></button>';
+
+      html += '<div id="decidr-next-steps-initiative-menu"'
+        + ' class="decidr-next-steps-initiative-menu" role="group" aria-label="Initiatives"'
+        + (dashState.nextStepsInitiativeFilterOpen ? '' : ' hidden') + '>';
+      html += '<label class="decidr-next-steps-initiative-option decidr-next-steps-initiative-select-all">'
+        + '<input type="checkbox" data-next-steps-initiative-select-all="true"'
+        + ((!allSelected && anySelected) ? ' data-next-steps-indeterminate="true"' : '')
+        + (allSelected ? ' checked' : '') + '>'
+        + '<span>Select all</span></label>';
+      html += '<div class="decidr-next-steps-initiative-list">';
+      for (var k = 0; k < initiatives.length; k++) {
+        var initiative = initiatives[k];
+        var checked = dashState.nextStepsInitiativeMode === 'ALL'
+          || !!dashState.nextStepsSelectedInitiatives[initiative.id];
+        html += '<label class="decidr-next-steps-initiative-option">'
+          + '<input type="checkbox" data-next-steps-initiative-id="' + UI.escapeHtml(initiative.id) + '"'
+          + (checked ? ' checked' : '') + '>'
+          + '<span class="decidr-next-steps-initiative-name">' + UI.escapeHtml(initiative.name || 'Untitled initiative') + '</span>'
+          + '<span class="decidr-next-steps-filter-count">' + (counts[initiative.id] || 0) + '</span></label>';
+      }
+      if (unassignedCount > 0) {
+        html += '<label class="decidr-next-steps-initiative-option">'
+          + '<input type="checkbox" data-next-steps-initiative-unassigned="true"'
+          + ((dashState.nextStepsInitiativeMode === 'ALL' || dashState.nextStepsIncludeUnassigned) ? ' checked' : '') + '>'
+          + '<span class="decidr-next-steps-initiative-name">No initiative</span>'
+          + '<span class="decidr-next-steps-filter-count">' + unassignedCount + '</span></label>';
+      }
+      html += '</div></div></div>';
+
+      return {
+        html: html,
+        selectAllIndeterminate: !allSelected && anySelected
+      };
+    }
+
     function renderNextStepsFilters(items, visibleCount) {
       var typeCounts = {};
       var statusCounts = {};
@@ -790,6 +1130,10 @@
       var types = orderedFilterValues(typeCounts, ['DECISION', 'TASK', 'PROJECT', 'BRIDGE', 'INITIATIVE', 'ISSUE', 'PULL_REQUEST', 'OTHER']);
       var statuses = orderedFilterValues(statusCounts, ['BACKLOG', 'DRAFT', 'PROPOSED', 'APPROVED', 'IN_PROGRESS', 'STAGED', 'TODO', 'BLOCKED', 'OPEN', 'IMPLEMENTED', 'DONE', 'REJECTED', 'CLOSED', 'MERGED', 'ARCHIVED', 'UNKNOWN']);
       var html = '<div class="decidr-next-steps-filters" aria-label="Filter Next Steps">';
+
+      var initiativeFilter = renderInitiativeFilter(items);
+      html += '<div class="decidr-next-steps-filter-row"><span class="decidr-next-steps-filter-label">Initiative</span>'
+        + initiativeFilter.html + '</div>';
 
       html += '<div class="decidr-next-steps-filter-row"><span class="decidr-next-steps-filter-label">Type</span>'
         + '<div class="decidr-next-steps-filter-options">';
@@ -810,7 +1154,10 @@
       html += '<div class="decidr-next-steps-filter-summary" aria-live="polite">'
         + '<span>Showing ' + visibleCount + ' of ' + items.length + ' next steps</span>'
         + (hasNextStepsFilters() ? '<button type="button" id="decidr-next-steps-filter-reset" class="decidr-next-steps-filter-reset">Reset filters</button>' : '')
-        + '</div></div>';
+        + '</div>'
+        + '<p id="decidr-next-steps-filter-warning" class="decidr-next-steps-filter-warning" role="status"'
+        + (dashState.nextStepsPreferenceWarning ? '' : ' hidden') + '>'
+        + UI.escapeHtml(dashState.nextStepsPreferenceWarning || '') + '</p></div>';
       return html;
     }
 
@@ -1273,9 +1620,11 @@
           openOrgSettings(settingsOrgId);
           return;
         }
-        dashState.activeOrgId = settingsOrgId;
         container.innerHTML = UI.loadingSpinner('Switching organization...');
-        API.switchOrg(settingsOrgId).then(function() {
+        flushNextStepsFilterSave().then(function() {
+          dashState.activeOrgId = settingsOrgId;
+          return API.switchOrg(settingsOrgId);
+        }).then(function() {
           return refreshDashboard();
         }).then(function() {
           openOrgSettings(settingsOrgId);
@@ -1333,10 +1682,12 @@
           menu.classList.remove('open');
           return;
         }
-        dashState.activeOrgId = orgId;
         menu.classList.remove('open');
         container.innerHTML = UI.loadingSpinner('Switching organization...');
-        API.switchOrg(orgId).then(function() {
+        flushNextStepsFilterSave().then(function() {
+          dashState.activeOrgId = orgId;
+          return API.switchOrg(orgId);
+        }).then(function() {
           refreshDashboard();
         }).catch(function(err) {
           console.error('[decidr] Org switch failed:', err);
@@ -1365,7 +1716,7 @@
       }
     }
 
-    function refreshNextStepsSection() {
+    function refreshNextStepsSection(focusSelector) {
       var section = container.querySelector('#decidr-next-steps-section');
       if (!section) return;
       section.outerHTML = '<div id="decidr-next-steps-section" style="margin-top: var(--space-8);">'
@@ -1374,9 +1725,114 @@
       wireNextStepsShowMore();
       wireCreateActions();
       wireEntityClicks(container);
+      if (focusSelector) {
+        var focusTarget = container.querySelector(focusSelector);
+        if (focusTarget) focusTarget.focus();
+      }
     }
 
     function wireNextStepsFilters() {
+      var initiativeTrigger = container.querySelector('#decidr-next-steps-initiative-trigger');
+      var initiativeMenu = container.querySelector('#decidr-next-steps-initiative-menu');
+      if (initiativeTrigger && initiativeMenu) {
+        initiativeTrigger.addEventListener('click', function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          dashState.nextStepsInitiativeFilterOpen = !dashState.nextStepsInitiativeFilterOpen;
+          initiativeMenu.hidden = !dashState.nextStepsInitiativeFilterOpen;
+          initiativeTrigger.setAttribute('aria-expanded', dashState.nextStepsInitiativeFilterOpen ? 'true' : 'false');
+          if (dashState.nextStepsInitiativeFilterOpen) {
+            var firstCheckbox = initiativeMenu.querySelector('input[type="checkbox"]');
+            if (firstCheckbox) firstCheckbox.focus();
+          } else {
+            flushNextStepsFilterSave();
+          }
+        });
+        initiativeMenu.addEventListener('click', function(e) {
+          e.stopPropagation();
+        });
+        initiativeMenu.addEventListener('keydown', function(e) {
+          if (e.key !== 'Escape') return;
+          e.preventDefault();
+          dashState.nextStepsInitiativeFilterOpen = false;
+          initiativeMenu.hidden = true;
+          initiativeTrigger.setAttribute('aria-expanded', 'false');
+          initiativeTrigger.focus();
+          flushNextStepsFilterSave();
+        });
+
+        if (container._decidrNextStepsOutsideHandler) {
+          document.removeEventListener('click', container._decidrNextStepsOutsideHandler);
+        }
+        container._decidrNextStepsOutsideHandler = function() {
+          if (!dashState.nextStepsInitiativeFilterOpen) return;
+          dashState.nextStepsInitiativeFilterOpen = false;
+          initiativeMenu.hidden = true;
+          initiativeTrigger.setAttribute('aria-expanded', 'false');
+          flushNextStepsFilterSave();
+        };
+        document.addEventListener('click', container._decidrNextStepsOutsideHandler);
+      }
+
+      function initializeCustomInitiativeSelection() {
+        if (dashState.nextStepsInitiativeMode === 'CUSTOM') return;
+        dashState.nextStepsInitiativeMode = 'CUSTOM';
+        dashState.nextStepsSelectedInitiatives = {};
+        var initiatives = dashState.initiatives || [];
+        for (var i = 0; i < initiatives.length; i++) {
+          dashState.nextStepsSelectedInitiatives[initiatives[i].id] = true;
+        }
+        dashState.nextStepsIncludeUnassigned = true;
+      }
+
+      var selectAll = container.querySelector('[data-next-steps-initiative-select-all]');
+      if (selectAll) {
+        selectAll.indeterminate = selectAll.getAttribute('data-next-steps-indeterminate') === 'true';
+        selectAll.addEventListener('change', function() {
+          if (selectAll.checked) {
+            dashState.nextStepsInitiativeMode = 'ALL';
+            dashState.nextStepsSelectedInitiatives = {};
+            dashState.nextStepsIncludeUnassigned = true;
+          } else {
+            dashState.nextStepsInitiativeMode = 'CUSTOM';
+            dashState.nextStepsSelectedInitiatives = {};
+            dashState.nextStepsIncludeUnassigned = false;
+          }
+          dashState.nextStepsInitiativeFilterOpen = true;
+          queueNextStepsFilterSave();
+          refreshNextStepsSection('[data-next-steps-initiative-select-all]');
+        });
+      }
+
+      var initiativeCheckboxes = container.querySelectorAll('[data-next-steps-initiative-id]');
+      for (var initiativeIndex = 0; initiativeIndex < initiativeCheckboxes.length; initiativeIndex++) {
+        (function(checkbox) {
+          checkbox.addEventListener('change', function() {
+            initializeCustomInitiativeSelection();
+            var initiativeId = checkbox.getAttribute('data-next-steps-initiative-id');
+            if (checkbox.checked) {
+              dashState.nextStepsSelectedInitiatives[initiativeId] = true;
+            } else {
+              delete dashState.nextStepsSelectedInitiatives[initiativeId];
+            }
+            dashState.nextStepsInitiativeFilterOpen = true;
+            queueNextStepsFilterSave();
+            refreshNextStepsSection('[data-next-steps-initiative-id="' + initiativeId + '"]');
+          });
+        })(initiativeCheckboxes[initiativeIndex]);
+      }
+
+      var unassigned = container.querySelector('[data-next-steps-initiative-unassigned]');
+      if (unassigned) {
+        unassigned.addEventListener('change', function() {
+          initializeCustomInitiativeSelection();
+          dashState.nextStepsIncludeUnassigned = unassigned.checked;
+          dashState.nextStepsInitiativeFilterOpen = true;
+          queueNextStepsFilterSave();
+          refreshNextStepsSection('[data-next-steps-initiative-unassigned]');
+        });
+      }
+
       var pills = container.querySelectorAll('[data-next-steps-filter-kind][data-next-steps-filter-value]');
       for (var i = 0; i < pills.length; i++) {
         (function(pill) {
@@ -1391,6 +1847,7 @@
             } else {
               hidden[value] = true;
             }
+            queueNextStepsFilterSave();
             refreshNextStepsSection();
           });
         })(pills[i]);
@@ -1402,6 +1859,11 @@
         reset.addEventListener('click', function() {
           dashState.nextStepsHiddenTypes = {};
           dashState.nextStepsHiddenStatuses = {};
+          dashState.nextStepsInitiativeMode = 'ALL';
+          dashState.nextStepsSelectedInitiatives = {};
+          dashState.nextStepsIncludeUnassigned = true;
+          dashState.nextStepsInitiativeFilterOpen = false;
+          clearNextStepsFilterPreference();
           refreshNextStepsSection();
         });
       }

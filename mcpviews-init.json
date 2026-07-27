@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "startup_rules": {
+    "decidr:decidr_governance_lifecycle_solo_runtime": {
+      "plugin": "decidr",
+      "rule_id": "decidr_governance_lifecycle_solo_runtime",
+      "rule_version": "6",
+      "rule_hash": "sha256:7edd3679b6f6c20dff878e77fe58712aac3b50a73d46df8ce6bbf04993a343ee",
+      "locations": [
+        {
+          "agent_type": "codex",
+          "path": "AGENTS.md",
+          "label": "AGENTS.md"
+        }
+      ],
+      "do_not_install": false,
+      "do_not_update": false,
+      "updated_at": "2026-07-27T15:15:44.605242+00:00"
+    },
+    "decidr:decidr_work_logging_runtime": {
+      "plugin": "decidr",
+      "rule_id": "decidr_work_logging_runtime",
+      "rule_version": "8",
+      "rule_hash": "sha256:2a0ce6818ec82d6331511b431fce318acaf26155249c3d0b2b1469db92f5f26f",
+      "locations": [
+        {
+          "agent_type": "codex",
+          "path": "AGENTS.md",
+          "label": "AGENTS.md"
+        }
+      ],
+      "do_not_install": false,
+      "do_not_update": false,
+      "updated_at": "2026-07-27T15:15:44.612231+00:00"
+    },
+    "mcpviews-core:init_session_project_path": {
+      "plugin": "mcpviews-core",
+      "rule_id": "init_session_project_path",
+      "rule_version": "1",
+      "rule_hash": "sha256:ca4d69a896ecf8edc08b989a0ba9f8cbb51a3666e8b8d1b2f818bc0ee6cb3a48",
+      "locations": [
+        {
+          "agent_type": "codex",
+          "path": "AGENTS.md",
+          "label": "AGENTS.md"
+        }
+      ],
+      "do_not_install": false,
+      "do_not_update": false,
+      "updated_at": "2026-07-27T15:15:44.583384+00:00"
+    },
+    "mcpviews-core:push_plans_to_mcpviews": {
+      "plugin": "mcpviews-core",
+      "rule_id": "push_plans_to_mcpviews",
+      "rule_version": "1",
+      "rule_hash": "sha256:b2e3674593731f546d2544dffe7490d9e9edddb1f05fd93e4fb9c0f5299959ae",
+      "locations": [
+        {
+          "agent_type": "codex",
+          "path": "AGENTS.md",
+          "label": "AGENTS.md"
+        }
+      ],
+      "do_not_install": false,
+      "do_not_update": false,
+      "updated_at": "2026-07-27T15:15:44.589948+00:00"
+    },
+    "mcpviews-gronk-speak:GronkSpeak": {
+      "plugin": "mcpviews-gronk-speak",
+      "rule_id": "GronkSpeak",
+      "rule_version": "4",
+      "rule_hash": "sha256:33a6b2f8bdc933d171e983a14d8e392dfc740c7b0111f7f54362376add13455a",
+      "locations": [
+        {
+          "agent_type": "codex",
+          "path": "AGENTS.md",
+          "label": "AGENTS.md"
+        }
+      ],
+      "do_not_install": false,
+      "do_not_update": false,
+      "updated_at": "2026-07-27T15:15:44.594727+00:00"
+    },
+    "mcpviews-gronk-speak:PlainProse": {
+      "plugin": "mcpviews-gronk-speak",
+      "rule_id": "PlainProse",
+      "rule_version": "1",
+      "rule_hash": "sha256:8e7d784474c643fa379ede240bf1f74e0e9f6cdca5083d4d584348e61f4706c6",
+      "locations": [
+        {
+          "agent_type": "codex",
+          "path": "AGENTS.md",
+          "label": "AGENTS.md"
+        }
+      ],
+      "do_not_install": false,
+      "do_not_update": false,
+      "updated_at": "2026-07-27T15:15:44.599611+00:00"
+    }
+  },
+  "context_defaults": [
+    {
+      "plugin_name": "decidr",
+      "context_type": "organization",
+      "context_id": "cmnlyuh3j0000jp04lr6yq0nv",
+      "routing_arg": "organization_id",
+      "scope": "plugin",
+      "target_name": null,
+      "label": "Tribe-X",
+      "updated_at": "2026-07-27T15:15:52.520241+00:00"
+    }
+  ],
+  "project_context_hints": [
+    {
+      "plugin_name": "decidr",
+      "key": "project_id",
+      "value": "cmq5nyc2i0001if04bec00n2g",
+      "label": "MCPViews Development",
+      "updated_at": "2026-07-27T15:15:55.485075+00:00"
+    }
+  ]
+}

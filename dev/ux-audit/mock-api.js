@@ -8,6 +8,20 @@
   var decisions = payload.decisions || [];
   var tasks = payload.tasks || [];
   var timelineEvents = payload.timelineEvents || [];
+  initiatives = initiatives.concat([
+    {
+      id: 'init-client-ops',
+      name: 'Client operations',
+      description: 'Operational delivery and customer follow-up.',
+      createdAt: '2026-06-03T12:00:00.000Z'
+    },
+    {
+      id: 'init-platform-reliability',
+      name: 'Platform reliability',
+      description: 'Reliability, release safety, and internal tooling.',
+      createdAt: '2026-06-04T12:00:00.000Z'
+    }
+  ]);
 
   function byId(rows, id) {
     for (var i = 0; i < rows.length; i++) {
@@ -93,6 +107,7 @@
       reason: 'Open decision needs attention',
       status: 'DRAFT',
       parentName: 'DecidR development',
+      initiativeIds: ['init-decidr-dev'],
       createdAt: '2026-06-06T15:10:00.000Z'
     },
     {
@@ -102,6 +117,7 @@
       reason: 'Open decision needs attention',
       status: 'STAGED',
       parentName: 'Timeline UX and visibility',
+      initiativeIds: ['init-decidr-dev', 'init-platform-reliability'],
       createdAt: '2026-06-05T21:40:00.000Z'
     },
     {
@@ -111,6 +127,7 @@
       reason: 'Decision in progress',
       status: 'IN_PROGRESS',
       parentName: 'Timeline UX and visibility',
+      initiativeIds: ['init-platform-reliability'],
       createdAt: '2026-06-05T18:35:00.000Z'
     },
     {
@@ -120,6 +137,7 @@
       reason: 'TODO task',
       status: 'TODO',
       parentName: 'Timeline UX and visibility',
+      initiativeIds: ['init-client-ops'],
       createdAt: '2026-06-05T21:28:00.000Z'
     },
     {
@@ -129,6 +147,7 @@
       reason: 'Task is blocked',
       status: 'IN_PROGRESS',
       parentName: 'Timeline UX and visibility',
+      initiativeIds: [],
       createdAt: '2026-06-05T17:52:00.000Z'
     }
   ];
@@ -150,6 +169,7 @@
   }
 
   var api = window.__decidrAPI;
+  var nextStepsPreferences = {};
   api._initialized = true;
   api._currentUserId = 'u-daenon';
   api.setActiveOrg('mock-org');
@@ -173,6 +193,24 @@
   };
   api.setDefaultOrg = function() { return Promise.resolve({ ok: true }); };
   api.clearDefaultOrg = function() { return Promise.resolve({ ok: true }); };
+  api.getNextStepsFilters = function(orgId) {
+    return Promise.resolve(clone(nextStepsPreferences[orgId] || {
+      organizationId: orgId,
+      initiativeMode: 'ALL',
+      initiativeIds: [],
+      includeUnassigned: true,
+      hiddenTypes: [],
+      hiddenStatuses: []
+    }));
+  };
+  api.saveNextStepsFilters = function(preference) {
+    nextStepsPreferences[preference.organizationId] = clone(preference);
+    return Promise.resolve(clone(preference));
+  };
+  api.clearNextStepsFilters = function(orgId) {
+    delete nextStepsPreferences[orgId];
+    return Promise.resolve({ organizationId: orgId, cleared: true });
+  };
   api.openPluginAuth = function() { return Promise.resolve({ ok: true }); };
   api.listInitiatives = function() { return data(initiatives); };
   api.listProjects = function() { return data(enrichedProjects); };

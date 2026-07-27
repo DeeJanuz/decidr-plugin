@@ -39,8 +39,58 @@ assert.match(
 );
 assert.match(
   dashboard,
-  /function getFilteredActionItems\(items\)[\s\S]*?nextStepsHiddenTypes\[type\][\s\S]*?nextStepsHiddenStatuses\[status\]/,
-  'Next Steps must combine entity-type and stage filters.'
+  /nextStepsInitiativeMode:\s*'ALL'[\s\S]*?nextStepsSelectedInitiatives:\s*\{\}[\s\S]*?nextStepsIncludeUnassigned:\s*true/,
+  'Next Steps initiative filters must default to selecting every initiative and unassigned item.'
+);
+assert.match(
+  dashboard,
+  /function getFilteredActionItems\(items\)[\s\S]*?actionItemMatchesInitiativeFilter\(items\[i\]\)[\s\S]*?nextStepsHiddenTypes\[type\][\s\S]*?nextStepsHiddenStatuses\[status\]/,
+  'Next Steps must combine initiative, entity-type, and stage filters.'
+);
+assert.match(
+  dashboard,
+  /id="decidr-next-steps-initiative-trigger"[\s\S]*?aria-expanded="[\s\S]*?id="decidr-next-steps-initiative-menu"/,
+  'Next Steps must render a collapsed, accessible initiative multi-select.'
+);
+assert.match(
+  dashboard,
+  /data-next-steps-initiative-select-all="true"[\s\S]*?<span>Select all<\/span>/,
+  'Initiative filters must include a Select all checkbox.'
+);
+assert.match(
+  dashboard,
+  /if \(unassignedCount > 0\)[\s\S]*?data-next-steps-initiative-unassigned="true"[\s\S]*?No initiative/,
+  'Initiative filters must include unassigned action items when needed.'
+);
+assert.match(
+  dashboard,
+  /function sortedInitiativesForFilter\(\)[\s\S]*?localeCompare/,
+  'Initiative filter options must be sorted alphabetically.'
+);
+assert.match(
+  dashboard,
+  /API\.getNextStepsFilters\(targetOrgId\)/,
+  'Dashboard load must hydrate saved Next Steps filters for the active organization.'
+);
+assert.match(
+  dashboard,
+  /function queueNextStepsFilterSave\(\)[\s\S]*?setTimeout[\s\S]*?flushNextStepsFilterSave/,
+  'Next Steps filter changes must be debounced before account persistence.'
+);
+assert.match(
+  apiClient,
+  /getNextStepsFilters:\s*function\(orgId\)[\s\S]*?\/me\/preferences\/next-steps/,
+  'API client must load persisted Next Steps filters.'
+);
+assert.match(
+  apiClient,
+  /saveNextStepsFilters:\s*function\(preference\)[\s\S]*?api\.patch\('\/me\/preferences\/next-steps'/,
+  'API client must save persisted Next Steps filters.'
+);
+assert.match(
+  apiClient,
+  /clearNextStepsFilters:\s*function\(orgId\)[\s\S]*?api\.delete\('\/me\/preferences\/next-steps'/,
+  'API client must clear persisted Next Steps filters.'
 );
 assert.match(
   dashboard,
@@ -64,13 +114,18 @@ assert.match(
 );
 assert.match(
   dashboard,
-  /decidr-next-steps-filter-reset[\s\S]*?nextStepsHiddenTypes\s*=\s*\{\}[\s\S]*?nextStepsHiddenStatuses\s*=\s*\{\}/,
-  'Next Steps must reset both filter dimensions.'
+  /decidr-next-steps-filter-reset[\s\S]*?nextStepsHiddenTypes\s*=\s*\{\}[\s\S]*?nextStepsHiddenStatuses\s*=\s*\{\}[\s\S]*?nextStepsInitiativeMode\s*=\s*'ALL'[\s\S]*?clearNextStepsFilterPreference\(\)/,
+  'Next Steps reset must restore every filter dimension and clear the saved preference.'
 );
 assert.match(
   theme,
   /\.decidr-next-steps-filters/,
   'Theme must include Next Steps filter styles.'
+);
+assert.match(
+  theme,
+  /\.decidr-next-steps-initiative-menu/,
+  'Theme must include initiative multi-select menu styles.'
 );
 assert.doesNotMatch(
   dashboard,

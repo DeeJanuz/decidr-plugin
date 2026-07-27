@@ -921,6 +921,18 @@
       return api.patch('/me/preferences', { defaultOrganizationId: null });
     },
 
+    getNextStepsFilters: function(orgId) {
+      return api.get('/me/preferences/next-steps' + _qs({ organizationId: orgId }));
+    },
+
+    saveNextStepsFilters: function(preference) {
+      return api.patch('/me/preferences/next-steps', preference);
+    },
+
+    clearNextStepsFilters: function(orgId) {
+      return api.delete('/me/preferences/next-steps' + _qs({ organizationId: orgId }));
+    },
+
     /**
      * Fetches organizations, shared MCPViews contexts, plugin-org tokens, and
      * user preferences in parallel, annotates each org with `tokenStatus`, and

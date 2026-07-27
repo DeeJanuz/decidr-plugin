@@ -1,3 +1,8 @@
+# 0.1.66
+
+- **feat**: Add a persisted initiative multi-select to dashboard Next Steps, including all/custom selection, overlapping initiative membership, unassigned items, reset behavior, and responsive keyboard-accessible controls.
+- **feat**: Persist initiative, entity-type, and lifecycle-stage filters per account and organization through the DecidR preferences API.
+
 # 0.1.40
 
 - **feat**: Add copy reference buttons for initiatives, projects, decisions, and tasks across dashboard cards, action rows, and slideout child lists.
